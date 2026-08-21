@@ -1275,7 +1275,11 @@ var CENTER_STAT_OPTIONS = ["streak", "taskCompletion", "connectivity", "newThisW
 var RIGHT_STAT_OPTIONS = ["taskCompletion", "overdueRate", "avgLinksPerNote", "connectivity", "orphanRate"];
 function resolveBannerStats(config) {
   var _a2;
-  return { ...DEFAULT_BANNER_STATS, ...config, rightStats: ((_a2 = config == null ? void 0 : config.rightStats) == null ? void 0 : _a2.length) ? [...config.rightStats] : [...DEFAULT_BANNER_STATS.rightStats] };
+  const selected = ((_a2 = config == null ? void 0 : config.rightStats) == null ? void 0 : _a2.length) ? [...config.rightStats] : [...DEFAULT_BANNER_STATS.rightStats];
+  for (const required of ["taskCompletion", "overdueRate", "avgLinksPerNote"]) {
+    if (!selected.includes(required)) selected.push(required);
+  }
+  return { ...DEFAULT_BANNER_STATS, ...config, rightStats: selected };
 }
 function dayKey(value) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;

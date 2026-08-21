@@ -25,7 +25,14 @@ export interface BannerStatsResult {
 }
 
 export function resolveBannerStats(config?: BannerStatsConfig): BannerStatsConfig {
-	return { ...DEFAULT_BANNER_STATS, ...config, rightStats: config?.rightStats?.length ? [...config.rightStats] : [...DEFAULT_BANNER_STATS.rightStats!] };
+	// These three metrics are the dashboard's core productivity indicators. Keep
+	// them visible even when an older saved config omitted one of them, and let
+	// the renderer show a 0%/0.0 progress track when the vault has no data.
+	const selected = config?.rightStats?.length ? [...config.rightStats] : [...DEFAULT_BANNER_STATS.rightStats!];
+	for (const required of ['taskCompletion', 'overdueRate', 'avgLinksPerNote'] as const) {
+		if (!selected.includes(required)) selected.push(required);
+	}
+	return { ...DEFAULT_BANNER_STATS, ...config, rightStats: selected };
 }
 
 function dayKey(value: Date): string {
