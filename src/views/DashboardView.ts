@@ -2,6 +2,8 @@ import { ItemView, Menu, TFile, TFolder, WorkspaceLeaf } from 'obsidian';
 import { MOCK_DATA, DashboardData } from '../data/mockData';
 import { BannerSettings, DEFAULT_SETTINGS } from '../settings';
 import { BannerModal } from './BannerModal';
+import { BannerEditModal } from './BannerEditModal';
+import { renderBannerStats } from './BannerStats';
 import { CountdownModal } from './CountdownModal';
 import { TaskEditModal } from './TaskEditModal';
 import { TaskItem, ProjectInfo, TaskStatus, ProjectType, LONG_TERM_STAGES, isLongTermProject, priorityWeight, NodeState, RepeatRule } from '../data/taskParser';
@@ -190,7 +192,7 @@ export class DashboardView extends ItemView {
 	private bannerImg: HTMLImageElement | null = null;
 	private bannerPh: HTMLElement | null = null;
 	private bannerEl: HTMLElement | null = null;
-	private bannerStatsEls: { completion: HTMLElement; overdue: HTMLElement; links: HTMLElement } | null = null;
+	private bannerStatsEl: HTMLElement | null = null;
 	public boardEl: HTMLElement | null = null;
 	private heatmapCard: HTMLElement | null = null;
 	private heatmapTimer: number | null = null;
@@ -410,15 +412,17 @@ export class DashboardView extends ItemView {
 		const pickBtn = bar.createEl('button', { cls: 'ad-banner__btn', text: '更换图片' });
 		const modeBtn = bar.createEl('button', {
 			cls: 'ad-banner__btn',
-			text: this.bannerState.mode === 'stats' ? '海报视图' : '统计视图',
-			attr: { title: '切换海报和数据统计' },
+			text: '横幅设置',
+			attr: { title: '设置海报和数据统计' },
 		});
 		modeBtn.addEventListener('click', (e) => {
 			e.stopPropagation();
-			this.bannerState.mode = this.bannerState.mode === 'stats' ? 'poster' : 'stats';
-			void this.saveBanner().then(() => this.refreshBanner());
+			this.openBannerEditModal();
 		});
-		if (this.bannerState.mode === 'stats') this.renderBannerStats(banner);
+		if (this.bannerState.mode === 'stats') {
+			banner.addClass('ad-banner--stats');
+			void this.renderStatsBanner(banner);
+		}
 
 		// hidden file input
 		const fileInput = root.createEl('input', { cls: 'ad-banner__fileinput', attr: { type: 'file', accept: 'image/*' } });
@@ -471,39 +475,27 @@ export class DashboardView extends ItemView {
 		if (input) parent.appendChild(input);
 	}
 
-	private renderBannerStats(banner: HTMLElement): void {
-		const stats = banner.createDiv({ cls: 'ad-banner__stats' });
-		const make = (label: string): HTMLElement => {
-			const item = stats.createDiv({ cls: 'ad-banner__stat' });
-			item.createDiv({ cls: 'ad-banner__stat-label', text: label });
-			return item.createDiv({ cls: 'ad-banner__stat-value', text: '—' });
-		};
-		this.bannerStatsEls = {
-			completion: make('任务完成率'),
-			overdue: make('任务逾期率'),
-			links: make('链接/篇'),
-		};
-		void this.refreshBannerStats();
+	private openBannerEditModal(): void {
+		new BannerEditModal({
+			app: this.app,
+			banner: this.bannerState,
+			onSave: (banner) => {
+				this.bannerState = banner;
+				void this.saveBanner().then(() => this.refreshBanner());
+			},
+		}).open();
+	}
+
+	private async renderStatsBanner(banner: HTMLElement): Promise<void> {
+		const stats = await renderBannerStats(banner, this.bannerState.statsConfig, this.app, this.taskStore);
+		if (banner.isConnected) this.bannerStatsEl = stats;
 	}
 
 	private async refreshBannerStats(): Promise<void> {
-		const els = this.bannerStatsEls;
-		if (!els || this.bannerState.mode !== 'stats') return;
-		const tasks = await this.taskStore.scanAllTasks();
-		const total = tasks.length;
-		const completed = tasks.filter((task) => task.status === '已完成').length;
-		const overdue = tasks.filter((task) => task.isOverdue).length;
-		const completionRate = total ? Math.round((completed / total) * 100) : 0;
-		const overdueRate = total ? Math.round((overdue / total) * 100) : 0;
-		const notes = this.app.vault.getMarkdownFiles().filter((file) => !file.path.startsWith('.'));
-		let linkCount = 0;
-		for (const targets of Object.values(this.app.metadataCache.resolvedLinks)) {
-			linkCount += Object.values(targets).reduce((sum, count) => sum + count, 0);
-		}
-		const linksPerNote = notes.length ? linkCount / notes.length : 0;
-		els.completion.textContent = `${completionRate}%`;
-		els.overdue.textContent = `${overdueRate}%`;
-		els.links.textContent = linksPerNote.toFixed(1);
+		if (this.bannerState.mode !== 'stats' || !this.bannerEl?.isConnected) return;
+		this.bannerStatsEl?.remove();
+		this.bannerStatsEl = null;
+		await this.renderStatsBanner(this.bannerEl);
 	}
 
 	private openBannerModal(dataUrl: string, currentOffsetY: number): void {

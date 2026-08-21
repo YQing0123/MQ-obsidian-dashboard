@@ -255,7 +255,7 @@ function parseFrontmatter(content, filePath) {
   const yamlBlock = lines.slice(1, end).join("\n");
   if (!yamlBlock.trim()) return {};
   try {
-    const parsed = (0, import_obsidian4.parseYaml)(yamlBlock);
+    const parsed = (0, import_obsidian6.parseYaml)(yamlBlock);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       return parsed;
     }
@@ -270,10 +270,10 @@ function parseTaskFile(filePath, content, projectId, projectColor) {
 function parseProjectMeta(content, filePath) {
   return projectFromFm(parseFrontmatter(content, filePath));
 }
-var import_obsidian4;
+var import_obsidian6;
 var init_taskParser = __esm({
   "src/data/taskParser.ts"() {
-    import_obsidian4 = require("obsidian");
+    import_obsidian6 = require("obsidian");
     init_taskParseCore();
     init_parserDiagnostics();
     init_taskParseCore();
@@ -285,10 +285,10 @@ var ProjectModal_exports = {};
 __export(ProjectModal_exports, {
   ProjectModal: () => ProjectModal
 });
-var import_obsidian12, COLORS, getToday, _a, ProjectModal;
+var import_obsidian14, COLORS, getToday, _a, ProjectModal;
 var init_ProjectModal = __esm({
   "src/views/ProjectModal.ts"() {
-    import_obsidian12 = require("obsidian");
+    import_obsidian14 = require("obsidian");
     init_taskParser();
     init_constants();
     COLORS = [
@@ -307,7 +307,7 @@ var init_ProjectModal = __esm({
       const d = /* @__PURE__ */ new Date();
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     };
-    ProjectModal = class extends import_obsidian12.Modal {
+    ProjectModal = class extends import_obsidian14.Modal {
       constructor(opts) {
         var _a2, _b;
         super(opts.app);
@@ -438,10 +438,10 @@ var TaskModal_exports = {};
 __export(TaskModal_exports, {
   TaskModal: () => TaskModal
 });
-var import_obsidian13, PRIORITIES, STATUSES, TYPES, REPEAT_FREQS, WEEKDAYS, REMINDER_OPTIONS, getToday2, dateToDow, TaskModal;
+var import_obsidian15, PRIORITIES, STATUSES, TYPES, REPEAT_FREQS, WEEKDAYS, REMINDER_OPTIONS, getToday2, dateToDow, TaskModal;
 var init_TaskModal = __esm({
   "src/views/TaskModal.ts"() {
-    import_obsidian13 = require("obsidian");
+    import_obsidian15 = require("obsidian");
     init_constants();
     PRIORITIES = [
       { value: "\u91CD\u8981\u4E14\u7D27\u6025", label: "\u{1F534} \u91CD\u8981\u4E14\u7D27\u6025" },
@@ -491,7 +491,7 @@ var init_TaskModal = __esm({
       if (isNaN(d.getTime())) return 1;
       return (d.getDay() + 6) % 7 + 1;
     };
-    TaskModal = class extends import_obsidian13.Modal {
+    TaskModal = class extends import_obsidian15.Modal {
       constructor(opts) {
         super(opts.app);
         __publicField(this, "opts");
@@ -746,13 +746,13 @@ __export(main_exports, {
   default: () => Dashboard
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian15 = require("obsidian");
+var import_obsidian17 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian = require("obsidian");
 var HOME_LAYOUT_VERSION = 3;
 var DEFAULT_SETTINGS = {
-  banner: { imageDataUrl: null, offsetY: 0, mode: "poster" },
+  banner: { imageDataUrl: null, offsetY: 0, mode: "poster", statsConfig: { showDetails: true, showLeft: true, showCenter: true, showRight: true, leftStat: "totalNotes", centerStat: "streak", rightStats: ["taskCompletion", "overdueRate", "avgLinksPerNote"], blur: 2, darkness: 20 } },
   quickCapture: {
     storagePath: "00 inbox/\u901F\u8BB0",
     namingPattern: "YYYY-MM-DD HH-mm \u6355\u6349",
@@ -1021,17 +1021,6 @@ var DashboardSettingTab = class extends import_obsidian.PluginSettingTab {
         this.plugin.refreshDashboardTitle();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("\u9996\u9875\u6A2A\u5E45\u663E\u793A").setDesc("\u5728\u6D77\u62A5\u548C\u6570\u636E\u7EDF\u8BA1\u4E4B\u95F4\u5207\u6362\uFF1B\u7EDF\u8BA1\u4F1A\u8BFB\u53D6\u5F53\u524D\u9879\u76EE\u4EFB\u52A1\u4E0E\u6574\u4E2A\u5E93\u7684\u94FE\u63A5\u6570\u636E").addDropdown((dropdown) => {
-      var _a2;
-      dropdown.addOption("poster", "\u6D77\u62A5");
-      dropdown.addOption("stats", "\u6570\u636E\u7EDF\u8BA1");
-      dropdown.setValue((_a2 = this.plugin.settings.banner.mode) != null ? _a2 : "poster");
-      dropdown.onChange(async (v) => {
-        this.plugin.settings.banner.mode = v === "stats" ? "stats" : "poster";
-        await this.plugin.saveSettings();
-        this.plugin.refreshBanner();
-      });
-    });
     new import_obsidian.Setting(containerEl).setName("\u9636\u6BB5\u7BA1\u9053").setHeading();
     new import_obsidian.Setting(containerEl).setName("\u9636\u6BB5\u6570\u91CF").setDesc("\u8BBE\u7F6E\u9879\u76EE\u9636\u6BB5\u7684\u6570\u91CF\uFF084-6\u4E2A\uFF09").addDropdown((dropdown) => {
       for (const n of [4, 5, 6]) {
@@ -1091,7 +1080,7 @@ var DashboardSettingTab = class extends import_obsidian.PluginSettingTab {
 };
 
 // src/views/DashboardView.ts
-var import_obsidian14 = require("obsidian");
+var import_obsidian16 = require("obsidian");
 
 // src/data/mockData.ts
 var MOCK_DATA = {
@@ -1265,10 +1254,343 @@ function applyY(img, y) {
   img.style.transform = `translateY(${y}px)`;
 }
 
-// src/views/CountdownModal.ts
+// src/views/BannerEditModal.ts
+var import_obsidian4 = require("obsidian");
+
+// src/views/BannerStats.ts
 var import_obsidian3 = require("obsidian");
+var DEFAULT_BANNER_STATS = {
+  showDetails: true,
+  showLeft: true,
+  showCenter: true,
+  showRight: true,
+  leftStat: "totalNotes",
+  centerStat: "streak",
+  rightStats: ["taskCompletion", "overdueRate", "avgLinksPerNote"],
+  blur: 2,
+  darkness: 20
+};
+var LEFT_STAT_OPTIONS = ["totalNotes", "tagsCount", "totalLinks", "newThisMonth", "newThisWeek", "totalTasks", "doneTasks", "pendingTasks"];
+var CENTER_STAT_OPTIONS = ["streak", "taskCompletion", "connectivity", "newThisWeek"];
+var RIGHT_STAT_OPTIONS = ["taskCompletion", "overdueRate", "avgLinksPerNote", "connectivity", "orphanRate"];
+function resolveBannerStats(config) {
+  var _a2;
+  return { ...DEFAULT_BANNER_STATS, ...config, rightStats: ((_a2 = config == null ? void 0 : config.rightStats) == null ? void 0 : _a2.length) ? [...config.rightStats] : [...DEFAULT_BANNER_STATS.rightStats] };
+}
+function dayKey(value) {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+}
+function startOfDay(value) {
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
+}
+async function computeBannerStats(app, taskStore) {
+  var _a2, _b;
+  const files = app.vault.getMarkdownFiles().filter((file) => !file.path.startsWith("."));
+  const now = /* @__PURE__ */ new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  const weekStart = startOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6));
+  const activity = new Array(98).fill(0);
+  const activityDates = /* @__PURE__ */ new Set();
+  let newThisMonth = 0;
+  let newThisWeek = 0;
+  for (const file of files) {
+    if (file.stat.ctime >= monthStart) newThisMonth++;
+    if (file.stat.ctime >= weekStart) newThisWeek++;
+    const age = Math.floor((startOfDay(now) - startOfDay(new Date(file.stat.ctime))) / 864e5);
+    if (age >= 0 && age < activity.length) activity[activity.length - 1 - age]++;
+    activityDates.add(dayKey(new Date(file.stat.ctime)));
+  }
+  const resolved = app.metadataCache.resolvedLinks;
+  const outgoing = /* @__PURE__ */ new Set();
+  const incoming = /* @__PURE__ */ new Set();
+  let totalLinks = 0;
+  for (const [src, targets] of Object.entries(resolved)) {
+    const keys = Object.keys(targets);
+    if (keys.length) outgoing.add(src);
+    for (const target of keys) incoming.add(target);
+    for (const count of Object.values(targets)) totalLinks += count;
+  }
+  let orphanNotes = 0;
+  for (const file of files) if (!outgoing.has(file.path) && !incoming.has(file.path)) orphanNotes++;
+  const tags = /* @__PURE__ */ new Set();
+  for (const file of files) {
+    const cache = app.metadataCache.getFileCache(file);
+    for (const tag of (_a2 = cache == null ? void 0 : cache.tags) != null ? _a2 : []) tags.add(tag.tag.replace(/^#/, ""));
+    const raw = (_b = cache == null ? void 0 : cache.frontmatter) == null ? void 0 : _b.tags;
+    if (Array.isArray(raw)) raw.forEach((tag) => tags.add(String(tag).replace(/^#/, "")));
+    else if (raw) tags.add(String(raw).replace(/^#/, ""));
+  }
+  const tasks = await taskStore.scanAllTasks();
+  const totalTasks = tasks.length;
+  const doneTasks = tasks.filter((task) => task.status === "\u5DF2\u5B8C\u6210").length;
+  const taskCompletion = totalTasks ? Math.round(doneTasks / totalTasks * 100) : 0;
+  const overdueRate = totalTasks ? Math.round(tasks.filter((task) => task.isOverdue).length / totalTasks * 100) : 0;
+  const streakDates = new Set(activityDates);
+  let cursor = startOfDay(now);
+  if (!streakDates.has(dayKey(new Date(cursor)))) cursor -= 864e5;
+  let streak = 0;
+  while (streakDates.has(dayKey(new Date(cursor)))) {
+    streak++;
+    cursor -= 864e5;
+  }
+  return {
+    totalNotes: files.length,
+    tagsCount: tags.size,
+    totalLinks,
+    newThisMonth,
+    newThisWeek,
+    streak,
+    totalTasks,
+    doneTasks,
+    pendingTasks: totalTasks - doneTasks,
+    taskCompletion,
+    overdueRate,
+    orphanNotes,
+    orphanRate: files.length ? Math.round(orphanNotes / files.length * 100) : 0,
+    avgLinksPerNote: files.length ? totalLinks / files.length : 0,
+    connectivity: files.length ? Math.round((files.length - orphanNotes) / files.length * 100) : 0,
+    activity
+  };
+}
+function applyBannerStatsBackdrop(banner, config) {
+  var _a2, _b;
+  const darkness = (_a2 = config.darkness) != null ? _a2 : 20;
+  banner.style.setProperty("--banner-blur", `${(_b = config.blur) != null ? _b : 2}px`);
+  banner.style.setProperty("--banner-bright", String(Math.max(0.3, 1 - darkness / 100 * 0.7)));
+  banner.style.setProperty("--banner-scrim", String(0.25 + darkness / 100 * 0.5));
+  banner.style.setProperty("--banner-stat-accent", config.accent || "#bff038");
+}
+var labels = {
+  totalNotes: "\u603B\u7B14\u8BB0",
+  tagsCount: "\u6807\u7B7E",
+  totalLinks: "\u603B\u94FE\u63A5",
+  newThisMonth: "\u672C\u6708\u65B0\u589E",
+  newThisWeek: "\u672C\u5468\u65B0\u589E",
+  totalTasks: "\u603B\u4EFB\u52A1",
+  doneTasks: "\u5DF2\u5B8C\u6210",
+  pendingTasks: "\u5F85\u529E",
+  streak: "\u8FDE\u7EED\u8BB0\u5F55",
+  taskCompletion: "\u4EFB\u52A1\u5B8C\u6210\u7387",
+  overdueRate: "\u4EFB\u52A1\u903E\u671F\u7387",
+  connectivity: "\u8FDE\u63A5\u5EA6",
+  orphanRate: "\u5B64\u7ACB\u7B14\u8BB0\u7387",
+  avgLinksPerNote: "\u94FE\u63A5/\u7BC7"
+};
+var icons = { totalNotes: "file-text", tagsCount: "hash", totalLinks: "link", newThisMonth: "calendar-plus", newThisWeek: "calendar-check", totalTasks: "list-checks", doneTasks: "check-check", pendingTasks: "circle-dashed", streak: "flame", taskCompletion: "list-checks", connectivity: "network", orphanRate: "circle-slash", avgLinksPerNote: "link" };
+function statValue(stat, r) {
+  var _a2;
+  const value = (_a2 = r[stat]) != null ? _a2 : 0;
+  if (stat === "taskCompletion" || stat === "overdueRate" || stat === "connectivity" || stat === "orphanRate") return `${value}%`;
+  if (stat === "avgLinksPerNote") return value.toFixed(1);
+  if (stat === "streak") return `${value}\u5929`;
+  return value.toLocaleString();
+}
+function hero(parent, stat, value) {
+  const row = parent.createDiv({ cls: "ad-banner-stat-hero" });
+  const icon = row.createDiv({ cls: "ad-banner-stat-icon" });
+  (0, import_obsidian3.setIcon)(icon, icons[stat] || "bar-chart-3");
+  row.createDiv({ cls: "ad-banner-stat-num", text: value });
+  row.createDiv({ cls: "ad-banner-stat-label ad-banner-stat-label--inline", text: labels[stat] || stat });
+}
+async function renderBannerStats(parent, config, app, taskStore) {
+  const resolved = resolveBannerStats(config);
+  applyBannerStatsBackdrop(parent.parentElement || parent, resolved);
+  const el = parent.createDiv({ cls: "ad-banner-stats" });
+  const result = await computeBannerStats(app, taskStore);
+  if (resolved.showLeft !== false) {
+    const col = el.createDiv({ cls: "ad-banner-stat-col ad-banner-stat-col--left" });
+    hero(col, resolved.leftStat || "totalNotes", statValue(resolved.leftStat || "totalNotes", result));
+    if (resolved.showDetails !== false) {
+      const strip = col.createDiv({ cls: "ad-banner-stat-strip" });
+      for (const [icon, text] of [["calendar-plus", `\u672C\u6708 ${result.newThisMonth}`], ["hash", `\u6807\u7B7E ${result.tagsCount}`], ["link", `\u94FE\u63A5 ${result.totalLinks}`]]) {
+        const item = strip.createDiv({ cls: "ad-banner-stat-strip-item" });
+        const ico = item.createDiv({ cls: "ad-banner-stat-strip-icon" });
+        (0, import_obsidian3.setIcon)(ico, icon);
+        item.createSpan({ text });
+      }
+    }
+  }
+  if (resolved.showCenter !== false) {
+    const stat = resolved.centerStat || "streak";
+    const col = el.createDiv({ cls: "ad-banner-stat-col ad-banner-stat-col--center" });
+    hero(col, stat, statValue(stat, result));
+    if (resolved.showDetails !== false) {
+      col.createDiv({ cls: "ad-banner-stat-sub", text: stat === "taskCompletion" ? `${result.doneTasks} / ${result.totalTasks} \u4E2A\u4EFB\u52A1\u5DF2\u5B8C\u6210` : `\u672C\u5468\u65B0\u589E ${result.newThisWeek} \xB7 \u672C\u6708\u65B0\u589E ${result.newThisMonth}` });
+      const chart = col.createDiv({ cls: "ad-banner-stat-chart" });
+      const grid = chart.createDiv({ cls: "ad-banner-heatmap" });
+      const max = Math.max(1, ...result.activity);
+      result.activity.forEach((v, i) => {
+        const cell = grid.createDiv({ cls: "ad-banner-heatmap-cell" });
+        const level = v <= 0 ? 0 : Math.min(4, Math.ceil(v / max * 4));
+        cell.addClass(`ad-banner-heatmap-cell--l${level}`);
+        if (i === result.activity.length - 1) cell.addClass("ad-banner-heatmap-cell--today");
+      });
+    }
+  }
+  if (resolved.showRight !== false) {
+    const col = el.createDiv({ cls: "ad-banner-stat-col ad-banner-stat-col--right" });
+    for (const stat of resolved.rightStats || DEFAULT_BANNER_STATS.rightStats) {
+      const row = col.createDiv({ cls: "ad-banner-stat-prog" });
+      const head = row.createDiv({ cls: "ad-banner-stat-prog-head" });
+      const title = head.createDiv({ cls: "ad-banner-stat-prog-title" });
+      const ico = title.createDiv({ cls: "ad-banner-stat-prog-icon" });
+      (0, import_obsidian3.setIcon)(ico, icons[stat]);
+      title.createSpan({ text: labels[stat] });
+      head.createDiv({ cls: "ad-banner-stat-prog-val", text: statValue(stat, result) });
+      if (resolved.showDetails !== false) {
+        const track = row.createDiv({ cls: "ad-banner-stat-prog-track" });
+        const fill = track.createDiv({ cls: "ad-banner-stat-prog-fill" });
+        const n = stat === "avgLinksPerNote" ? Math.min(100, Math.round(result.avgLinksPerNote / 3 * 100)) : result[stat] || 0;
+        fill.style.width = `${n}%`;
+      }
+    }
+  }
+  return el;
+}
+
+// src/views/BannerEditModal.ts
+var statLabels = {
+  totalNotes: "\u603B\u7B14\u8BB0",
+  tagsCount: "\u6807\u7B7E\u6570",
+  totalLinks: "\u603B\u94FE\u63A5",
+  newThisMonth: "\u672C\u6708\u65B0\u589E",
+  newThisWeek: "\u672C\u5468\u65B0\u589E",
+  totalTasks: "\u603B\u4EFB\u52A1",
+  doneTasks: "\u5DF2\u5B8C\u6210\u4EFB\u52A1",
+  pendingTasks: "\u5F85\u529E\u4EFB\u52A1",
+  streak: "\u8FDE\u7EED\u8BB0\u5F55",
+  taskCompletion: "\u4EFB\u52A1\u5B8C\u6210\u7387",
+  overdueRate: "\u4EFB\u52A1\u903E\u671F\u7387",
+  connectivity: "\u8FDE\u63A5\u5EA6",
+  orphanRate: "\u5B64\u7ACB\u7B14\u8BB0\u7387",
+  avgLinksPerNote: "\u94FE\u63A5/\u7BC7"
+};
+var BannerEditModal = class extends import_obsidian4.Modal {
+  constructor(opts) {
+    super(opts.app);
+    __publicField(this, "opts");
+    __publicField(this, "mode");
+    __publicField(this, "draft");
+    __publicField(this, "form");
+    this.opts = opts;
+    this.mode = opts.banner.mode === "stats" ? "stats" : "poster";
+    this.draft = resolveBannerStats(opts.banner.statsConfig);
+  }
+  onOpen() {
+    this.contentEl.addClass("ad-banner-modal");
+    this.contentEl.createEl("h2", { text: "\u9996\u9875\u6A2A\u5E45\u8BBE\u7F6E" });
+    const hint = this.contentEl.createDiv({ cls: "ad-banner-modal__hint" });
+    hint.createDiv({ text: "\u5207\u6362\u6A2A\u5E45\u5C55\u793A\u5185\u5BB9\uFF0C\u5E76\u914D\u7F6E\u7EDF\u8BA1\u9762\u677F\u7684\u6307\u6807\u548C\u5916\u89C2\u3002" });
+    const toggle = this.contentEl.createDiv({ cls: "ad-banner-modal__toggle" });
+    const makeToggle = (mode, icon, text) => {
+      const btn = toggle.createEl("button", { cls: "ad-banner-modal__toggle-btn" + (this.mode === mode ? " is-active" : ""), attr: { type: "button" } });
+      (0, import_obsidian4.setIcon)(btn, icon);
+      btn.createSpan({ text });
+      btn.addEventListener("click", () => {
+        this.mode = mode;
+        toggle.querySelectorAll("button").forEach((node) => node.removeClass("is-active"));
+        btn.addClass("is-active");
+        this.renderBody();
+      });
+    };
+    makeToggle("poster", "image", "\u6D77\u62A5");
+    makeToggle("stats", "bar-chart-3", "\u6570\u636E\u7EDF\u8BA1");
+    this.form = this.contentEl.createDiv({ cls: "ad-banner-modal__form" });
+    this.renderBody();
+    const actions = this.contentEl.createDiv({ cls: "ad-banner-modal__actions" });
+    actions.createEl("button", { text: "\u53D6\u6D88" }).addEventListener("click", () => this.close());
+    actions.createEl("button", { cls: "mod-cta", text: "\u4FDD\u5B58" }).addEventListener("click", () => this.save());
+  }
+  renderBody() {
+    var _a2, _b, _c, _d;
+    this.form.empty();
+    if (this.mode === "poster") {
+      this.form.createDiv({ cls: "ad-banner-modal__section-title", text: "\u6D77\u62A5\u6A21\u5F0F" });
+      this.form.createDiv({ cls: "ad-banner-modal__copy", text: "\u6A2A\u5E45\u7EE7\u7EED\u4F7F\u7528\u5F53\u524D\u5C01\u9762\u56FE\u7247\u3002\u53EF\u5728\u9996\u9875\u6A2A\u5E45\u7684\u201C\u66F4\u6362\u56FE\u7247\u201D\u6309\u94AE\u4E2D\u66F4\u65B0\u56FE\u7247\u3002" });
+      return;
+    }
+    this.form.createDiv({ cls: "ad-banner-modal__section-title", text: "\u7EDF\u8BA1\u9762\u677F" });
+    const columns = this.form.createDiv({ cls: "ad-banner-modal__columns" });
+    this.addColumn(columns, "\u5DE6\u4FA7\u6307\u6807", "showLeft", "leftStat", LEFT_STAT_OPTIONS);
+    this.addColumn(columns, "\u4E2D\u5FC3\u6307\u6807", "showCenter", "centerStat", CENTER_STAT_OPTIONS);
+    const right = this.form.createDiv({ cls: "ad-banner-modal__right" });
+    const rightHead = right.createDiv({ cls: "ad-banner-modal__row" });
+    this.addCheck(rightHead, "\u663E\u793A\u53F3\u4FA7", "showRight");
+    right.createDiv({ cls: "ad-banner-modal__metric-title", text: "\u53F3\u4FA7\u8FDB\u5EA6\u6307\u6807" });
+    for (const stat of RIGHT_STAT_OPTIONS) {
+      const label = right.createEl("label", { cls: "ad-banner-modal__check" });
+      const input = label.createEl("input", { attr: { type: "checkbox" } });
+      input.checked = (_b = (_a2 = this.draft.rightStats) == null ? void 0 : _a2.includes(stat)) != null ? _b : false;
+      input.addEventListener("change", () => {
+        const selected = new Set(this.draft.rightStats || []);
+        input.checked ? selected.add(stat) : selected.delete(stat);
+        this.draft.rightStats = RIGHT_STAT_OPTIONS.filter((key) => selected.has(key));
+      });
+      label.createSpan({ text: statLabels[stat] || stat });
+    }
+    const appearance = this.form.createDiv({ cls: "ad-banner-modal__appearance" });
+    appearance.createDiv({ cls: "ad-banner-modal__section-title", text: "\u5916\u89C2" });
+    this.addRange(appearance, "\u80CC\u666F\u6A21\u7CCA", "blur", (_c = this.draft.blur) != null ? _c : 2, 0, 16);
+    this.addRange(appearance, "\u80CC\u666F\u6697\u5EA6", "darkness", (_d = this.draft.darkness) != null ? _d : 20, 0, 100);
+    const accent = appearance.createDiv({ cls: "ad-banner-modal__row" });
+    accent.createSpan({ text: "\u5F3A\u8C03\u8272" });
+    const color = accent.createEl("input", { attr: { type: "color" } });
+    color.value = this.draft.accent || "#bff038";
+    color.addEventListener("input", () => {
+      this.draft.accent = color.value;
+    });
+    const details = this.form.createEl("label", { cls: "ad-banner-modal__check" });
+    const cb = details.createEl("input", { attr: { type: "checkbox" } });
+    cb.checked = this.draft.showDetails !== false;
+    cb.addEventListener("change", () => {
+      this.draft.showDetails = cb.checked;
+    });
+    details.createSpan({ text: "\u663E\u793A\u8BE6\u7EC6\u6761\u5E26\u3001\u70ED\u529B\u56FE\u548C\u8FDB\u5EA6\u6761" });
+  }
+  addColumn(parent, label, visibility, key, options) {
+    const row = parent.createDiv({ cls: "ad-banner-modal__column" });
+    this.addCheck(row, label, visibility);
+    const select = row.createEl("select");
+    select.value = String(this.draft[key] || options[0]);
+    for (const option of options) select.createEl("option", { value: option, text: statLabels[option] || option });
+    select.value = String(this.draft[key] || options[0]);
+    select.addEventListener("change", () => {
+      this.draft[key] = select.value;
+    });
+  }
+  addCheck(parent, label, key) {
+    const check = parent.createEl("label", { cls: "ad-banner-modal__check" });
+    const input = check.createEl("input", { attr: { type: "checkbox" } });
+    input.checked = this.draft[key] !== false;
+    input.addEventListener("change", () => {
+      this.draft[key] = input.checked;
+    });
+    check.createSpan({ text: label });
+  }
+  addRange(parent, label, key, value, min, max) {
+    const row = parent.createDiv({ cls: "ad-banner-modal__range" });
+    row.createSpan({ text: label });
+    const input = row.createEl("input", { attr: { type: "range", min: String(min), max: String(max), value: String(value) } });
+    const valueEl = row.createSpan({ text: String(value) });
+    input.addEventListener("input", () => {
+      const n = Number(input.value);
+      valueEl.textContent = String(n);
+      this.draft[key] = n;
+    });
+  }
+  save() {
+    this.opts.onSave({ ...this.opts.banner, mode: this.mode, statsConfig: { ...this.draft, rightStats: [...this.draft.rightStats || []] } });
+    this.close();
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+
+// src/views/CountdownModal.ts
+var import_obsidian5 = require("obsidian");
 init_constants();
-var CountdownModal = class extends import_obsidian3.Modal {
+var CountdownModal = class extends import_obsidian5.Modal {
   constructor(app, current, onConfirm) {
     super(app);
     __publicField(this, "eventName");
@@ -1318,7 +1640,7 @@ var CountdownModal = class extends import_obsidian3.Modal {
 };
 
 // src/views/TaskEditModal.ts
-var import_obsidian5 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 init_taskParser();
 
 // src/data/frontmatterWriter.ts
@@ -1377,7 +1699,7 @@ function applyFrontmatterUpdates(lines, updates) {
 
 // src/views/TaskEditModal.ts
 init_constants();
-var TaskEditModal = class extends import_obsidian5.Modal {
+var TaskEditModal = class extends import_obsidian7.Modal {
   constructor(opts) {
     super(opts.app);
     __publicField(this, "opts");
@@ -1435,7 +1757,7 @@ var TaskEditModal = class extends import_obsidian5.Modal {
     var _a2, _b, _c, _d, _e;
     const task = this.opts.task;
     const file = this.app.vault.getAbstractFileByPath(task.sourceFile);
-    if (!(file instanceof import_obsidian5.TFile)) return;
+    if (!(file instanceof import_obsidian7.TFile)) return;
     const newTitle = title.trim();
     if (newTitle && newTitle !== task.content) {
       const dir = file.path.includes("/") ? file.path.slice(0, file.path.lastIndexOf("/")) : "";
@@ -1686,7 +2008,7 @@ function weekdayLabel(date) {
 init_taskParser();
 
 // src/data/taskStore.ts
-var import_obsidian6 = require("obsidian");
+var import_obsidian8 = require("obsidian");
 init_taskParser();
 init_taskParser();
 init_parserDiagnostics();
@@ -1718,7 +2040,7 @@ var TaskStore = class {
     const pf = this.getSettings().projectsFolder;
     if (!path.endsWith(".md")) return false;
     const root = this.app.vault.getAbstractFileByPath(pf);
-    if (!(root instanceof import_obsidian6.TFolder)) return true;
+    if (!(root instanceof import_obsidian8.TFolder)) return true;
     return path === pf || path.startsWith(pf + "/");
   }
   /** Scan vault for all project folders with project.md */
@@ -1745,7 +2067,7 @@ var TaskStore = class {
     const allTasks = [];
     let root = null;
     const rootFile = this.app.vault.getAbstractFileByPath(rootPath);
-    if (rootFile instanceof import_obsidian6.TFolder) {
+    if (rootFile instanceof import_obsidian8.TFolder) {
       root = rootFile;
     } else {
       if (!this.warnedProjectsFallback) {
@@ -1764,10 +2086,10 @@ var TaskStore = class {
   async scanProjectsInFolder(folder, projects, acc) {
     var _a2, _b;
     for (const child of folder.children) {
-      if (child instanceof import_obsidian6.TFolder) {
+      if (child instanceof import_obsidian8.TFolder) {
         const projectFilePath = `${child.path}/project-${child.name}.md`;
         const projectFile = this.app.vault.getAbstractFileByPath(projectFilePath);
-        if (projectFile instanceof import_obsidian6.TFile) {
+        if (projectFile instanceof import_obsidian8.TFile) {
           let meta = {};
           try {
             const content = await this.app.vault.cachedRead(projectFile);
@@ -1807,9 +2129,9 @@ var TaskStore = class {
     const files = [];
     const collect = (f) => {
       for (const child of f.children) {
-        if (child instanceof import_obsidian6.TFolder) {
+        if (child instanceof import_obsidian8.TFolder) {
           collect(child);
-        } else if (child instanceof import_obsidian6.TFile && child.name.endsWith(".md") && !child.name.startsWith("project-")) {
+        } else if (child instanceof import_obsidian8.TFile && child.name.endsWith(".md") && !child.name.startsWith("project-")) {
           files.push(child);
         }
       }
@@ -1889,10 +2211,10 @@ var DashboardStore = class {
 };
 
 // src/views/OpportunityBoard.ts
-var import_obsidian10 = require("obsidian");
+var import_obsidian12 = require("obsidian");
 
 // src/views/OpportunityModal.ts
-var import_obsidian7 = require("obsidian");
+var import_obsidian9 = require("obsidian");
 init_constants();
 function sanitizeWikiName(name) {
   return name.replace(/[\[\]#^|/]/g, " ").replace(/\s+/g, " ").trim();
@@ -1903,7 +2225,7 @@ function extractWikiName(link) {
   const name = (_b = ((_a2 = cleaned.split("|")[0]) != null ? _a2 : "").split("#")[0]) != null ? _b : "";
   return name.trim();
 }
-var FileSuggest = class extends import_obsidian7.AbstractInputSuggest {
+var FileSuggest = class extends import_obsidian9.AbstractInputSuggest {
   getSuggestions(query) {
     if (!query.includes("[")) return [];
     const q = query.replace(/^\[+/, "").trim().toLowerCase();
@@ -1920,7 +2242,7 @@ var FileSuggest = class extends import_obsidian7.AbstractInputSuggest {
     this.close();
   }
 };
-var OpportunityModal = class extends import_obsidian7.Modal {
+var OpportunityModal = class extends import_obsidian9.Modal {
   constructor(opts) {
     var _a2, _b;
     super(opts.app);
@@ -2049,7 +2371,7 @@ var OpportunityModal = class extends import_obsidian7.Modal {
   async ensureAndOpenNote(name) {
     const path = name.endsWith(".md") ? name : name + ".md";
     let file = this.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof import_obsidian7.TFile)) {
+    if (!(file instanceof import_obsidian9.TFile)) {
       let backlink = "";
       if (this.opts.boardFile) {
         const boardName = this.opts.boardFile.replace(/\.md$/i, "").replace(/^.*\//, "");
@@ -2061,7 +2383,7 @@ var OpportunityModal = class extends import_obsidian7.Modal {
 ${backlink}
 `);
     }
-    if (file instanceof import_obsidian7.TFile) {
+    if (file instanceof import_obsidian9.TFile) {
       const leaf = this.app.workspace.getLeaf("tab");
       await leaf.openFile(file);
     }
@@ -2075,8 +2397,8 @@ ${backlink}
 };
 
 // src/data/opportunityParser.ts
-var import_obsidian8 = require("obsidian");
-var import_obsidian9 = require("obsidian");
+var import_obsidian10 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 init_taskParser();
 var DEFAULT_BOARD_FILE = "\u770B\u677F.md";
 var STATUS_REMAP = {
@@ -2256,7 +2578,7 @@ ${buildBody([], title)}`;
 }
 async function parseOpportunitiesFile(app, path, title) {
   const file = app.vault.getAbstractFileByPath(path);
-  if (!(file instanceof import_obsidian8.TFile)) {
+  if (!(file instanceof import_obsidian10.TFile)) {
     await ensureOpportunityFile(app, path, title);
     return [];
   }
@@ -2268,15 +2590,15 @@ async function parseOpportunitiesFile(app, path, title) {
 }
 async function writeOpportunitiesFile(app, path, items, title) {
   let file = app.vault.getAbstractFileByPath(path);
-  if (!(file instanceof import_obsidian8.TFile)) {
+  if (!(file instanceof import_obsidian10.TFile)) {
     await ensureOpportunityFile(app, path, title);
     file = app.vault.getAbstractFileByPath(path);
   }
-  if (!(file instanceof import_obsidian8.TFile)) return;
+  if (!(file instanceof import_obsidian10.TFile)) return;
   const content = await app.vault.read(file);
   const fm = parseFrontmatter(content, path);
   fm["opportunities"] = items.map(toFmObject);
-  const yaml = (0, import_obsidian9.stringifyYaml)(fm);
+  const yaml = (0, import_obsidian11.stringifyYaml)(fm);
   const front = `---
 ${yaml.trim()}
 ---
@@ -2556,7 +2878,7 @@ var OpportunityBoard = class {
         });
         card.addEventListener("contextmenu", (e) => {
           e.preventDefault();
-          const menu = new import_obsidian10.Menu();
+          const menu = new import_obsidian12.Menu();
           menu.addItem((m) => m.setTitle(UI_TEXT.edit).setIcon("pencil").onClick(() => this.openModal(it)));
           if (singleMode) menu.addItem((m) => m.setTitle("\u5728\u53F3\u4FA7\u67E5\u770B").setIcon("eye").onClick(() => {
             this.selectedDetailId = it.id;
@@ -2923,7 +3245,7 @@ var OpportunityBoard = class {
 };
 
 // src/views/ProjectBoard.ts
-var import_obsidian11 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 init_taskParser();
 
 // src/data/taskLogic.ts
@@ -3272,7 +3594,7 @@ var ProjectBoard = class {
     const folderName = proj.path.split("/").pop() || proj.name;
     const projectFilePath = `${proj.path}/project-${folderName}.md`;
     const file = this.app.vault.getAbstractFileByPath(projectFilePath);
-    if (file instanceof import_obsidian11.TFile) {
+    if (file instanceof import_obsidian13.TFile) {
       await this.writeFrontmatter(file, { "\u9636\u6BB5": String(stage) });
     }
     this.renderPanels();
@@ -3308,7 +3630,7 @@ var ProjectBoard = class {
       });
       item.addEventListener("contextmenu", (e) => {
         e.preventDefault();
-        const menu = new import_obsidian11.Menu();
+        const menu = new import_obsidian13.Menu();
         menu.addItem((menuItem) => {
           menuItem.setTitle("\u7F16\u8F91\u9879\u76EE").setIcon("pencil").onClick(() => {
             void this.editProject(p);
@@ -3376,7 +3698,7 @@ var ProjectBoard = class {
       return;
     }
     const file = this.app.vault.getAbstractFileByPath(taskId);
-    if (!(file instanceof import_obsidian11.TFile)) {
+    if (!(file instanceof import_obsidian13.TFile)) {
       this.showToast("\u627E\u4E0D\u5230\u4EFB\u52A1\u6587\u4EF6");
       return;
     }
@@ -3388,7 +3710,7 @@ var ProjectBoard = class {
     }
     await this.app.fileManager.renameFile(file, newPath);
     const moved = this.app.vault.getAbstractFileByPath(newPath);
-    if (moved instanceof import_obsidian11.TFile) {
+    if (moved instanceof import_obsidian13.TFile) {
       const content = await this.app.vault.read(moved);
       const fm = parseFrontmatter(content);
       if (typeof fm["\u9879\u76EE"] === "string" && fm["\u9879\u76EE"] !== targetProject) {
@@ -3407,7 +3729,7 @@ var ProjectBoard = class {
     const confirmed = confirm(`\u786E\u5B9A\u5220\u9664\u9879\u76EE "${proj.name}" \u53CA\u5176\u6240\u6709\u4EFB\u52A1\u6587\u4EF6\uFF1F\u6B64\u64CD\u4F5C\u4E0D\u53EF\u64A4\u9500\u3002`);
     if (!confirmed) return;
     const folder = this.app.vault.getAbstractFileByPath(proj.path);
-    if (folder instanceof import_obsidian11.TFolder) {
+    if (folder instanceof import_obsidian13.TFolder) {
       await this.app.fileManager.trashFile(folder);
       this.showToast("\u274C \u9879\u76EE\u5DF2\u5220\u9664: " + proj.name);
       await this.refresh();
@@ -3612,7 +3934,7 @@ var ProjectBoard = class {
     };
     updateFilterLabel();
     filterBtn.addEventListener("click", (e) => {
-      const menu = new import_obsidian11.Menu();
+      const menu = new import_obsidian13.Menu();
       for (const st of STATUS_LIST) {
         menu.addItem((item) => item.setTitle(st).setChecked(this.ganttStatusFilter.includes(st)).onClick(() => {
           const idx = this.ganttStatusFilter.indexOf(st);
@@ -3806,7 +4128,7 @@ var ProjectBoard = class {
       lr.addEventListener("click", () => this.openTaskEditModal(t));
       lr.addEventListener("contextmenu", (e) => {
         e.preventDefault();
-        const menu = new import_obsidian11.Menu();
+        const menu = new import_obsidian13.Menu();
         menu.addItem((item) => {
           item.setTitle(UI_TEXT.taskDetail).setIcon("pencil").onClick(() => this.openTaskEditModal(t));
         });
@@ -4051,7 +4373,7 @@ var ProjectBoard = class {
   async updateTaskDates(task, newStart, newEnd) {
     if (!task.sourceFile) return;
     const file = this.app.vault.getAbstractFileByPath(task.sourceFile);
-    if (!(file instanceof import_obsidian11.TFile)) return;
+    if (!(file instanceof import_obsidian13.TFile)) return;
     await this.writeFrontmatter(file, {
       "\u5F00\u59CB\u65E5\u671F": newStart,
       "\u622A\u6B62\u65E5\u671F": newEnd
@@ -4278,7 +4600,7 @@ var ProjectBoard = class {
     tdProj.appendText(t.projectId);
     tr.addEventListener("contextmenu", (e) => {
       e.preventDefault();
-      const menu = new import_obsidian11.Menu();
+      const menu = new import_obsidian13.Menu();
       menu.addItem((item) => {
         item.setTitle(UI_TEXT.edit).setIcon("pencil").onClick(() => this.openTaskEditModal(t));
       });
@@ -4423,7 +4745,7 @@ var ProjectBoard = class {
   async updateTaskDate(task, newDate) {
     if (!task.sourceFile) return;
     const file = this.app.vault.getAbstractFileByPath(task.sourceFile);
-    if (!(file instanceof import_obsidian11.TFile)) return;
+    if (!(file instanceof import_obsidian13.TFile)) return;
     const updates = {};
     if (task.dueDate) updates["\u622A\u6B62\u65E5\u671F"] = newDate;
     if (task.remindDate) updates["\u63D0\u9192\u65E5\u671F"] = newDate;
@@ -4473,7 +4795,7 @@ var ProjectBoard = class {
         });
         card.addEventListener("contextmenu", (e) => {
           e.preventDefault();
-          const menu = new import_obsidian11.Menu();
+          const menu = new import_obsidian13.Menu();
           menu.addItem((item) => {
             item.setTitle("\u7F16\u8F91").setIcon("pencil").onClick(() => this.openTaskEditModal(t));
           });
@@ -4526,7 +4848,7 @@ var ProjectBoard = class {
   async updateTaskStatus(task, newStatus) {
     if (!task.sourceFile) return;
     const file = this.app.vault.getAbstractFileByPath(task.sourceFile);
-    if (!(file instanceof import_obsidian11.TFile)) return;
+    if (!(file instanceof import_obsidian13.TFile)) return;
     await this.writeFrontmatter(file, { "\u72B6\u6001": newStatus });
     task.status = newStatus;
     this.showToast("\u2728 \u4EFB\u52A1\u72B6\u6001\u5DF2\u66F4\u65B0: " + newStatus);
@@ -4536,7 +4858,7 @@ var ProjectBoard = class {
   async updateTaskPriority(task, newPriority) {
     if (!task.sourceFile) return;
     const file = this.app.vault.getAbstractFileByPath(task.sourceFile);
-    if (!(file instanceof import_obsidian11.TFile)) return;
+    if (!(file instanceof import_obsidian13.TFile)) return;
     await this.writeFrontmatter(file, { "\u4F18\u5148\u7EA7": newPriority });
     task.priority = newPriority;
     this.showToast("\u2728 \u4F18\u5148\u7EA7\u5DF2\u66F4\u65B0: " + newPriority);
@@ -4678,7 +5000,7 @@ function getLunarDate(d) {
     return "";
   }
 }
-var DashboardView = class _DashboardView extends import_obsidian14.ItemView {
+var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     __publicField(this, "plugin");
@@ -4686,7 +5008,7 @@ var DashboardView = class _DashboardView extends import_obsidian14.ItemView {
     __publicField(this, "bannerImg", null);
     __publicField(this, "bannerPh", null);
     __publicField(this, "bannerEl", null);
-    __publicField(this, "bannerStatsEls", null);
+    __publicField(this, "bannerStatsEl", null);
     __publicField(this, "boardEl", null);
     __publicField(this, "heatmapCard", null);
     __publicField(this, "heatmapTimer", null);
@@ -4827,16 +5149,16 @@ var DashboardView = class _DashboardView extends import_obsidian14.ItemView {
         this.taskStore.invalidate();
         void this.refreshBannerStats();
         if (this.currentPage === "project") {
-          if (file instanceof import_obsidian14.TFile && file.name.startsWith("project-")) return;
+          if (file instanceof import_obsidian16.TFile && file.name.startsWith("project-")) return;
           void this.updatePulse();
           void this.projectBoard.refresh();
         } else if (this.currentPage === "opportunity" && this.plugin.settings.boardEnabled) {
-          if (file instanceof import_obsidian14.TFile && file.path === this.plugin.settings.opportunityFile) {
+          if (file instanceof import_obsidian16.TFile && file.path === this.plugin.settings.opportunityFile) {
             void this.updatePulse();
             this.oppBoard.scheduleRefresh();
           }
         } else {
-          if (!(file instanceof import_obsidian14.TFile) || !this.taskStore.isTaskRelevantPath(file.path)) return;
+          if (!(file instanceof import_obsidian16.TFile) || !this.taskStore.isTaskRelevantPath(file.path)) return;
           void this.updatePulse();
           this.dashboardStore.requestRefresh();
         }
@@ -4898,15 +5220,17 @@ var DashboardView = class _DashboardView extends import_obsidian14.ItemView {
     const pickBtn = bar.createEl("button", { cls: "ad-banner__btn", text: "\u66F4\u6362\u56FE\u7247" });
     const modeBtn = bar.createEl("button", {
       cls: "ad-banner__btn",
-      text: this.bannerState.mode === "stats" ? "\u6D77\u62A5\u89C6\u56FE" : "\u7EDF\u8BA1\u89C6\u56FE",
-      attr: { title: "\u5207\u6362\u6D77\u62A5\u548C\u6570\u636E\u7EDF\u8BA1" }
+      text: "\u6A2A\u5E45\u8BBE\u7F6E",
+      attr: { title: "\u8BBE\u7F6E\u6D77\u62A5\u548C\u6570\u636E\u7EDF\u8BA1" }
     });
     modeBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      this.bannerState.mode = this.bannerState.mode === "stats" ? "poster" : "stats";
-      void this.saveBanner().then(() => this.refreshBanner());
+      this.openBannerEditModal();
     });
-    if (this.bannerState.mode === "stats") this.renderBannerStats(banner);
+    if (this.bannerState.mode === "stats") {
+      banner.addClass("ad-banner--stats");
+      void this.renderStatsBanner(banner);
+    }
     const fileInput = root.createEl("input", { cls: "ad-banner__fileinput", attr: { type: "file", accept: "image/*" } });
     if (this.bannerState.imageDataUrl && this.bannerImg && this.bannerPh) {
       this.displayBannerImage(this.bannerState.imageDataUrl, this.bannerState.offsetY);
@@ -4951,38 +5275,26 @@ var DashboardView = class _DashboardView extends import_obsidian14.ItemView {
     if (old && fresh) old.replaceWith(fresh);
     if (input) parent.appendChild(input);
   }
-  renderBannerStats(banner) {
-    const stats = banner.createDiv({ cls: "ad-banner__stats" });
-    const make = (label) => {
-      const item = stats.createDiv({ cls: "ad-banner__stat" });
-      item.createDiv({ cls: "ad-banner__stat-label", text: label });
-      return item.createDiv({ cls: "ad-banner__stat-value", text: "\u2014" });
-    };
-    this.bannerStatsEls = {
-      completion: make("\u4EFB\u52A1\u5B8C\u6210\u7387"),
-      overdue: make("\u4EFB\u52A1\u903E\u671F\u7387"),
-      links: make("\u94FE\u63A5/\u7BC7")
-    };
-    void this.refreshBannerStats();
+  openBannerEditModal() {
+    new BannerEditModal({
+      app: this.app,
+      banner: this.bannerState,
+      onSave: (banner) => {
+        this.bannerState = banner;
+        void this.saveBanner().then(() => this.refreshBanner());
+      }
+    }).open();
+  }
+  async renderStatsBanner(banner) {
+    const stats = await renderBannerStats(banner, this.bannerState.statsConfig, this.app, this.taskStore);
+    if (banner.isConnected) this.bannerStatsEl = stats;
   }
   async refreshBannerStats() {
-    const els = this.bannerStatsEls;
-    if (!els || this.bannerState.mode !== "stats") return;
-    const tasks = await this.taskStore.scanAllTasks();
-    const total = tasks.length;
-    const completed = tasks.filter((task) => task.status === "\u5DF2\u5B8C\u6210").length;
-    const overdue = tasks.filter((task) => task.isOverdue).length;
-    const completionRate = total ? Math.round(completed / total * 100) : 0;
-    const overdueRate = total ? Math.round(overdue / total * 100) : 0;
-    const notes = this.app.vault.getMarkdownFiles().filter((file) => !file.path.startsWith("."));
-    let linkCount = 0;
-    for (const targets of Object.values(this.app.metadataCache.resolvedLinks)) {
-      linkCount += Object.values(targets).reduce((sum, count) => sum + count, 0);
-    }
-    const linksPerNote = notes.length ? linkCount / notes.length : 0;
-    els.completion.textContent = `${completionRate}%`;
-    els.overdue.textContent = `${overdueRate}%`;
-    els.links.textContent = linksPerNote.toFixed(1);
+    var _a2, _b;
+    if (this.bannerState.mode !== "stats" || !((_a2 = this.bannerEl) == null ? void 0 : _a2.isConnected)) return;
+    (_b = this.bannerStatsEl) == null ? void 0 : _b.remove();
+    this.bannerStatsEl = null;
+    await this.renderStatsBanner(this.bannerEl);
   }
   openBannerModal(dataUrl, currentOffsetY) {
     new BannerModal(
@@ -5276,7 +5588,7 @@ var DashboardView = class _DashboardView extends import_obsidian14.ItemView {
   }
   async openFileByPath(path) {
     const f = this.app.vault.getAbstractFileByPath(path);
-    if (f instanceof import_obsidian14.TFile) {
+    if (f instanceof import_obsidian16.TFile) {
       const leaf = this.app.workspace.getLeaf(true);
       await leaf.openFile(f);
     } else {
@@ -5394,7 +5706,7 @@ var DashboardView = class _DashboardView extends import_obsidian14.ItemView {
     if (qc.templateFile) {
       const tplPath = this.resolveTemplatePath(qc.templateFile);
       const tplFile = this.app.vault.getAbstractFileByPath(tplPath);
-      if (tplFile instanceof import_obsidian14.TFile) {
+      if (tplFile instanceof import_obsidian16.TFile) {
         const tpl = await this.app.vault.read(tplFile);
         fileContent = this.applyTemplate(tpl, content, filename, now);
       }
@@ -5417,7 +5729,7 @@ var DashboardView = class _DashboardView extends import_obsidian14.ItemView {
     if (dc.templateFile) {
       const tplPath = this.resolveTemplatePath(dc.templateFile);
       const tplFile = this.app.vault.getAbstractFileByPath(tplPath);
-      if (tplFile instanceof import_obsidian14.TFile) {
+      if (tplFile instanceof import_obsidian16.TFile) {
         const tpl = await this.app.vault.read(tplFile);
         content = this.applyTemplate(tpl, "", filename, now);
       }
@@ -5425,7 +5737,7 @@ var DashboardView = class _DashboardView extends import_obsidian14.ItemView {
     await this.app.vault.create(filepath, content);
     this.showToast(`\u2728 \u65E5\u8BB0\u5DF2\u521B\u5EFA\uFF1A${filename}`);
     const file = this.app.vault.getAbstractFileByPath(filepath);
-    if (file instanceof import_obsidian14.TFile) {
+    if (file instanceof import_obsidian16.TFile) {
       await this.app.workspace.openLinkText(file.path, "", true);
     }
   }
@@ -5478,7 +5790,7 @@ var DashboardView = class _DashboardView extends import_obsidian14.ItemView {
   /** Toggle task status in source file's Chinese frontmatter */
   async toggleTask(task, row) {
     const file = this.app.vault.getAbstractFileByPath(task.sourceFile);
-    if (!(file instanceof import_obsidian14.TFile)) return;
+    if (!(file instanceof import_obsidian16.TFile)) return;
     if (task.type === "\u91CD\u590D" && task.status !== "\u5DF2\u5B8C\u6210") {
       const nextDate = calcNextRemindDate(task);
       if (nextDate) {
@@ -5509,7 +5821,7 @@ var DashboardView = class _DashboardView extends import_obsidian14.ItemView {
   async writeTaskField(task, fieldKey, value) {
     if (!task.sourceFile) return;
     const file = this.app.vault.getAbstractFileByPath(task.sourceFile);
-    if (!(file instanceof import_obsidian14.TFile)) return;
+    if (!(file instanceof import_obsidian16.TFile)) return;
     await this.writeFrontmatter(file, { [fieldKey]: value });
   }
   /** Postpone task by one day (spec section VIII.3) */
@@ -5572,7 +5884,7 @@ var DashboardView = class _DashboardView extends import_obsidian14.ItemView {
     const folderName = proj.path.split("/").pop() || proj.name;
     const projectFilePath = `${proj.path}/project-${folderName}.md`;
     const file = this.app.vault.getAbstractFileByPath(projectFilePath);
-    if (!(file instanceof import_obsidian14.TFile)) return;
+    if (!(file instanceof import_obsidian16.TFile)) return;
     const typeLabel = isLongTermProject(data.type) ? "\u957F\u671F\u9879\u76EE" : "\u9636\u6BB5\u9879\u76EE";
     await this.writeFrontmatter(file, {
       "\u9879\u76EE\u540D\u79F0": data.name,
@@ -5602,7 +5914,7 @@ var DashboardView = class _DashboardView extends import_obsidian14.ItemView {
     const confirmed = confirm(`\u786E\u5B9A\u5220\u9664\u4EFB\u52A1 "${task.content}"\uFF1F`);
     if (!confirmed) return;
     const file = this.app.vault.getAbstractFileByPath(task.sourceFile);
-    if (file instanceof import_obsidian14.TFile) {
+    if (file instanceof import_obsidian16.TFile) {
       await this.app.fileManager.trashFile(file);
       this.showToast("\u274C \u4EFB\u52A1\u5DF2\u5220\u9664: " + task.content);
       void this.refreshRelevant();
@@ -5623,12 +5935,12 @@ var DashboardView = class _DashboardView extends import_obsidian14.ItemView {
   async findProjectFolder(projectName) {
     const rootPath = this.plugin.settings.projectsFolder;
     const root = this.app.vault.getAbstractFileByPath(rootPath);
-    if (!(root instanceof import_obsidian14.TFolder)) return null;
+    if (!(root instanceof import_obsidian16.TFolder)) return null;
     return this.findProjectFolderRecursive(root, projectName);
   }
   findProjectFolderRecursive(folder, projectName) {
     for (const child of folder.children) {
-      if (child instanceof import_obsidian14.TFolder) {
+      if (child instanceof import_obsidian16.TFolder) {
         if (child.name === projectName) return child;
         const found = this.findProjectFolderRecursive(child, projectName);
         if (found) return found;
@@ -6070,7 +6382,7 @@ var DashboardView = class _DashboardView extends import_obsidian14.ItemView {
     if (!card) return;
     if (((_a2 = card.getAttribute("data-mod")) != null ? _a2 : "") !== "countdown") return;
     e.preventDefault();
-    const menu = new import_obsidian14.Menu();
+    const menu = new import_obsidian16.Menu();
     menu.addItem((item) => item.setTitle("\u7F16\u8F91").setIcon("pencil").onClick(() => this.openCountdownEdit()));
     menu.showAtMouseEvent(e);
   }
@@ -6688,7 +7000,7 @@ var DashboardView = class _DashboardView extends import_obsidian14.ItemView {
         row.createSpan({ cls: "ad-todo__tag", text: prioLabel, attr: { "data-prio": task.priority || "" } });
         row.addEventListener("contextmenu", (e) => {
           e.preventDefault();
-          const menu = new import_obsidian14.Menu();
+          const menu = new import_obsidian16.Menu();
           menu.addItem((item) => {
             item.setTitle("\u7F16\u8F91\u4EFB\u52A1").setIcon("pencil").onClick(() => this.openTaskEditModal(task));
           });
@@ -6902,7 +7214,7 @@ var DashboardView = class _DashboardView extends import_obsidian14.ItemView {
     li.addEventListener("click", () => this.openTaskEditModal(task));
     li.addEventListener("contextmenu", (e) => {
       e.preventDefault();
-      const menu = new import_obsidian14.Menu();
+      const menu = new import_obsidian16.Menu();
       menu.addItem((item) => {
         item.setTitle("\u7F16\u8F91\u4EFB\u52A1").setIcon("pencil").onClick(() => this.openTaskEditModal(task));
       });
@@ -7029,7 +7341,7 @@ var DashboardView = class _DashboardView extends import_obsidian14.ItemView {
       row.createDiv({ cls: "ad-proj__chev", text: "\u203A" });
       row.addEventListener("contextmenu", (e) => {
         e.preventDefault();
-        const menu = new import_obsidian14.Menu();
+        const menu = new import_obsidian16.Menu();
         menu.addItem((item) => {
           item.setTitle("\u7F16\u8F91\u9879\u76EE").setIcon("pencil").onClick(() => void this.editProject(p));
         });
@@ -7277,7 +7589,7 @@ var DashboardView = class _DashboardView extends import_obsidian14.ItemView {
 };
 
 // src/main.ts
-var Dashboard = class extends import_obsidian15.Plugin {
+var Dashboard = class extends import_obsidian17.Plugin {
   constructor() {
     super(...arguments);
     __publicField(this, "settings");
