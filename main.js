@@ -5215,7 +5215,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
   renderBanner(root) {
     const banner = root.createDiv({ cls: "ad-banner" });
     this.bannerEl = banner;
-    const ph = banner.createDiv({ cls: "ad-banner__ph", text: "[ banner ]  \xB7  \u70B9\u51FB\u53F3\u4E0A\u89D2\u6309\u94AE\u63D2\u5165\u5C01\u9762\u56FE\u7247" });
+    const ph = this.bannerState.mode === "stats" ? null : banner.createDiv({ cls: "ad-banner__ph", text: "[ banner ]  \xB7  \u70B9\u51FB\u53F3\u4E0A\u89D2\u6309\u94AE\u63D2\u5165\u5C01\u9762\u56FE\u7247" });
     this.bannerPh = ph;
     const img = banner.createEl("img", { cls: "ad-banner__img ad-banner__img--hidden" });
     img.alt = "Banner";
@@ -5236,7 +5236,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
       void this.renderStatsBanner(banner);
     }
     const fileInput = root.createEl("input", { cls: "ad-banner__fileinput", attr: { type: "file", accept: "image/*" } });
-    if (this.bannerState.imageDataUrl && this.bannerImg && this.bannerPh) {
+    if (this.bannerState.imageDataUrl && this.bannerImg) {
       this.displayBannerImage(this.bannerState.imageDataUrl, this.bannerState.offsetY);
     }
     pickBtn.addEventListener("click", (e) => {
@@ -5317,13 +5317,13 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
   displayBannerImage(dataUrl, offsetY) {
     const img = this.bannerImg;
     const ph = this.bannerPh;
-    if (!img || !ph) return;
+    if (!img) return;
     img.onload = () => {
       img.style.transform = `translateY(${offsetY}px)`;
     };
     img.src = dataUrl;
     img.removeClass("ad-banner__img--hidden");
-    ph.addClass("ad-banner__ph--hidden");
+    ph == null ? void 0 : ph.addClass("ad-banner__ph--hidden");
   }
   async saveBanner() {
     this.plugin.settings.banner = { ...this.bannerState };

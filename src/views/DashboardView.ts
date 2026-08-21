@@ -400,7 +400,9 @@ export class DashboardView extends ItemView {
 	private renderBanner(root: HTMLElement): HTMLElement {
 		const banner = root.createDiv({ cls: 'ad-banner' });
 		this.bannerEl = banner;
-		const ph = banner.createDiv({ cls: 'ad-banner__ph', text: '[ banner ]  ·  点击右上角按钮插入封面图片' });
+		const ph = this.bannerState.mode === 'stats'
+			? null
+			: banner.createDiv({ cls: 'ad-banner__ph', text: '[ banner ]  ·  点击右上角按钮插入封面图片' });
 		this.bannerPh = ph;
 
 		const img = banner.createEl('img', { cls: 'ad-banner__img ad-banner__img--hidden' });
@@ -428,7 +430,7 @@ export class DashboardView extends ItemView {
 		const fileInput = root.createEl('input', { cls: 'ad-banner__fileinput', attr: { type: 'file', accept: 'image/*' } });
 
 		// restore saved image
-		if (this.bannerState.imageDataUrl && this.bannerImg && this.bannerPh) {
+		if (this.bannerState.imageDataUrl && this.bannerImg) {
 			this.displayBannerImage(this.bannerState.imageDataUrl, this.bannerState.offsetY);
 		}
 
@@ -516,13 +518,13 @@ export class DashboardView extends ItemView {
 	private displayBannerImage(dataUrl: string, offsetY: number): void {
 		const img = this.bannerImg;
 		const ph = this.bannerPh;
-		if (!img || !ph) return;
+		if (!img) return;
 		img.onload = () => {
 			img.style.transform = `translateY(${offsetY}px)`;
 		};
 		img.src = dataUrl;
 		img.removeClass('ad-banner__img--hidden');
-		ph.addClass('ad-banner__ph--hidden');
+		ph?.addClass('ad-banner__ph--hidden');
 	}
 
 	private async saveBanner(): Promise<void> {
