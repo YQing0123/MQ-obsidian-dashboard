@@ -1,6 +1,7 @@
 import { TFile, TFolder } from 'obsidian';
 import type { App } from 'obsidian';
 import { parseTaskFile, parseProjectMeta } from './taskParser';
+import { LONG_TERM_STAGES, isLongTermProject } from './taskParser';
 import type { ProjectInfo, TaskItem } from './taskParser';
 import { reportParseIssue, clearParseIssues, getParseIssues } from './parserDiagnostics';
 import type { ParseIssue } from './parserDiagnostics';
@@ -115,7 +116,7 @@ export class TaskStore {
 					acc.push(...taskFiles);
 					const activeCount = taskFiles.filter((t) => t.status !== '已完成' && t.status !== '已取消').length;
 					const projStage = meta.stage ?? 0;
-					const stages = this.getSettings().npdpStages;
+					const stages = isLongTermProject(meta.type) ? LONG_TERM_STAGES : this.getSettings().npdpStages;
 					projects.push({
 						name: meta.name || child.name,
 						color: projColor,

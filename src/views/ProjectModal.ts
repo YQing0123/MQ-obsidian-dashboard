@@ -1,5 +1,5 @@
 import { App, Modal } from 'obsidian';
-import { ProjectType, PROJECT_TYPE_LIST } from '../data/taskParser';
+import { LONG_TERM_STAGES, ProjectType, PROJECT_TYPE_LIST, isLongTermProject } from '../data/taskParser';
 import { UI_TEXT } from '../constants';
 
 export interface ProjectFormData {
@@ -44,7 +44,7 @@ export class ProjectModal extends Modal {
 		if (opts.editData) {
 			this.selectedColor = opts.editData.color;
 			this.selectedStage = opts.editData.stage ?? 0;
-			this.selectedType = opts.editData.type ?? 'stage';
+		this.selectedType = opts.editData.type === 'nostage' ? 'longterm' : (opts.editData.type ?? 'stage');
 		}
 	}
 
@@ -64,7 +64,7 @@ export class ProjectModal extends Modal {
 			(nameInput).disabled = true;
 		}
 
-		// Project type selector (阶段项目 / 非阶段项目)
+		// Project type selector
 		contentEl.createEl('label', { cls: 'ad-modal-label', text: '项目类型' });
 		const typeWrap = contentEl.createDiv({ cls: 'ad-modal-row' });
 		const typeSelect = typeWrap.createEl('select', { cls: 'ad-modal-input' });
@@ -74,8 +74,7 @@ export class ProjectModal extends Modal {
 		typeSelect.value = this.selectedType;
 		typeSelect.addEventListener('change', () => {
 			this.selectedType = (typeSelect.value as ProjectType) || 'stage';
-			// Non-stage projects have no stage pipeline → hide the 项目阶段 field
-			stageField.style.display = this.selectedType === 'stage' ? '' : 'none';
+			populateStages();
 		});
 
 		contentEl.createEl('label', { cls: 'ad-modal-label', text: '项目颜色（用于甘特图）' });
@@ -104,6 +103,14 @@ export class ProjectModal extends Modal {
 		endCol.createEl('label', { cls: 'ad-modal-label', text: '结束日期' });
 		const endInput = endCol.createEl('input', { cls: 'ad-modal-input', attr: { type: 'date' } });
 		if (ed) (endInput).value = ed.endDate || '';
+		// Keep manual YYYY-MM-DD entry, while explicitly opening the native calendar
+		// when the field is clicked in Obsidian's embedded Chromium view.
+		for (const input of [startInput, endInput]) {
+			input.addEventListener('click', () => {
+				const picker = input as HTMLInputElement & { showPicker?: () => void };
+				try { picker.showPicker?.(); } catch { /* browser may require a trusted event */ }
+			});
+		}
 
 		contentEl.createEl('label', { cls: 'ad-modal-label', text: '项目描述' });
 		const descArea = contentEl.createEl('textarea', {
@@ -112,25 +119,25 @@ export class ProjectModal extends Modal {
 		});
 		if (ed) (descArea).value = ed.description;
 
-		// Stage dropdown (hidden for 非阶段项目)
-		const stages = this.opts.stages || ['立项', '规划', '开发', '测试', '上线'];
+		// Both project types have a stage pipeline. Long-term projects use the
+		// fixed lifecycle 立项 → 迭代 → 完结.
+		const configuredStages = this.opts.stages || ['立项', '规划', '开发', '测试', '上线'];
 		const stageField = contentEl.createDiv({ cls: 'ad-modal-field' });
 		stageField.createEl('label', { cls: 'ad-modal-label', text: '项目阶段' });
 		const stageWrap = stageField.createDiv({ cls: 'ad-modal-row' });
 		const stageSelect = stageWrap.createEl('select', { cls: 'ad-modal-input' });
-		stages.forEach((label, i) => {
-			stageSelect.createEl('option', { value: String(i), text: label });
-		});
-		// Clamp the stage index into the valid range: if the stage count was
-		// reduced (e.g. 5 → 4) a saved project could keep a now-missing stage,
-		// which would leave the dropdown blank. Pin it to the last option.
-		this.selectedStage = Math.max(0, Math.min(this.selectedStage, stages.length - 1));
-		stageSelect.value = String(this.selectedStage);
+		const populateStages = (): void => {
+			const stages = isLongTermProject(this.selectedType) ? LONG_TERM_STAGES : configuredStages;
+			stageSelect.empty();
+			stages.forEach((label, i) => stageSelect.createEl('option', { value: String(i), text: label }));
+			this.selectedStage = Math.max(0, Math.min(this.selectedStage, stages.length - 1));
+			stageSelect.value = String(this.selectedStage);
+		};
+		populateStages();
 		stageSelect.addEventListener('change', () => {
 			this.selectedStage = parseInt(stageSelect.value) || 0;
 		});
-		// Initialize visibility based on current type
-		stageField.style.display = this.selectedType === 'stage' ? '' : 'none';
+		stageField.style.display = '';
 
 		const btns = contentEl.createDiv({ cls: 'ad-modal-btns' });
 		btns.createEl('button', { cls: 'ad-modal-btn', text: UI_TEXT.cancel })

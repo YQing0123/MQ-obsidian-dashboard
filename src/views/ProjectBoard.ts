@@ -2,7 +2,7 @@ import { Menu, TFile, TFolder } from 'obsidian';
 import type { App } from 'obsidian';
 import {
 	TaskItem, ProjectInfo, TaskStatus, NodeState, priorityWeight,
-	parseFrontmatter, STATUS_LIST,
+	parseFrontmatter, STATUS_LIST, LONG_TERM_STAGES, isLongTermProject,
 } from '../data/taskParser';
 import type { TaskStore } from '../data/taskStore';
 import { fmtDate } from '../data/taskLogic';
@@ -166,10 +166,10 @@ export class ProjectBoard {
 			panels[td.key] = content.createDiv({ cls: 'po-panel' + (td.key === this.currentView ? ' is-active' : ''), attr: { 'data-view': td.key } });
 		}
 
-		// Stage pipeline (compact dots) at the tab row's right side — only for 阶段项目
+		// Stage pipeline (compact dots) at the tab row's right side.
 		if (this.selectedProject) {
 			const selProj = this.currentProjects.find((p) => p.name === this.selectedProject);
-			if (selProj && (selProj.type ?? 'stage') === 'stage') {
+			if (selProj) {
 				this.renderStagePipeline(tabs);
 			}
 		}
@@ -212,8 +212,8 @@ export class ProjectBoard {
 	/** Render NPDP stage pipeline for selected project — compact card-style dots (like home page project card) */
 	private renderStagePipeline(container: HTMLElement): void {
 		const proj = this.currentProjects.find((p) => p.name === this.selectedProject);
-		if (!proj || (proj.type ?? 'stage') !== 'stage') return;
-		const stages = this.plugin.settings.npdpStages;
+		if (!proj) return;
+		const stages = proj.stages ?? (isLongTermProject(proj.type) ? LONG_TERM_STAGES : this.plugin.settings.npdpStages);
 		const currentStage = proj.stage ?? 0;
 
 		const bar = container.createDiv({ cls: 'ad-proj__stages po-stage-compact' });
@@ -248,7 +248,8 @@ export class ProjectBoard {
 		this.renderPanels();
 		const sidebar = this.boardEl?.querySelector('.po-sidebar') as HTMLElement | undefined;
 		if (sidebar) this.renderSidebar(sidebar);
-		this.showToast(`\u2728 ${proj.name} \u9636\u6BB5\u5DF2\u66F4\u65B0\u4E3A "${this.plugin.settings.npdpStages[stage]}"`);
+		const stages = proj.stages ?? (isLongTermProject(proj.type) ? LONG_TERM_STAGES : this.plugin.settings.npdpStages);
+		this.showToast(`\u2728 ${proj.name} \u9636\u6BB5\u5DF2\u66F4\u65B0\u4E3A "${stages[stage] ?? stages[0]}"`);
 	}
 
 

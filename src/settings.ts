@@ -5,6 +5,7 @@ import type { BoardStage } from './data/opportunityParser';
 export interface BannerSettings {
 	imageDataUrl: string | null;
 	offsetY: number;
+	mode?: 'poster' | 'stats';
 }
 
 export interface QuickCaptureSettings {
@@ -79,7 +80,7 @@ export interface HomeModuleConfig {
 }
 
 export const DEFAULT_SETTINGS: DashboardSettings = {
-	banner: { imageDataUrl: null, offsetY: 0 },
+	banner: { imageDataUrl: null, offsetY: 0, mode: 'poster' },
 	quickCapture: {
 		storagePath: '00 inbox/速记',
 		namingPattern: 'YYYY-MM-DD HH-mm 捕捉',
@@ -408,7 +409,21 @@ export class DashboardSettingTab extends PluginSettingTab {
 				.setPlaceholder('MY DASHBOARD')
 				.setValue(this.plugin.settings.dashboardTitle)
 				.onChange(async (v) => { this.plugin.settings.dashboardTitle = v; await this.plugin.saveSettings(); this.plugin.refreshDashboardTitle(); }),
-			);
+		);
+
+		new Setting(containerEl)
+			.setName('首页横幅显示')
+			.setDesc('在海报和数据统计之间切换；统计会读取当前项目任务与整个库的链接数据')
+			.addDropdown((dropdown) => {
+				dropdown.addOption('poster', '海报');
+				dropdown.addOption('stats', '数据统计');
+				dropdown.setValue(this.plugin.settings.banner.mode ?? 'poster');
+				dropdown.onChange(async (v) => {
+					this.plugin.settings.banner.mode = v === 'stats' ? 'stats' : 'poster';
+					await this.plugin.saveSettings();
+					this.plugin.refreshBanner();
+				});
+			});
 
 		/* ---- 阶段管道 ---- */
 		new Setting(containerEl).setName('阶段管道').setHeading();

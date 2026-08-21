@@ -40,7 +40,14 @@ export interface TaskItem {
 	parent: string;          // parent task name (父任务)
 }
 
-export type ProjectType = 'stage' | 'nostage';
+/** 项目类型。nostage 仅用于兼容历史 frontmatter，新项目统一使用 longterm。 */
+export type ProjectType = 'stage' | 'longterm' | 'nostage';
+
+export const LONG_TERM_STAGES = ['立项', '迭代', '完结'];
+
+export function isLongTermProject(type: ProjectType | null | undefined): boolean {
+	return type === 'longterm' || type === 'nostage';
+}
 
 export interface ProjectInfo {
 	name: string;           // folder name
@@ -54,13 +61,13 @@ export interface ProjectInfo {
 	path: string;
 	stage: number;          // 0-based index into stages (0 = first stage)
 	stages?: string[];      // NPDP stage labels from settings
-	type: ProjectType;      // 'stage' = 阶段项目, 'nostage' = 非阶段项目
+	type: ProjectType;      // 'stage' = 阶段项目, 'longterm' = 长期项目
 }
 
 /** Project type options for the new/edit project modal */
 export const PROJECT_TYPE_LIST: { value: ProjectType; label: string }[] = [
 	{ value: 'stage', label: '阶段项目' },
-	{ value: 'nostage', label: '非阶段项目' },
+	{ value: 'longterm', label: '长期项目' },
 ];
 
 /* ---- Constants ---- */
@@ -243,6 +250,9 @@ export function projectFromFm(fm: Record<string, unknown>): Partial<ProjectInfo>
 		endDate: getString(fm, '结束日期') || undefined,
 		createDate: getString(fm, '创建时间') || undefined,
 		stage: parseInt(getString(fm, '阶段') || '0') || 0,
-		type: getString(fm, '项目类型') === '非阶段项目' ? 'nostage' : 'stage',
+		type: (() => {
+			const raw = getString(fm, '项目类型');
+			return raw === '长期项目' ? 'longterm' : raw === '非阶段项目' ? 'nostage' : 'stage';
+		})(),
 	};
 }

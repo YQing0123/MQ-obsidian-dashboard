@@ -4,7 +4,7 @@ import { BannerSettings, DEFAULT_SETTINGS } from '../settings';
 import { BannerModal } from './BannerModal';
 import { CountdownModal } from './CountdownModal';
 import { TaskEditModal } from './TaskEditModal';
-import { TaskItem, ProjectInfo, TaskStatus, ProjectType, priorityWeight, NodeState, RepeatRule } from '../data/taskParser';
+import { TaskItem, ProjectInfo, TaskStatus, ProjectType, LONG_TERM_STAGES, isLongTermProject, priorityWeight, NodeState, RepeatRule } from '../data/taskParser';
 import { TaskStore } from '../data/taskStore';
 import { writeFrontmatter as fmWriteFrontmatter, yamlScalar } from '../data/frontmatterWriter';
 import type { ParseIssue } from '../data/parserDiagnostics';
@@ -189,6 +189,8 @@ export class DashboardView extends ItemView {
 	private bannerState: BannerSettings;
 	private bannerImg: HTMLImageElement | null = null;
 	private bannerPh: HTMLElement | null = null;
+	private bannerEl: HTMLElement | null = null;
+	private bannerStatsEls: { completion: HTMLElement; overdue: HTMLElement; links: HTMLElement } | null = null;
 	public boardEl: HTMLElement | null = null;
 	private heatmapCard: HTMLElement | null = null;
 	private heatmapTimer: number | null = null;
@@ -324,6 +326,7 @@ export class DashboardView extends ItemView {
 		// Auto-refresh on vault changes (home cards incl. progress + weekly, or project overview)
 		const refreshAll = () => {
 			this.taskStore.invalidate();
+			void this.refreshBannerStats();
 			void this.updatePulse();
 			if (this.currentPage === 'project') {
 				void this.projectBoard.refresh();
@@ -339,6 +342,7 @@ export class DashboardView extends ItemView {
 		this.registerEvent(this.app.vault.on('rename', refreshAll));
 		this.registerEvent(this.app.vault.on('modify', (file) => {
 			this.taskStore.invalidate();
+			void this.refreshBannerStats();
 			if (this.currentPage === 'project') {
 				// Project config files are re-rendered by setProjectStage / updateProjectFile themselves.
 				// Skipping here avoids a stale re-scan clobbering the just-set stage (flash → reset to first stage).
@@ -391,8 +395,9 @@ export class DashboardView extends ItemView {
 	/* ============================================================
 	   BANNER — image insert via modal, vertical drag only
 	   ============================================================ */
-	private renderBanner(root: HTMLElement): void {
+	private renderBanner(root: HTMLElement): HTMLElement {
 		const banner = root.createDiv({ cls: 'ad-banner' });
+		this.bannerEl = banner;
 		const ph = banner.createDiv({ cls: 'ad-banner__ph', text: '[ banner ]  ·  点击右上角按钮插入封面图片' });
 		this.bannerPh = ph;
 
@@ -403,6 +408,17 @@ export class DashboardView extends ItemView {
 		// toolbar
 		const bar = banner.createDiv({ cls: 'ad-banner__bar' });
 		const pickBtn = bar.createEl('button', { cls: 'ad-banner__btn', text: '更换图片' });
+		const modeBtn = bar.createEl('button', {
+			cls: 'ad-banner__btn',
+			text: this.bannerState.mode === 'stats' ? '海报视图' : '统计视图',
+			attr: { title: '切换海报和数据统计' },
+		});
+		modeBtn.addEventListener('click', (e) => {
+			e.stopPropagation();
+			this.bannerState.mode = this.bannerState.mode === 'stats' ? 'poster' : 'stats';
+			void this.saveBanner().then(() => this.refreshBanner());
+		});
+		if (this.bannerState.mode === 'stats') this.renderBannerStats(banner);
 
 		// hidden file input
 		const fileInput = root.createEl('input', { cls: 'ad-banner__fileinput', attr: { type: 'file', accept: 'image/*' } });
@@ -437,6 +453,57 @@ export class DashboardView extends ItemView {
 				this.openBannerModal(this.bannerState.imageDataUrl, this.bannerState.offsetY);
 			}
 		});
+		return banner;
+	}
+
+	/** Replace only the banner so a setting or inline toggle takes effect immediately. */
+	refreshBanner(): void {
+		const old = this.bannerEl;
+		const parent = old?.parentElement ?? this.dashboardEl;
+		if (!parent) return;
+		this.bannerState = { ...DEFAULT_SETTINGS.banner, ...this.plugin.settings.banner };
+		const holder = document.createElement('div');
+		this.renderBanner(holder);
+		const fresh = holder.querySelector('.ad-banner');
+		const input = holder.querySelector('.ad-banner__fileinput');
+		parent.querySelectorAll('.ad-banner__fileinput').forEach((node) => node.remove());
+		if (old && fresh) old.replaceWith(fresh);
+		if (input) parent.appendChild(input);
+	}
+
+	private renderBannerStats(banner: HTMLElement): void {
+		const stats = banner.createDiv({ cls: 'ad-banner__stats' });
+		const make = (label: string): HTMLElement => {
+			const item = stats.createDiv({ cls: 'ad-banner__stat' });
+			item.createDiv({ cls: 'ad-banner__stat-label', text: label });
+			return item.createDiv({ cls: 'ad-banner__stat-value', text: '—' });
+		};
+		this.bannerStatsEls = {
+			completion: make('任务完成率'),
+			overdue: make('任务逾期率'),
+			links: make('链接/篇'),
+		};
+		void this.refreshBannerStats();
+	}
+
+	private async refreshBannerStats(): Promise<void> {
+		const els = this.bannerStatsEls;
+		if (!els || this.bannerState.mode !== 'stats') return;
+		const tasks = await this.taskStore.scanAllTasks();
+		const total = tasks.length;
+		const completed = tasks.filter((task) => task.status === '已完成').length;
+		const overdue = tasks.filter((task) => task.isOverdue).length;
+		const completionRate = total ? Math.round((completed / total) * 100) : 0;
+		const overdueRate = total ? Math.round((overdue / total) * 100) : 0;
+		const notes = this.app.vault.getMarkdownFiles().filter((file) => !file.path.startsWith('.'));
+		let linkCount = 0;
+		for (const targets of Object.values(this.app.metadataCache.resolvedLinks)) {
+			linkCount += Object.values(targets).reduce((sum, count) => sum + count, 0);
+		}
+		const linksPerNote = notes.length ? linkCount / notes.length : 0;
+		els.completion.textContent = `${completionRate}%`;
+		els.overdue.textContent = `${overdueRate}%`;
+		els.links.textContent = linksPerNote.toFixed(1);
 	}
 
 	private openBannerModal(dataUrl: string, currentOffsetY: number): void {
@@ -1097,7 +1164,7 @@ export class DashboardView extends ItemView {
 	/** Edit project via ProjectModal */
 	async editProject(proj: ProjectInfo): Promise<void> {
 		const { ProjectModal } = await import('./ProjectModal');
-		const stages = this.plugin.settings.npdpStages;
+		const stages = proj.stages ?? (isLongTermProject(proj.type) ? LONG_TERM_STAGES : this.plugin.settings.npdpStages);
 		new ProjectModal({
 			app: this.app,
 			stages,
@@ -1124,7 +1191,7 @@ export class DashboardView extends ItemView {
 		const file = this.app.vault.getAbstractFileByPath(projectFilePath);
 		if (!(file instanceof TFile)) return;
 
-		const typeLabel = data.type === 'nostage' ? '\u975E\u9636\u6BB5\u9879\u76EE' : '\u9636\u6BB5\u9879\u76EE';
+		const typeLabel = isLongTermProject(data.type) ? '\u957F\u671F\u9879\u76EE' : '\u9636\u6BB5\u9879\u76EE';
 		await this.writeFrontmatter(file, {
 			'\u9879\u76EE\u540D\u79F0': data.name,
 			'\u989C\u8272': data.color,
@@ -1302,12 +1369,12 @@ export class DashboardView extends ItemView {
 		new ProjectModal({
 			app: this.app,
 			onSave: (data) => {
-				void this.createProjectFolder(data.name, data.color, data.startDate, data.endDate, data.description, data.type);
+				void this.createProjectFolder(data.name, data.color, data.startDate, data.endDate, data.description, data.stage, data.type);
 			},
 		}).open();
 	}
 
-	private async createProjectFolder(name: string, color: string, startDate: string, endDate: string, description: string, type: ProjectType = 'stage'): Promise<void> {
+	private async createProjectFolder(name: string, color: string, startDate: string, endDate: string, description: string, stage: number, type: ProjectType = 'stage'): Promise<void> {
 		const rootPath = this.plugin.settings.projectsFolder;
 
 		// Ensure root folder exists
@@ -1321,7 +1388,7 @@ export class DashboardView extends ItemView {
 		const now = new Date();
 		const createDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-		const typeLabel = type === 'nostage' ? '\u975E\u9636\u6BB5\u9879\u76EE' : '\u9636\u6BB5\u9879\u76EE';
+		const typeLabel = isLongTermProject(type) ? '\u957F\u671F\u9879\u76EE' : '\u9636\u6BB5\u9879\u76EE';
 	const lines: string[] = [
 		'---',
 		`\u9879\u76EE\u540D\u79F0: ${yamlScalar(name)}`,
@@ -1331,6 +1398,7 @@ export class DashboardView extends ItemView {
 		`\u63CF\u8FF0: ${yamlScalar(description)}`,
 		`\u5F00\u59CB\u65E5\u671F: ${yamlScalar(startDate)}`,
 		`\u7ED3\u675F\u65E5\u671F: ${yamlScalar(endDate)}`,
+		`\u9636\u6BB5: ${Math.max(0, stage)}`,
 		`\u521B\u5EFA\u65F6\u95F4: ${createDate}`,
 		'---',
 		'',
@@ -2781,15 +2849,14 @@ export class DashboardView extends ItemView {
 			projects = await this.taskStore.scanAllProjects();
 		} catch { /* keep empty */ }
 
-		// Only 阶段项目 participate in the stage-progress card (非阶段项目 excluded from display & count)
-		const stageProjects = projects.filter((p) => (p.type ?? 'stage') === 'stage');
+		// Long-term projects are first-class projects on the home card. The
+		// existing progress filter still applies to configurable stage projects,
+		// while long-term projects always remain visible and use their own stages.
+		const filtered = projects.filter((p) =>
+			isLongTermProject(p.type) || maxStageFilter >= stages.length || (p.stage ?? 0) <= maxStageFilter,
+		);
 
-		// Filter: only show projects at stage <= maxStageFilter
-		const filtered = maxStageFilter < stages.length
-			? stageProjects.filter((p) => (p.stage ?? 0) <= maxStageFilter)
-			: stageProjects;
-
-		hint.textContent = `${filtered.length} / ${stageProjects.length} \u4E2A\u9879\u76EE`;
+		hint.textContent = `${filtered.length} / ${projects.length} \u4E2A\u9879\u76EE`;
 		if (maxStageFilter < stages.length) {
 			hint.textContent += ` (\u2264${stages[maxStageFilter - 1]})`;
 		}
@@ -2823,7 +2890,7 @@ export class DashboardView extends ItemView {
 			// Stage pipeline mini (connector line segments colored by progress, ends at last dot)
 			const track = row.createDiv({ cls: 'ad-proj__track' });
 			const stageNodes = track.createDiv({ cls: 'ad-proj__stages' });
-			const projStages = p.stages || stages;
+			const projStages = p.stages || (isLongTermProject(p.type) ? LONG_TERM_STAGES : stages);
 			// Auto-size stage dots by count: more stages → smaller, fixed width for connector math
 			const stageMinW = Math.max(20, Math.min(36, Math.floor(160 / projStages.length)));
 			const stageGap = Math.max(1, Math.floor(4 / (projStages.length / 4)));

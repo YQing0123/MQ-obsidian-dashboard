@@ -13,6 +13,7 @@ export type {
 } from './taskParseCore';
 export {
 	PROJECT_TYPE_LIST, STATUS_LIST, PRIORITY_LIST, TYPE_LIST, priorityWeight,
+	LONG_TERM_STAGES, isLongTermProject,
 	parseDailyNodesFromBody, serializeDailyNodesBlock,
 } from './taskParseCore';
 

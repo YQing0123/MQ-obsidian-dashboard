@@ -37,6 +37,7 @@ export default class Dashboard extends Plugin {
 		//    迁移判断就永远不会触发（老用户的错误比例将无法被纠正）。
 		const storedLayoutVersion = typeof loaded.homeLayoutVersion === 'number' ? loaded.homeLayoutVersion : 0;
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded);
+		this.settings.banner = { ...DEFAULT_SETTINGS.banner, ...(loaded.banner ?? {}) };
 		// 迁移：旧版「模板文件夹 + 模板文件名」合并为「模板文件（完整路径）」
 		for (const key of ['quickCapture', 'diary'] as const) {
 			const grp = loaded[key];
@@ -193,6 +194,14 @@ export default class Dashboard extends Plugin {
 		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
 			const view = leaf.view;
 			if (view instanceof DashboardView) view.refreshTitle();
+		}
+	}
+
+	/** Push the persisted banner mode/image settings into open dashboard views. */
+	refreshBanner(): void {
+		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+			const view = leaf.view;
+			if (view instanceof DashboardView) view.refreshBanner();
 		}
 	}
 
