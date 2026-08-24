@@ -646,7 +646,6 @@ export class DashboardView extends ItemView {
 	   ============================================================ */
 	private async renderPulse(root: HTMLElement, d: DashboardData): Promise<void> {
 		const bar = root.createDiv({ cls: 'ad-pulse' });
-		bar.createSpan({ cls: 'ad-pulse__tag', text: '[ VAULT PULSE ]' });
 
 		const today = new Date();
 		const todayKey = todayStr();

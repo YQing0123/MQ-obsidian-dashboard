@@ -5438,7 +5438,6 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
   async renderPulse(root, d) {
     var _a2;
     const bar = root.createDiv({ cls: "ad-pulse" });
-    bar.createSpan({ cls: "ad-pulse__tag", text: "[ VAULT PULSE ]" });
     const today = /* @__PURE__ */ new Date();
     const todayKey = todayStr3();
     const noteCounts = this.getVaultNoteCounts();
