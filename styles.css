@@ -532,13 +532,14 @@
 .ad-banner--stats::before { content: ''; position: absolute; inset: 0; border-radius: inherit; background: rgba(10,10,18,var(--banner-scrim,.55)); backdrop-filter: blur(var(--banner-blur,6px)) brightness(var(--banner-bright,.6)); -webkit-backdrop-filter: blur(var(--banner-blur,6px)) brightness(var(--banner-bright,.6)); pointer-events: none; z-index: 1; }
 .ad-banner--stats::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(120deg,var(--banner-stat-accent,#bff038),transparent 62%); opacity: .22; pointer-events: none; z-index: 1; }
 .ad-banner--stats .ad-banner__img { filter: none; }
-.ad-banner-stats { position: absolute; inset: 0; z-index: 2; display: flex; align-items: stretch; justify-content: center; padding: 10px 35px 10px 20px; color: #fff; pointer-events: none; }
+.ad-banner-stats { position: absolute; inset: 0; z-index: 2; display: flex; align-items: stretch; justify-content: center; padding: 10px 190px 10px 20px; color: #fff; pointer-events: none; }
 .ad-banner-stat-col { min-width: 0; display: flex; flex-direction: column; position: relative; padding: 8px 10px; pointer-events: auto; }
 .ad-banner-stat-col--left { flex: 1 1 0; align-items: flex-start; justify-content: flex-start; text-align: left; padding-left: 0; }
-.ad-banner-stat-col--center { flex: 3 1 0; align-items: center; justify-content: flex-start; text-align: center; }
-.ad-banner-stat-col--right { flex: 1 1 0; align-items: stretch; justify-content: center; text-align: left; gap: 5px; padding-right: 0; }
+.ad-banner-stat-col--center { flex: 2.4 1 0; align-items: center; justify-content: flex-start; text-align: center; }
+.ad-banner-stat-col--right { flex: .82 1 0; align-items: stretch; justify-content: center; text-align: left; gap: 5px; padding-right: 0; }
 .ad-banner-stat-col + .ad-banner-stat-col::before { content: ''; position: absolute; left: 0; top: 18%; bottom: 18%; width: 1px; background: linear-gradient(to bottom,transparent,rgba(255,255,255,.22),transparent); }
 .ad-banner-stat-hero { display: flex; align-items: baseline; gap: 6px; line-height: 1; }
+.ad-banner-stat-title-prefix { max-width: 15ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1.7em; font-weight: 700; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.5); }
 .ad-banner-stat-icon,.ad-banner-stat-prog-icon,.ad-banner-stat-strip-icon { color: var(--banner-stat-accent,#bff038); display: flex; align-items: center; filter: drop-shadow(0 1px 3px rgba(0,0,0,.4)); }
 .ad-banner-stat-icon svg { width: 20px; height: 20px; }
 .ad-banner-stat-num { font-size: 1.7em; font-weight: 700; font-variant-numeric: tabular-nums; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.5); line-height: 1; }
@@ -563,6 +564,45 @@
 .ad-banner-stat-prog-track { height: 3px; border-radius: 3px; overflow: hidden; background: rgba(255,255,255,.12); }
 .ad-banner-stat-prog-fill { height: 100%; border-radius: inherit; background: var(--banner-stat-accent,#bff038); }
 
+/* Date and controls share the banner's dark glass treatment and occupy the
+   reserved space at the far right of both poster and statistics modes. */
+.ad-banner-meta { position: absolute; right: 14px; bottom: 12px; z-index: 8; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; color: rgba(255,255,255,.78); font-family: var(--font-monospace, monospace); font-size: 11px; text-align: right; }
+.ad-banner-meta .ad-header__date { color: rgba(255,255,255,.96); font-size: 13px; letter-spacing: .04em; }
+.ad-banner-meta .ad-header__meta { display: flex; align-items: center; gap: 7px; }
+.ad-banner-meta .ad-header__btns { display: flex; gap: 5px; align-items: center; }
+.ad-banner-meta .ad-header__theme,
+.ad-banner-meta .ad-header__settings { color: rgba(255,255,255,.82); background: rgba(15,16,20,.72); border-color: rgba(255,255,255,.18); }
+.ad-banner-meta .ad-header__theme:hover,
+.ad-banner-meta .ad-header__settings:hover { color: #fff; border-color: var(--banner-stat-accent,#bff038); background: rgba(15,16,20,.9); }
+
+/* Statistics is a self-contained dark surface. Its palette must not inherit
+   the dashboard's light-mode banner treatment. */
+:is(body.theme-light .dashboard-plugin:not([data-theme="dark"]),
+    body.theme-dark .dashboard-plugin[data-theme="light"]) .ad-banner.ad-banner--stats {
+  background: #16161d !important;
+  border-color: rgba(255,255,255,.14);
+  color-scheme: dark;
+}
+:is(body.theme-light .dashboard-plugin:not([data-theme="dark"]),
+    body.theme-dark .dashboard-plugin[data-theme="light"]) .ad-banner.ad-banner--stats::after {
+  background: linear-gradient(120deg,var(--banner-stat-accent,#bff038),transparent 62%) !important;
+  opacity: .22;
+}
+:is(body.theme-light .dashboard-plugin:not([data-theme="dark"]),
+    body.theme-dark .dashboard-plugin[data-theme="light"]) .ad-banner.ad-banner--stats .ad-banner__btn {
+  color: rgba(255,255,255,.9);
+  background: rgba(15,16,20,.78);
+  border-color: rgba(255,255,255,.18);
+}
+:is(body.theme-light .dashboard-plugin:not([data-theme="dark"]),
+    body.theme-dark .dashboard-plugin[data-theme="light"]) .ad-banner.ad-banner--stats .ad-banner-meta .ad-header__theme,
+:is(body.theme-light .dashboard-plugin:not([data-theme="dark"]),
+    body.theme-dark .dashboard-plugin[data-theme="light"]) .ad-banner.ad-banner--stats .ad-banner-meta .ad-header__settings {
+  color: rgba(255,255,255,.82) !important;
+  background: rgba(15,16,20,.72) !important;
+  border-color: rgba(255,255,255,.18) !important;
+}
+
 .ad-banner-modal { min-width: 520px; max-width: 680px; }
 .ad-banner-modal__hint { margin: -4px 0 14px; color: var(--text-muted); font-size: .85em; }
 .ad-banner-modal__toggle { display: flex; gap: 6px; padding: 4px; margin-bottom: 16px; background: var(--background-secondary); border-radius: 10px; }
@@ -584,6 +624,12 @@
 .ad-banner-modal__range input { flex: 1; }
 .ad-banner-modal__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 @media (max-width: 600px) { .ad-banner-modal { min-width: 0; width: calc(100vw - 32px); } .ad-banner-modal__columns { grid-template-columns: 1fr; } .ad-banner-modal__right { grid-template-columns: 1fr 1fr; } .ad-banner-modal__right > .ad-banner-modal__row { grid-column: 1 / -1; } }
+
+@media (max-width: 760px) {
+  .ad-banner-stats { padding-right: 158px; }
+  .ad-banner-meta { right: 9px; }
+  .ad-banner-stat-title-prefix { max-width: 9ch; }
+}
 
 /* ============================================================ pulse */
 .ad-pulse {

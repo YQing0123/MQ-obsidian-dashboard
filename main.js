@@ -1274,11 +1274,7 @@ var LEFT_STAT_OPTIONS = ["totalNotes", "tagsCount", "totalLinks", "newThisMonth"
 var CENTER_STAT_OPTIONS = ["streak", "taskCompletion", "connectivity", "newThisWeek"];
 var RIGHT_STAT_OPTIONS = ["taskCompletion", "overdueRate", "avgLinksPerNote", "connectivity", "orphanRate"];
 function resolveBannerStats(config) {
-  var _a2;
-  const selected = ((_a2 = config == null ? void 0 : config.rightStats) == null ? void 0 : _a2.length) ? [...config.rightStats] : [...DEFAULT_BANNER_STATS.rightStats];
-  for (const required of ["taskCompletion", "overdueRate", "avgLinksPerNote"]) {
-    if (!selected.includes(required)) selected.push(required);
-  }
+  const selected = Array.isArray(config == null ? void 0 : config.rightStats) ? [...config.rightStats] : [...DEFAULT_BANNER_STATS.rightStats];
   return { ...DEFAULT_BANNER_STATS, ...config, rightStats: selected };
 }
 function dayKey(value) {
@@ -1380,7 +1376,7 @@ var labels = {
   orphanRate: "\u5B64\u7ACB\u7B14\u8BB0\u7387",
   avgLinksPerNote: "\u94FE\u63A5/\u7BC7"
 };
-var icons = { totalNotes: "file-text", tagsCount: "hash", totalLinks: "link", newThisMonth: "calendar-plus", newThisWeek: "calendar-check", totalTasks: "list-checks", doneTasks: "check-check", pendingTasks: "circle-dashed", streak: "flame", taskCompletion: "list-checks", connectivity: "network", orphanRate: "circle-slash", avgLinksPerNote: "link" };
+var icons = { totalNotes: "file-text", tagsCount: "hash", totalLinks: "link", newThisMonth: "calendar-plus", newThisWeek: "calendar-check", totalTasks: "list-checks", doneTasks: "check-check", pendingTasks: "circle-dashed", streak: "flame", taskCompletion: "list-checks", overdueRate: "clock-alert", connectivity: "network", orphanRate: "circle-slash", avgLinksPerNote: "link" };
 function statValue(stat, r) {
   var _a2;
   const value = (_a2 = r[stat]) != null ? _a2 : 0;
@@ -1389,14 +1385,15 @@ function statValue(stat, r) {
   if (stat === "streak") return `${value}\u5929`;
   return value.toLocaleString();
 }
-function hero(parent, stat, value) {
+function hero(parent, stat, value, prefix) {
   const row = parent.createDiv({ cls: "ad-banner-stat-hero" });
+  if (prefix) row.createDiv({ cls: "ad-banner-stat-title-prefix", text: prefix });
   const icon = row.createDiv({ cls: "ad-banner-stat-icon" });
   (0, import_obsidian3.setIcon)(icon, icons[stat] || "bar-chart-3");
   row.createDiv({ cls: "ad-banner-stat-num", text: value });
   row.createDiv({ cls: "ad-banner-stat-label ad-banner-stat-label--inline", text: labels[stat] || stat });
 }
-async function renderBannerStats(parent, config, app, taskStore) {
+async function renderBannerStats(parent, config, app, taskStore, dashboardTitle) {
   const resolved = resolveBannerStats(config);
   applyBannerStatsBackdrop(parent.parentElement || parent, resolved);
   const el = parent.createDiv({ cls: "ad-banner-stats" });
@@ -1417,7 +1414,7 @@ async function renderBannerStats(parent, config, app, taskStore) {
   if (resolved.showCenter !== false) {
     const stat = resolved.centerStat || "streak";
     const col = el.createDiv({ cls: "ad-banner-stat-col ad-banner-stat-col--center" });
-    hero(col, stat, statValue(stat, result));
+    hero(col, stat, statValue(stat, result), stat === "streak" ? (dashboardTitle == null ? void 0 : dashboardTitle.trim()) || void 0 : void 0);
     if (resolved.showDetails !== false) {
       col.createDiv({ cls: "ad-banner-stat-sub", text: stat === "taskCompletion" ? `${result.doneTasks} / ${result.totalTasks} \u4E2A\u4EFB\u52A1\u5DF2\u5B8C\u6210` : `\u672C\u5468\u65B0\u589E ${result.newThisWeek} \xB7 \u672C\u6708\u65B0\u589E ${result.newThisMonth}` });
       const chart = col.createDiv({ cls: "ad-banner-stat-chart" });
@@ -1433,20 +1430,18 @@ async function renderBannerStats(parent, config, app, taskStore) {
   }
   if (resolved.showRight !== false) {
     const col = el.createDiv({ cls: "ad-banner-stat-col ad-banner-stat-col--right" });
-    for (const stat of resolved.rightStats || DEFAULT_BANNER_STATS.rightStats) {
+    for (const stat of resolved.rightStats || []) {
       const row = col.createDiv({ cls: "ad-banner-stat-prog" });
       const head = row.createDiv({ cls: "ad-banner-stat-prog-head" });
       const title = head.createDiv({ cls: "ad-banner-stat-prog-title" });
       const ico = title.createDiv({ cls: "ad-banner-stat-prog-icon" });
-      (0, import_obsidian3.setIcon)(ico, icons[stat]);
-      title.createSpan({ text: labels[stat] });
+      (0, import_obsidian3.setIcon)(ico, icons[stat] || "bar-chart-3");
+      title.createSpan({ text: labels[stat] || stat });
       head.createDiv({ cls: "ad-banner-stat-prog-val", text: statValue(stat, result) });
-      if (resolved.showDetails !== false) {
-        const track = row.createDiv({ cls: "ad-banner-stat-prog-track" });
-        const fill = track.createDiv({ cls: "ad-banner-stat-prog-fill" });
-        const n = stat === "avgLinksPerNote" ? Math.min(100, Math.round(result.avgLinksPerNote / 3 * 100)) : result[stat] || 0;
-        fill.style.width = `${n}%`;
-      }
+      const track = row.createDiv({ cls: "ad-banner-stat-prog-track" });
+      const fill = track.createDiv({ cls: "ad-banner-stat-prog-fill" });
+      const n = stat === "avgLinksPerNote" ? Math.min(100, Math.round(result.avgLinksPerNote / 3 * 100)) : result[stat] || 0;
+      fill.style.width = `${n}%`;
     }
   }
   return el;
@@ -5019,11 +5014,13 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     __publicField(this, "noiseId", null);
     __publicField(this, "pulseEls", null);
     __publicField(this, "dateEl", null);
+    __publicField(this, "bannerClockId", null);
     // NOTE: deliberately NOT named `titleEl` — Obsidian's ItemView has its own
     // `titleEl` (view-header title). Declaring a field with that name would
     // overwrite the parent's after super() and break ItemView.load()
     // ("Cannot read properties of null (reading 'setText')" → blank view).
     __publicField(this, "adTitleEl", null);
+    __publicField(this, "bannerTitleEl", null);
     __publicField(this, "weekdayEl", null);
     __publicField(this, "parseIssuesEl", null);
     __publicField(this, "lunarEl", null);
@@ -5129,8 +5126,6 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
       this.renderBanner(this.dashboardEl);
       this.renderParseIssues(this.dashboardEl);
       this.renderNoise(this.dashboardEl);
-      void this.renderPulse(this.dashboardEl, d);
-      this.renderHeader(this.dashboardEl, d);
       this.renderActions(this.dashboardEl);
       this.renderBoard(this.dashboardEl, d);
       const refreshAll = () => {
@@ -5235,6 +5230,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
       banner.addClass("ad-banner--stats");
       void this.renderStatsBanner(banner);
     }
+    this.renderBannerMeta(banner);
     const fileInput = root.createEl("input", { cls: "ad-banner__fileinput", attr: { type: "file", accept: "image/*" } });
     if (this.bannerState.imageDataUrl && this.bannerImg) {
       this.displayBannerImage(this.bannerState.imageDataUrl, this.bannerState.offsetY);
@@ -5264,6 +5260,52 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     });
     return banner;
   }
+  /** Date, lunar date, theme and plugin settings now live inside the banner. */
+  renderBannerMeta(banner) {
+    const right = banner.createDiv({ cls: "ad-banner-meta" });
+    const now = /* @__PURE__ */ new Date();
+    const dateStr = now.toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" });
+    const timeStr = now.toLocaleTimeString("zh-CN", { timeZone: "Asia/Shanghai", hour: "2-digit", minute: "2-digit" });
+    this.dateEl = right.createDiv({ cls: "ad-header__date", text: `${dateStr} ${timeStr}` });
+    const meta = right.createDiv({ cls: "ad-header__meta" });
+    this.weekdayEl = meta.createSpan({ text: now.toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai", weekday: "long" }) });
+    meta.createSpan({ cls: "ad-dot" });
+    const lunar = getLunarDate(now);
+    this.lunarEl = meta.createSpan({ text: lunar ? "\u519C\u5386 " + lunar : "" });
+    const btns = right.createDiv({ cls: "ad-header__btns" });
+    const themeBtn = btns.createEl("button", { cls: "ad-header__theme" });
+    this.adThemeBtn = themeBtn;
+    this.refreshThemeButton();
+    themeBtn.addEventListener("click", () => {
+      void (async () => {
+        const next = this.effectiveTheme() === "light" ? "dark" : "light";
+        this.plugin.setObsidianTheme(next);
+        this.plugin.settings.theme = "auto";
+        await this.plugin.saveSettings();
+        this.plugin.refreshThemeButtons();
+        this.applyTheme();
+      })();
+    });
+    const settings = btns.createEl("button", { cls: "ad-header__settings", text: "\u2699 \u8BBE\u7F6E" });
+    settings.addEventListener("click", () => {
+      var _a2, _b;
+      const app = this.app;
+      (_a2 = app.setting) == null ? void 0 : _a2.open();
+      (_b = app.setting) == null ? void 0 : _b.openTabById(this.plugin.manifest.id);
+    });
+    if (this.bannerClockId !== null) window.clearInterval(this.bannerClockId);
+    this.bannerClockId = window.setInterval(() => {
+      const n = /* @__PURE__ */ new Date();
+      const ds = n.toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" });
+      const ts = n.toLocaleTimeString("zh-CN", { timeZone: "Asia/Shanghai", hour: "2-digit", minute: "2-digit" });
+      if (this.dateEl) this.dateEl.textContent = `${ds} ${ts}`;
+      if (this.weekdayEl) this.weekdayEl.textContent = n.toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai", weekday: "long" });
+      if (this.lunarEl) {
+        const value = getLunarDate(n);
+        if (value) this.lunarEl.textContent = "\u519C\u5386 " + value;
+      }
+    }, 3e4);
+  }
   /** Replace only the banner so a setting or inline toggle takes effect immediately. */
   refreshBanner() {
     var _a2;
@@ -5290,7 +5332,8 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     }).open();
   }
   async renderStatsBanner(banner) {
-    const stats = await renderBannerStats(banner, this.bannerState.statsConfig, this.app, this.taskStore);
+    const stats = await renderBannerStats(banner, this.bannerState.statsConfig, this.app, this.taskStore, this.plugin.settings.dashboardTitle);
+    this.bannerTitleEl = stats.querySelector(".ad-banner-stat-title-prefix");
     if (banner.isConnected) this.bannerStatsEl = stats;
   }
   async refreshBannerStats() {
@@ -5443,8 +5486,12 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
   }
   /** Live-update only the dashboard title text (cheap; no full re-render). */
   refreshTitle() {
-    if (!this.adTitleEl) return;
-    this.adTitleEl.textContent = this.plugin.settings.dashboardTitle || MOCK_DATA.header.title;
+    var _a2;
+    if (this.adTitleEl) this.adTitleEl.textContent = this.plugin.settings.dashboardTitle || MOCK_DATA.header.title;
+    if (this.bannerTitleEl) {
+      this.bannerTitleEl.textContent = this.plugin.settings.dashboardTitle || "";
+      this.bannerTitleEl.toggleClass("is-hidden", !((_a2 = this.plugin.settings.dashboardTitle) == null ? void 0 : _a2.trim()));
+    }
   }
   /* ============================================================
      Header
@@ -6253,9 +6300,9 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     const nav = tmp.firstElementChild;
     tmp.remove();
     if (nav) {
-      const header = this.dashboardEl.querySelector(".ad-header");
-      if (header) {
-        header.after(nav);
+      const banner = this.dashboardEl.querySelector(".ad-banner");
+      if (banner) {
+        banner.after(nav);
       } else {
         const boardEl = this.dashboardEl.querySelector(".ad-board");
         if (boardEl) this.dashboardEl.insertBefore(nav, boardEl);

@@ -199,11 +199,13 @@ export class DashboardView extends ItemView {
 	private noiseId: number | null = null;
 	private pulseEls: { total: HTMLElement; pending: HTMLElement; today: HTMLElement; streak: HTMLElement } | null = null;
 	private dateEl: HTMLElement | null = null;
+	private bannerClockId: number | null = null;
 	// NOTE: deliberately NOT named `titleEl` — Obsidian's ItemView has its own
 	// `titleEl` (view-header title). Declaring a field with that name would
 	// overwrite the parent's after super() and break ItemView.load()
 	// ("Cannot read properties of null (reading 'setText')" → blank view).
 	private adTitleEl: HTMLElement | null = null;
+	private bannerTitleEl: HTMLElement | null = null;
 	private weekdayEl: HTMLElement | null = null;
 	private parseIssuesEl: HTMLElement | null = null;
 	private lunarEl: HTMLElement | null = null;
@@ -320,8 +322,6 @@ export class DashboardView extends ItemView {
 		this.renderBanner(this.dashboardEl);
 		this.renderParseIssues(this.dashboardEl);
 		this.renderNoise(this.dashboardEl);
-		void this.renderPulse(this.dashboardEl, d);
-		this.renderHeader(this.dashboardEl, d);
 		this.renderActions(this.dashboardEl);
 		this.renderBoard(this.dashboardEl, d);
 
@@ -425,6 +425,7 @@ export class DashboardView extends ItemView {
 			banner.addClass('ad-banner--stats');
 			void this.renderStatsBanner(banner);
 		}
+		this.renderBannerMeta(banner);
 
 		// hidden file input
 		const fileInput = root.createEl('input', { cls: 'ad-banner__fileinput', attr: { type: 'file', accept: 'image/*' } });
@@ -462,6 +463,48 @@ export class DashboardView extends ItemView {
 		return banner;
 	}
 
+	/** Date, lunar date, theme and plugin settings now live inside the banner. */
+	private renderBannerMeta(banner: HTMLElement): void {
+		const right = banner.createDiv({ cls: 'ad-banner-meta' });
+		const now = new Date();
+		const dateStr = now.toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' });
+		const timeStr = now.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' });
+		this.dateEl = right.createDiv({ cls: 'ad-header__date', text: `${dateStr} ${timeStr}` });
+		const meta = right.createDiv({ cls: 'ad-header__meta' });
+		this.weekdayEl = meta.createSpan({ text: now.toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', weekday: 'long' }) });
+		meta.createSpan({ cls: 'ad-dot' });
+		const lunar = getLunarDate(now);
+		this.lunarEl = meta.createSpan({ text: lunar ? '农历 ' + lunar : '' });
+		const btns = right.createDiv({ cls: 'ad-header__btns' });
+		const themeBtn = btns.createEl('button', { cls: 'ad-header__theme' });
+		this.adThemeBtn = themeBtn;
+		this.refreshThemeButton();
+		themeBtn.addEventListener('click', () => { void (async () => {
+			const next: 'light' | 'dark' = this.effectiveTheme() === 'light' ? 'dark' : 'light';
+			this.plugin.setObsidianTheme(next);
+			this.plugin.settings.theme = 'auto';
+			await this.plugin.saveSettings();
+			this.plugin.refreshThemeButtons();
+			this.applyTheme();
+		})(); });
+		const settings = btns.createEl('button', { cls: 'ad-header__settings', text: '\u2699 设置' });
+		settings.addEventListener('click', () => {
+			interface SettingApi { open(): void; openTabById(id: string): void }
+			const app = this.app as unknown as { setting?: SettingApi };
+			app.setting?.open();
+			app.setting?.openTabById(this.plugin.manifest.id);
+		});
+		if (this.bannerClockId !== null) window.clearInterval(this.bannerClockId);
+		this.bannerClockId = window.setInterval(() => {
+			const n = new Date();
+			const ds = n.toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' });
+			const ts = n.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' });
+			if (this.dateEl) this.dateEl.textContent = `${ds} ${ts}`;
+			if (this.weekdayEl) this.weekdayEl.textContent = n.toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', weekday: 'long' });
+			if (this.lunarEl) { const value = getLunarDate(n); if (value) this.lunarEl.textContent = '农历 ' + value; }
+		}, 30000);
+	}
+
 	/** Replace only the banner so a setting or inline toggle takes effect immediately. */
 	refreshBanner(): void {
 		const old = this.bannerEl;
@@ -489,7 +532,8 @@ export class DashboardView extends ItemView {
 	}
 
 	private async renderStatsBanner(banner: HTMLElement): Promise<void> {
-		const stats = await renderBannerStats(banner, this.bannerState.statsConfig, this.app, this.taskStore);
+		const stats = await renderBannerStats(banner, this.bannerState.statsConfig, this.app, this.taskStore, this.plugin.settings.dashboardTitle);
+		this.bannerTitleEl = stats.querySelector('.ad-banner-stat-title-prefix');
 		if (banner.isConnected) this.bannerStatsEl = stats;
 	}
 
@@ -657,8 +701,11 @@ export class DashboardView extends ItemView {
 
 	/** Live-update only the dashboard title text (cheap; no full re-render). */
 	refreshTitle(): void {
-		if (!this.adTitleEl) return;
-		this.adTitleEl.textContent = this.plugin.settings.dashboardTitle || MOCK_DATA.header.title;
+		if (this.adTitleEl) this.adTitleEl.textContent = this.plugin.settings.dashboardTitle || MOCK_DATA.header.title;
+		if (this.bannerTitleEl) {
+			this.bannerTitleEl.textContent = this.plugin.settings.dashboardTitle || '';
+			this.bannerTitleEl.toggleClass('is-hidden', !this.plugin.settings.dashboardTitle?.trim());
+		}
 	}
 
 	/* ============================================================
@@ -1635,10 +1682,7 @@ export class DashboardView extends ItemView {
 	refreshNav(): void {
 		if (!this.dashboardEl) return;
 		// 1) 重渲染顶部导航：看板入口显隐 + 看板名称 label 实时生效。
-		//    renderActions 会把 nav append 到末尾，故先在临时容器渲染，再插回 header 之后。
-		//    ⚠️ 锚点必须用 .ad-header（始终存在），不能用 .ad-board：当视图停在项目/机会页时
-		//    boardEl 已移除 .ad-board class，querySelector 找不到会 fallback 到 appendChild，
-		//    把 toolbar 插到页面最底部（=「按钮栏漂移到卡片下方」的偶发 bug）。
+		//    横幅现在承载日期/设置区，导航固定插在横幅之后。
 		const oldToolbar = this.dashboardEl.querySelector('.ad-toolbar');
 		if (oldToolbar) oldToolbar.remove();
 		const tmp = this.dashboardEl.createDiv();
@@ -1646,9 +1690,9 @@ export class DashboardView extends ItemView {
 		const nav = tmp.firstElementChild;
 		tmp.remove();
 		if (nav) {
-			const header = this.dashboardEl.querySelector('.ad-header');
-			if (header) {
-				header.after(nav);
+			const banner = this.dashboardEl.querySelector('.ad-banner');
+			if (banner) {
+				banner.after(nav);
 			} else {
 				const boardEl = this.dashboardEl.querySelector('.ad-board');
 				if (boardEl) this.dashboardEl.insertBefore(nav, boardEl);

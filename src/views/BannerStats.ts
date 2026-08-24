@@ -25,13 +25,12 @@ export interface BannerStatsResult {
 }
 
 export function resolveBannerStats(config?: BannerStatsConfig): BannerStatsConfig {
-	// These three metrics are the dashboard's core productivity indicators. Keep
-	// them visible even when an older saved config omitted one of them, and let
-	// the renderer show a 0%/0.0 progress track when the vault has no data.
-	const selected = config?.rightStats?.length ? [...config.rightStats] : [...DEFAULT_BANNER_STATS.rightStats!];
-	for (const required of ['taskCompletion', 'overdueRate', 'avgLinksPerNote'] as const) {
-		if (!selected.includes(required)) selected.push(required);
-	}
+	// Preserve an explicitly empty selection. This is important because the
+	// banner editor must be able to save an unchecked metric instead of silently
+	// restoring the defaults the next time the modal opens.
+	const selected = Array.isArray(config?.rightStats)
+		? [...config.rightStats]
+		: [...DEFAULT_BANNER_STATS.rightStats!];
 	return { ...DEFAULT_BANNER_STATS, ...config, rightStats: selected };
 }
 
@@ -114,7 +113,7 @@ const labels: Record<string, string> = {
 	totalNotes: '总笔记', tagsCount: '标签', totalLinks: '总链接', newThisMonth: '本月新增', newThisWeek: '本周新增', totalTasks: '总任务', doneTasks: '已完成', pendingTasks: '待办',
 	streak: '连续记录', taskCompletion: '任务完成率', overdueRate: '任务逾期率', connectivity: '连接度', orphanRate: '孤立笔记率', avgLinksPerNote: '链接/篇',
 };
-const icons: Record<string, string> = { totalNotes: 'file-text', tagsCount: 'hash', totalLinks: 'link', newThisMonth: 'calendar-plus', newThisWeek: 'calendar-check', totalTasks: 'list-checks', doneTasks: 'check-check', pendingTasks: 'circle-dashed', streak: 'flame', taskCompletion: 'list-checks', connectivity: 'network', orphanRate: 'circle-slash', avgLinksPerNote: 'link' };
+const icons: Record<string, string> = { totalNotes: 'file-text', tagsCount: 'hash', totalLinks: 'link', newThisMonth: 'calendar-plus', newThisWeek: 'calendar-check', totalTasks: 'list-checks', doneTasks: 'check-check', pendingTasks: 'circle-dashed', streak: 'flame', taskCompletion: 'list-checks', overdueRate: 'clock-alert', connectivity: 'network', orphanRate: 'circle-slash', avgLinksPerNote: 'link' };
 
 function statValue(stat: string, r: BannerStatsResult): string {
 	const value = (r as unknown as Record<string, number>)[stat] ?? 0;
@@ -124,14 +123,15 @@ function statValue(stat: string, r: BannerStatsResult): string {
 	return value.toLocaleString();
 }
 
-function hero(parent: HTMLElement, stat: string, value: string): void {
+function hero(parent: HTMLElement, stat: string, value: string, prefix?: string): void {
 	const row = parent.createDiv({ cls: 'ad-banner-stat-hero' });
+	if (prefix) row.createDiv({ cls: 'ad-banner-stat-title-prefix', text: prefix });
 	const icon = row.createDiv({ cls: 'ad-banner-stat-icon' }); setIcon(icon, icons[stat] || 'bar-chart-3');
 	row.createDiv({ cls: 'ad-banner-stat-num', text: value });
 	row.createDiv({ cls: 'ad-banner-stat-label ad-banner-stat-label--inline', text: labels[stat] || stat });
 }
 
-export async function renderBannerStats(parent: HTMLElement, config: BannerStatsConfig | undefined, app: App, taskStore: TaskStore): Promise<HTMLElement> {
+export async function renderBannerStats(parent: HTMLElement, config: BannerStatsConfig | undefined, app: App, taskStore: TaskStore, dashboardTitle?: string): Promise<HTMLElement> {
 	const resolved = resolveBannerStats(config);
 	applyBannerStatsBackdrop(parent.parentElement || parent, resolved);
 	const el = parent.createDiv({ cls: 'ad-banner-stats' });
@@ -147,7 +147,7 @@ export async function renderBannerStats(parent: HTMLElement, config: BannerStats
 	if (resolved.showCenter !== false) {
 		const stat = resolved.centerStat || 'streak';
 		const col = el.createDiv({ cls: 'ad-banner-stat-col ad-banner-stat-col--center' });
-		hero(col, stat, statValue(stat, result));
+		hero(col, stat, statValue(stat, result), stat === 'streak' ? (dashboardTitle?.trim() || undefined) : undefined);
 		if (resolved.showDetails !== false) {
 			col.createDiv({ cls: 'ad-banner-stat-sub', text: stat === 'taskCompletion' ? `${result.doneTasks} / ${result.totalTasks} 个任务已完成` : `本周新增 ${result.newThisWeek} · 本月新增 ${result.newThisMonth}` });
 			const chart = col.createDiv({ cls: 'ad-banner-stat-chart' }); const grid = chart.createDiv({ cls: 'ad-banner-heatmap' }); const max = Math.max(1, ...result.activity);
@@ -156,9 +156,9 @@ export async function renderBannerStats(parent: HTMLElement, config: BannerStats
 	}
 	if (resolved.showRight !== false) {
 		const col = el.createDiv({ cls: 'ad-banner-stat-col ad-banner-stat-col--right' });
-		for (const stat of resolved.rightStats || DEFAULT_BANNER_STATS.rightStats!) {
-			const row = col.createDiv({ cls: 'ad-banner-stat-prog' }); const head = row.createDiv({ cls: 'ad-banner-stat-prog-head' }); const title = head.createDiv({ cls: 'ad-banner-stat-prog-title' }); const ico = title.createDiv({ cls: 'ad-banner-stat-prog-icon' }); setIcon(ico, icons[stat]); title.createSpan({ text: labels[stat] }); head.createDiv({ cls: 'ad-banner-stat-prog-val', text: statValue(stat, result) });
-			if (resolved.showDetails !== false) { const track = row.createDiv({ cls: 'ad-banner-stat-prog-track' }); const fill = track.createDiv({ cls: 'ad-banner-stat-prog-fill' }); const n = stat === 'avgLinksPerNote' ? Math.min(100, Math.round(result.avgLinksPerNote / 3 * 100)) : (result as unknown as Record<string, number>)[stat] || 0; fill.style.width = `${n}%`; }
+		for (const stat of resolved.rightStats || []) {
+			const row = col.createDiv({ cls: 'ad-banner-stat-prog' }); const head = row.createDiv({ cls: 'ad-banner-stat-prog-head' }); const title = head.createDiv({ cls: 'ad-banner-stat-prog-title' }); const ico = title.createDiv({ cls: 'ad-banner-stat-prog-icon' }); setIcon(ico, icons[stat] || 'bar-chart-3'); title.createSpan({ text: labels[stat] || stat }); head.createDiv({ cls: 'ad-banner-stat-prog-val', text: statValue(stat, result) });
+			const track = row.createDiv({ cls: 'ad-banner-stat-prog-track' }); const fill = track.createDiv({ cls: 'ad-banner-stat-prog-fill' }); const n = stat === 'avgLinksPerNote' ? Math.min(100, Math.round(result.avgLinksPerNote / 3 * 100)) : (result as unknown as Record<string, number>)[stat] || 0; fill.style.width = `${n}%`;
 		}
 	}
 	return el;
