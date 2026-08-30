@@ -160,6 +160,17 @@ test('today tasks hide completed, done/skipped daily nodes', () => {
 	assert.equal(getTodayTasks(tasks, '2026-08-08').length, 2);
 });
 
+test('today tasks can retain only tasks resolved today', () => {
+	const tasks = [
+		makeTask({ id: 'done-today', status: '已完成', dueDate: '2026-08-08', completeTime: '2026-08-08 09:00' }),
+		makeTask({ id: 'done-before', status: '已完成', dueDate: '2026-08-08', completeTime: '2026-08-07 09:00' }),
+		makeTask({ id: 'recurring', type: '重复', completeTime: '2026-08-08 10:00' }),
+		makeTask({ id: 'node-done', dueDate: '2026-08-08', dailyNodes: { '2026-08-08': { s: 'done', n: '' } } }),
+		makeTask({ id: 'node-skip', dueDate: '2026-08-08', dailyNodes: { '2026-08-08': { s: 'skip', n: '' } } }),
+	];
+	assert.deepEqual(getTodayTasks(tasks, '2026-08-08', true).map((t) => t.id), ['done-today', 'recurring', 'node-done']);
+});
+
 /* ---- isDoneToday / isSkipToday ---- */
 
 test('isDoneToday checks status, completeTime and daily node', () => {

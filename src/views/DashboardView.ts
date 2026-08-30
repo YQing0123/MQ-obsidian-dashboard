@@ -1,6 +1,6 @@
 import { ItemView, Menu, TFile, TFolder, WorkspaceLeaf } from 'obsidian';
 import { MOCK_DATA, DashboardData } from '../data/mockData';
-import { BannerSettings, DEFAULT_SETTINGS } from '../settings';
+import { BannerSettings, CountdownCardConfig, DEFAULT_SETTINGS, HomeModuleConfig } from '../settings';
 import { BannerModal } from './BannerModal';
 import { BannerEditModal } from './BannerEditModal';
 import { renderBannerStats } from './BannerStats';
@@ -32,6 +32,8 @@ interface HomeModule {
 	live?: boolean;
 	render: (board: HTMLElement, allTasks?: TaskItem[]) => Promise<void> | void;
 }
+
+type DashboardCardConfig = HomeModuleConfig | CountdownCardConfig;
 
 /** 卡片比例的最大格数（宽/高均为 1..4，4 = 页面最宽） */
 const MAX_SPAN = 4;
@@ -254,7 +256,6 @@ export class DashboardView extends ItemView {
 		{ id: 'weekly', title: '本周待办 & 逾期', cardCls: 'ad-card ad-b-weekly', render: (b, t) => void this.renderWeekly(b, t) },
 		{ id: 'projects', title: '项目情况', cardCls: 'ad-card ad-b-project', render: (b) => void this.renderProjects(b) },
 		{ id: 'heatmap', title: '笔记统计', cardCls: 'ad-card ad-b-heatmap', live: false, render: (b) => this.renderHeatmap(b) },
-		{ id: 'countdown', title: '倒计时', cardCls: 'ad-card ad-b-countdown', live: false, render: (b) => this.renderCountdown(b) },
 	];
 
 	// Project overview state (renderer extracted into ProjectBoard)
@@ -1271,16 +1272,26 @@ export class DashboardView extends ItemView {
 		}
 	}
 
-	/** Open TaskEditModal for a given task */
+	/** Open TaskEditModal for a given task. The project list is loaded at open
+	 *  time so moving a task always uses the project's real vault path. */
 	openTaskEditModal(task: TaskItem, presetTodayNode?: NodeState): void {
-		new TaskEditModal({
-			app: this.app,
-			task,
-			presetTodayNode,
-			onSave: () => {
-				void this.refreshRelevant();
-			},
-		}).open();
+		void (async () => {
+			const [projects, allTasks] = await Promise.all([
+				this.taskStore.scanAllProjects(),
+				this.taskStore.scanAllTasks(),
+			]);
+			new TaskEditModal({
+				app: this.app,
+				task,
+				presetTodayNode,
+				projects,
+				allTasks,
+				taskDetailMode: this.plugin.settings.taskDetailMode,
+				onSave: () => {
+					void this.refreshRelevant();
+				},
+			}).open();
+		})();
 	}
 
 	/** Find the actual project folder by scanning vault */
@@ -1530,9 +1541,24 @@ export class DashboardView extends ItemView {
 
 	/** Refresh the todo list card in-place */
 	private async refreshTodoList(): Promise<void> {
-		if (!this.boardEl) return;
+		if (this.currentPage !== 'home' || !this.boardEl) return;
 		const allTasks = await this.taskStore.scanAllTasks();
+		if (this.currentPage !== 'home' || !this.boardEl) return;
 		await this.renderTodo(this.boardEl, allTasks);
+	}
+
+	/** Refresh TODO after its display preference changes. */
+	refreshTodo(): void {
+		void this.refreshTodoList();
+	}
+
+	/** Refresh the weekly card after its display preference changes. */
+	refreshWeekly(): void {
+		if (this.currentPage !== 'home' || !this.boardEl) return;
+		void (async () => {
+			const allTasks = await this.taskStore.scanAllTasks();
+			if (this.currentPage === 'home' && this.boardEl) await this.renderWeekly(this.boardEl, allTasks);
+		})();
 	}
 
 	/**
@@ -1558,6 +1584,21 @@ export class DashboardView extends ItemView {
 		return board.createDiv({ cls });
 	}
 
+	private countdownModuleId(id: string): string {
+		return `countdown:${id}`;
+	}
+
+	private countdownIdFromModuleId(modId: string): string | null {
+		return modId.startsWith('countdown:') ? modId.slice('countdown:'.length) : null;
+	}
+
+	/** 统一读取静态模块和动态倒计时实例的布局配置。 */
+	private findCardConfig(modId: string): DashboardCardConfig | undefined {
+		const countdownId = this.countdownIdFromModuleId(modId);
+		if (countdownId) return this.plugin.settings.countdownCards?.find((card) => card.id === countdownId);
+		return this.plugin.settings.homeModules?.find((card) => card.id === modId);
+	}
+
 	/**
 	 * 按 settings.homeModules 的「启用 + 顺序」驱动首页渲染（注册表化核心）。
 	 * - 渲染前先移除「已禁用 / 已不存在」模块的残留卡片，保证显隐即时生效、无重复。
@@ -1570,20 +1611,22 @@ export class DashboardView extends ItemView {
 	): Promise<void> {
 		const configs = this.plugin.settings.homeModules ?? [];
 		const enabled = configs
-			.filter((m) => m.enabled && this.homeModules.some((x) => x.id === m.id))
-			.sort((a, b) => a.order - b.order);
-
-		const enabledTokens = enabled
-			.map((m) => {
-				const mod = this.homeModules.find((x) => x.id === m.id);
-				return mod ? mod.cardCls.split(' ')[1] : '';
-			})
-			.filter((t): t is string => t !== '');
+			.filter((m) => m.id !== 'countdown' && m.enabled && this.homeModules.some((x) => x.id === m.id))
+			.map((cfg) => ({ id: cfg.id, cfg, mod: this.homeModules.find((x) => x.id === cfg.id)! }));
+		for (const card of this.plugin.settings.countdownCards ?? []) {
+			if (!card.enabled) continue;
+			enabled.push({
+				id: this.countdownModuleId(card.id),
+				cfg: card,
+				mod: { id: 'countdown', title: '倒计时', cardCls: 'ad-card ad-b-countdown', live: false, render: () => undefined },
+			});
+		}
+		enabled.sort((a, b) => a.cfg.order - b.cfg.order);
+		const enabledIds = new Set(enabled.map((entry) => entry.id));
 
 		// 移除被禁用模块残留的卡片（显隐切换后旧卡需清掉，否则会留空白卡）
 		board.querySelectorAll('.ad-card').forEach((el) => {
-			const matched = enabledTokens.some((tok) => el.classList.contains(tok));
-			if (!matched) el.remove();
+			if (!enabledIds.has(el.getAttribute('data-mod') ?? '')) el.remove();
 		});
 
 		// ── 第一步：**同步**建好全部卡壳并按 settings 顺序摆位 ──────────────────
@@ -1591,13 +1634,14 @@ export class DashboardView extends ItemView {
 		// 若等它们各自 createDiv，DOM 顺序就变成「谁先 resolve 谁在前」→ 表现为
 		// 「排好的布局一切页/一重启就乱」。先同步占好位置，异步内容只是往壳里填。
 		const shells: HTMLElement[] = [];
-		for (const cfg of enabled) {
-			const mod = this.homeModules.find((x) => x.id === cfg.id);
-			if (!mod) continue;
-			const sel = DashboardView.cardSel(mod.cardCls);
+		for (const entry of enabled) {
+			const { id, cfg, mod } = entry;
+			const sel = id.startsWith('countdown:')
+				? `[data-mod="${id}"]`
+				: DashboardView.cardSel(mod.cardCls);
 			let el = board.querySelector(sel) as HTMLElement | null;
 			if (!el) el = board.createDiv({ cls: mod.cardCls });
-			el.setAttribute('data-mod', mod.id);
+			el.setAttribute('data-mod', id);
 			this.applyCardSpan(el, cfg.cols, cfg.rows);
 			shells.push(el);
 		}
@@ -1612,17 +1656,22 @@ export class DashboardView extends ItemView {
 
 		// ── 第二步：填充内容（各 render 内部用 getOrCreateCard 命中上面的壳） ──────
 		const allTasks = opts?.allTasks ?? await this.taskStore.scanAllTasks();
-		for (const cfg of enabled) {
-			const mod = this.homeModules.find((x) => x.id === cfg.id);
-			if (!mod) continue;
+		for (const entry of enabled) {
+			const { id, cfg, mod } = entry;
 			if (opts?.onlyLive && mod.live === false) continue;
 			// 异步渲染期间用户可能已切页，必须重校验，否则会把主页卡渲染进其它页面
 			if (this.currentPage !== 'home' || !this.boardEl) return;
-			await mod.render(board, allTasks);
+			const countdownId = this.countdownIdFromModuleId(id);
+			if (countdownId) {
+				const card = this.plugin.settings.countdownCards?.find((item) => item.id === countdownId);
+				if (card) this.renderCountdownCard(board, id, card);
+			} else {
+				await mod.render(board, allTasks);
+			}
 			// 内容渲染可能重建了卡片，比例/标识需要复位一次（幂等）
-			const cardEl = board.querySelector(DashboardView.cardSel(mod.cardCls)) as HTMLElement | null;
+			const cardEl = board.querySelector(`[data-mod="${id}"]`) as HTMLElement | null;
 			if (cardEl) {
-				cardEl.setAttribute('data-mod', mod.id);
+				cardEl.setAttribute('data-mod', id);
 				this.applyCardSpan(cardEl, cfg.cols, cfg.rows);
 			}
 		}
@@ -1768,11 +1817,10 @@ export class DashboardView extends ItemView {
 	private reapplySpans(): void {
 		const board = this.boardEl;
 		if (!board) return;
-		const hm = this.plugin.settings.homeModules ?? [];
 		board.querySelectorAll('.ad-card').forEach((card) => {
 			const el = card as HTMLElement;
 			const modId = el.getAttribute('data-mod') ?? '';
-			const m = hm.find((x) => x.id === modId);
+			const m = this.findCardConfig(modId);
 			if (!m) return;
 			const { cols, rows } = this.resolveSpan(modId, clampSpan(m.cols), clampSpan(m.rows));
 			el.style.setProperty('--cols', String(cols));
@@ -1851,26 +1899,32 @@ export class DashboardView extends ItemView {
 		if (!this.adEditMode) return;
 		const card = (e.target as HTMLElement).closest('.ad-card') as HTMLElement | null;
 		if (!card) return;
-		if ((card.getAttribute('data-mod') ?? '') !== 'countdown') return;
+		const modId = card.getAttribute('data-mod') ?? '';
+		if (!this.countdownIdFromModuleId(modId)) return;
 		e.preventDefault();
 		const menu = new Menu();
 		menu.addItem((item) => item
 			.setTitle('\u7F16\u8F91')
 			.setIcon('pencil')
-			.onClick(() => this.openCountdownEdit()));
+			.onClick(() => this.openCountdownEdit(modId)));
 		menu.showAtMouseEvent(e);
 	}
 
 	/** 打开倒计时事件编辑弹窗，保存后回写 settings 并刷新卡片 */
-	private openCountdownEdit(): void {
+	private openCountdownEdit(modId: string): void {
 		if (!this.boardEl) return;
+		const countdownId = this.countdownIdFromModuleId(modId);
+		if (!countdownId) return;
+		const cfg = this.plugin.settings.countdownCards?.find((card) => card.id === countdownId);
+		if (!cfg) return;
 		const modal = new CountdownModal(
 			this.app,
-			this.plugin.settings.countdown,
-			(cfg) => {
-				this.plugin.settings.countdown = cfg;
+			cfg,
+			(next) => {
+				cfg.eventName = next.eventName;
+				cfg.targetDate = next.targetDate;
 				void this.plugin.saveSettings();
-				this.renderCountdown(this.boardEl!);
+				this.renderCountdownCard(this.boardEl!, modId, cfg);
 			},
 		);
 		modal.open();
@@ -2074,9 +2128,11 @@ export class DashboardView extends ItemView {
 			const id = el.getAttribute('data-mod');
 			if (id) order.push(id);
 		});
-		const hm = this.plugin.settings.homeModules;
-		if (!hm || order.length === 0) return; // 防御：读不到 data-mod 时绝不写入空顺序
-		const map = new Map(hm.map((m) => [m.id, m]));
+		const hm = this.plugin.settings.homeModules ?? [];
+		if (order.length === 0) return; // 防御：读不到 data-mod 时绝不写入空顺序
+		const map = new Map<string, DashboardCardConfig>();
+		for (const m of hm) if (m.id !== 'countdown') map.set(m.id, m);
+		for (const card of this.plugin.settings.countdownCards ?? []) map.set(this.countdownModuleId(card.id), card);
 		order.forEach((id, i) => {
 			const m = map.get(id);
 			if (m) m.order = i;
@@ -2084,16 +2140,23 @@ export class DashboardView extends ItemView {
 		// 被隐藏的模块统一排到可见卡片之后，保证 order 连续、重新添加时落在末尾
 		let next = order.length;
 		for (const m of hm) {
-			if (!order.includes(m.id)) m.order = next++;
+			if (m.id !== 'countdown' && !order.includes(m.id)) m.order = next++;
+		}
+		for (const card of this.plugin.settings.countdownCards ?? []) {
+			if (!order.includes(this.countdownModuleId(card.id))) card.order = next++;
 		}
 		void this.plugin.saveSettings();
 	}
 
-	/** 移除模块（仅隐藏，不删数据），随后从 DOM 移除卡片 */
+	/** 移除模块；普通模块仅隐藏，倒计时实例则仅删除该事件卡片。 */
 	private removeModule(id: string): void {
-		const hm = this.plugin.settings.homeModules;
-		const m = hm?.find((x) => x.id === id);
-		if (m) m.enabled = false;
+		const countdownId = this.countdownIdFromModuleId(id);
+		if (countdownId) {
+			this.plugin.settings.countdownCards = (this.plugin.settings.countdownCards ?? []).filter((card) => card.id !== countdownId);
+		} else {
+			const m = this.plugin.settings.homeModules?.find((x) => x.id === id);
+			if (m) m.enabled = false;
+		}
 		void this.plugin.saveSettings();
 		this.boardEl?.querySelector(`[data-mod="${id}"]`)?.remove();
 		if (this.boardEl && this.boardEl.querySelectorAll('.ad-card').length === 0) {
@@ -2237,7 +2300,7 @@ export class DashboardView extends ItemView {
 	private beginResizeDrag(card: HTMLElement, modId: string, e: PointerEvent): void {
 		e.preventDefault();
 		e.stopPropagation();
-		const m = this.plugin.settings.homeModules?.find((x) => x.id === modId);
+		const m = this.findCardConfig(modId);
 		const startCols = clampSpan(m?.cols);
 		const startRows = clampSpan(m?.rows);
 		this.adResize = { card, modId, startCols, startRows, x0: e.clientX, y0: e.clientY, moved: false };
@@ -2298,7 +2361,7 @@ export class DashboardView extends ItemView {
 		}
 		const cols = clampSpan(st.card.style.getPropertyValue('--cols'));
 		const rows = clampSpan(st.card.style.getPropertyValue('--rows'));
-		const m = this.plugin.settings.homeModules?.find((x) => x.id === st.modId);
+		const m = this.findCardConfig(st.modId);
 		if (m) {
 			m.cols = cols;
 			m.rows = rows;
@@ -2359,8 +2422,7 @@ export class DashboardView extends ItemView {
 
 	/** 编辑态：弹出 4×4 比例选择器；宽度/高度各 1-4 格（宽度 4 = 页面最宽），高度可大于宽度（如 1:2 竖卡） */
 	private openProportionMenu(cardEl: HTMLElement, modId: string): void {
-		const hm = this.plugin.settings.homeModules;
-		const m = hm?.find((x) => x.id === modId);
+		const m = this.findCardConfig(modId);
 		if (!m) return;
 		const curCols = m.cols ?? 1;
 		const curRows = m.rows ?? 1;
@@ -2409,24 +2471,56 @@ export class DashboardView extends ItemView {
 	/** 弹出被隐藏模块的列表，点击即加回首页 */
 	private openAddMenu(): void {
 		const hm = this.plugin.settings.homeModules ?? [];
-		const hidden = hm.filter((m) => !m.enabled);
+		const hidden = hm.filter((m) => m.id !== 'countdown' && !m.enabled);
 		const titleMap = new Map(this.homeModules.map((m) => [m.id, m.title]));
+		const countdownCards = this.plugin.settings.countdownCards ?? [];
 		const { backdrop, close } = this.createPopover('ad-addmenu-backdrop');
 		const menu = backdrop.createDiv({ cls: 'ad-addmenu' });
 		menu.createDiv({ cls: 'ad-addmenu__title', text: '添加卡片到首页' });
-		if (hidden.length === 0) {
-			menu.createDiv({ cls: 'ad-addmenu__empty', text: '所有模块均已显示在首页' });
-		} else {
-			for (const m of hidden) {
-				const item = menu.createDiv({ cls: 'ad-addmenu__item' });
-				item.createSpan({ text: titleMap.get(m.id) ?? m.id });
-				item.createSpan({ text: '＋' });
-				item.addEventListener('click', () => {
-					close();
-					void this.addModule(m.id);
-				});
-			}
+		if (countdownCards.length < 5) {
+			const item = menu.createDiv({ cls: 'ad-addmenu__item' });
+			item.createSpan({ text: '倒计时卡片' });
+			item.createSpan({ text: '＋' });
+			item.addEventListener('click', () => {
+				close();
+				void this.addCountdownCard();
+			});
 		}
+		if (hidden.length === 0 && countdownCards.length >= 5) {
+			menu.createDiv({ cls: 'ad-addmenu__empty', text: '所有模块均已显示在首页' });
+		}
+		for (const m of hidden) {
+			const item = menu.createDiv({ cls: 'ad-addmenu__item' });
+			item.createSpan({ text: titleMap.get(m.id) ?? m.id });
+			item.createSpan({ text: '＋' });
+			item.addEventListener('click', () => {
+				close();
+				void this.addModule(m.id);
+			});
+		}
+	}
+
+	/** 在底部编辑条中追加一张独立倒计时卡片，行为与 Xove 的多倒计时一致。 */
+	private async addCountdownCard(): Promise<void> {
+		const cards = this.plugin.settings.countdownCards ?? [];
+		if (cards.length >= 5) {
+			this.showToast('倒计时卡片最多添加 5 张');
+			return;
+		}
+		const ids = new Set(cards.map((card) => card.id));
+		let sequence = cards.length + 1;
+		let id = `countdown-${sequence}`;
+		while (ids.has(id)) id = `countdown-${++sequence}`;
+		const staticOrders = (this.plugin.settings.homeModules ?? [])
+			.filter((module) => module.id !== 'countdown')
+			.map((module) => module.order);
+		const dynamicOrders = cards.map((card) => card.order);
+		const order = Math.max(-1, ...staticOrders, ...dynamicOrders) + 1;
+		cards.push({ id, eventName: '新年', targetDate: '2027-01-01', enabled: true, order, cols: 1, rows: 1 });
+		this.plugin.settings.countdownCards = cards;
+		await this.plugin.saveSettings();
+		this.boardEl?.querySelector('.ad-empty')?.remove();
+		await this.showDashboardKeepEditMode();
 	}
 
 	/** 全部卡片被移除后的空状态提示 */
@@ -2504,17 +2598,21 @@ export class DashboardView extends ItemView {
 		const list = card.createDiv({ cls: 'ad-todo' });
 
 		try {
-			const todayTasks = getTodayTasks(tasks);
+			const today = todayStr();
+			const todayTasks = getTodayTasks(tasks, today, this.plugin.settings.todoShowCompleted);
+			const isDoneRow = (task: TaskItem): boolean =>
+				task.status === '已完成' || !!task.completeTime?.startsWith(today) || task.dailyNodes?.[today]?.s === 'done';
 
-			// Sort: overdue first, then by priority
+			// Completed items stay at the end so active work remains actionable.
 			const sorted = todayTasks.sort((a, b) => {
+				if (isDoneRow(a) !== isDoneRow(b)) return isDoneRow(a) ? 1 : -1;
 				if (a.isOverdue && !b.isOverdue) return -1;
 				if (!a.isOverdue && b.isOverdue) return 1;
 				return priorityWeight(a.priority) - priorityWeight(b.priority);
 			});
 
 			sorted.forEach((task) => {
-				const isDone = task.status === '\u5DF2\u5B8C\u6210';
+				const isDone = isDoneRow(task);
 				const row = list.createDiv({ cls: 'ad-todo__item' + (isDone ? ' is-done' : '') + (task.isOverdue ? ' is-overdue' : '') });
 
 				// Circle click → toggle task (handles repeat tasks)
@@ -2725,6 +2823,7 @@ export class DashboardView extends ItemView {
 
 			const isDone = (t: TaskItem): boolean =>
 				t.status === '\u5DF2\u5B8C\u6210' || t.status === '\u5DF2\u53D6\u6D88';
+			const keepDone = this.plugin.settings.todoShowCompleted;
 
 			// ALL overdue tasks (even outside this week), sorted earliest-overdue first
 			const overdue = tasks.filter((t) => t.isOverdue);
@@ -2732,7 +2831,11 @@ export class DashboardView extends ItemView {
 
 	// This-week, non-overdue, not done — incl. multi-day tasks that span the week
 	const thisWeek = tasks.filter((t) => {
-		if (isDone(t)) return false;
+		if (isDone(t)) {
+			if (!keepDone || !t.completeTime) return false;
+			const completedDate = t.completeTime.slice(0, 10);
+			return completedDate >= weekStartStr && completedDate < weekEndStr;
+		}
 		// Recurring tasks: show when their next 提醒日期 falls within this week
 		if (t.type === '\u91CD\u590D' && t.remindDate) {
 			return t.remindDate < weekEndStr && t.remindDate >= weekStartStr;
@@ -2788,6 +2891,7 @@ export class DashboardView extends ItemView {
 	/** Build a single weekly/overdue task row (li) with click + context menu */
 	private renderWeeklyRow(ul: HTMLElement, task: TaskItem, isOverdue: boolean): void {
 		const li = ul.createEl('li');
+		if (task.status === '\u5DF2\u5B8C\u6210') li.addClass('is-done');
 		const due = task.dueDate || task.remindDate || '';
 		li.createSpan({ cls: 'ad-wo__date', text: due ? due.slice(5) : '\u2014' });
 		li.createSpan({ cls: 'ad-wo__text', text: task.content });
@@ -3172,8 +3276,11 @@ export class DashboardView extends ItemView {
 
 
 	/* ---- Countdown ---- */
-	private renderCountdown(board: HTMLElement): void {
-		const cfg = this.plugin.settings.countdown;
+	private renderCountdownCard(board: HTMLElement, modId: string, cfg: CountdownCardConfig): void {
+		const card = board.querySelector(`[data-mod="${modId}"]`) as HTMLElement | null;
+		if (!card) return;
+		card.empty();
+		card.setAttribute('data-mod', modId);
 		const target = this.parseCountdownDate(cfg.targetDate);
 		const now = new Date();
 		const today = this.startOfDay(now);
@@ -3181,7 +3288,6 @@ export class DashboardView extends ItemView {
 		// 以「天」为单位的差值：>0 表示未来、0 表示当天到达、<0 表示已过期
 		const diffDays = Math.round((targetDay.getTime() - today.getTime()) / 86400000);
 
-		const card = this.getOrCreateCard(board, 'ad-card ad-b-countdown');
 		this.cardHead(card, '\u25C7', '\u5012\u8BA1\u65F6', 'Days Left');
 
 		const cd = card.createDiv({ cls: 'ad-cd' });

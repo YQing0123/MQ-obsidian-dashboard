@@ -3,8 +3,13 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
-var __esm = (fn, res) => function __init() {
-  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+var __esm = (fn, res, err) => function __init() {
+  if (err) throw err[0];
+  try {
+    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+  } catch (e) {
+    throw err = [e], e;
+  }
 };
 var __export = (target, all) => {
   for (var name in all)
@@ -84,12 +89,11 @@ function getStringArray(fm, key) {
   return Array.isArray(v) ? v.map(String) : [];
 }
 function bodyOf(content) {
-  var _a2, _b;
   const lines = content.split(/\r?\n/);
-  if (((_a2 = lines[0]) == null ? void 0 : _a2.trim()) !== "---") return content;
+  if (lines[0]?.trim() !== "---") return content;
   let i = 1;
   for (; i < lines.length; i++) {
-    if (((_b = lines[i]) == null ? void 0 : _b.trim()) === "---") {
+    if (lines[i]?.trim() === "---") {
       i++;
       break;
     }
@@ -97,26 +101,25 @@ function bodyOf(content) {
   return lines.slice(i).join("\n");
 }
 function parseDailyNodesFromBody(content) {
-  var _a2, _b, _c, _d;
   const out = {};
   const lines = bodyOf(content).split(/\r?\n/);
   let inBlock = false;
   for (const raw of lines) {
-    const line = raw != null ? raw : "";
+    const line = raw ?? "";
     const h = line.match(/^#{1,6}\s+(.+?)\s*$/);
     if (h) {
-      inBlock = ((_a2 = h[1]) != null ? _a2 : "").trim() === "\u6BCF\u65E5\u8282\u70B9";
+      inBlock = (h[1] ?? "").trim() === "\u6BCF\u65E5\u8282\u70B9";
       continue;
     }
     if (!inBlock) continue;
     const m = line.match(/^\s*-\s*(\d{4}-\d{2}-\d{2})\b(.*)$/);
     if (!m) continue;
-    const date = (_b = m[1]) != null ? _b : "";
-    const rest = (_c = m[2]) != null ? _c : "";
+    const date = m[1] ?? "";
+    const rest = m[2] ?? "";
     const s = /未做|跳过|⏭/.test(rest) ? "skip" : /待办|📝|⏳/.test(rest) ? "todo" : "done";
     let n = "";
     const nm = rest.match(/(?:——|—|--)\s*(.+?)\s*$/);
-    if (nm) n = ((_d = nm[1]) != null ? _d : "").trim();
+    if (nm) n = (nm[1] ?? "").trim();
     out[date] = { s, n };
   }
   return out;
@@ -154,8 +157,7 @@ function localTodayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 function taskFromFm(fm, content, filePath, projectId, projectColor, today = localTodayStr()) {
-  var _a2;
-  const fileName = ((_a2 = filePath.split("/").pop()) == null ? void 0 : _a2.replace(/\.md$/, "")) || filePath;
+  const fileName = filePath.split("/").pop()?.replace(/\.md$/, "") || filePath;
   const dueDate = getString(fm, "\u622A\u6B62\u65E5\u671F");
   const rawStatus = getString(fm, "\u72B6\u6001") || "\u5F85\u529E";
   const status = STATUS_LIST.includes(rawStatus) ? rawStatus : "\u5F85\u529E";
@@ -241,12 +243,11 @@ var init_parserDiagnostics = __esm({
 
 // src/data/taskParser.ts
 function parseFrontmatter(content, filePath) {
-  var _a2, _b;
   const lines = content.split(/\r?\n/);
-  if (((_a2 = lines[0]) == null ? void 0 : _a2.trim()) !== "---") return {};
+  if (lines[0]?.trim() !== "---") return {};
   let end = -1;
   for (let i = 1; i < lines.length; i++) {
-    if (((_b = lines[i]) == null ? void 0 : _b.trim()) === "---") {
+    if (lines[i]?.trim() === "---") {
       end = i;
       break;
     }
@@ -260,7 +261,7 @@ function parseFrontmatter(content, filePath) {
       return parsed;
     }
   } catch (e) {
-    reportParseIssue({ path: filePath != null ? filePath : "(unknown)", kind: "yaml", message: e instanceof Error ? e.message : String(e) });
+    reportParseIssue({ path: filePath ?? "(unknown)", kind: "yaml", message: e instanceof Error ? e.message : String(e) });
   }
   return {};
 }
@@ -285,7 +286,7 @@ var ProjectModal_exports = {};
 __export(ProjectModal_exports, {
   ProjectModal: () => ProjectModal
 });
-var import_obsidian14, COLORS, getToday, _a, ProjectModal;
+var import_obsidian14, COLORS, getToday, ProjectModal;
 var init_ProjectModal = __esm({
   "src/views/ProjectModal.ts"() {
     import_obsidian14 = require("obsidian");
@@ -309,10 +310,9 @@ var init_ProjectModal = __esm({
     };
     ProjectModal = class extends import_obsidian14.Modal {
       constructor(opts) {
-        var _a2, _b;
         super(opts.app);
         __publicField(this, "opts");
-        __publicField(this, "selectedColor", (_a = COLORS[0]) != null ? _a : "#3b82f6");
+        __publicField(this, "selectedColor", COLORS[0] ?? "#3b82f6");
         __publicField(this, "isEdit");
         __publicField(this, "selectedStage", 0);
         __publicField(this, "selectedType", "stage");
@@ -320,8 +320,8 @@ var init_ProjectModal = __esm({
         this.isEdit = !!opts.editData;
         if (opts.editData) {
           this.selectedColor = opts.editData.color;
-          this.selectedStage = (_a2 = opts.editData.stage) != null ? _a2 : 0;
-          this.selectedType = opts.editData.type === "nostage" ? "longterm" : (_b = opts.editData.type) != null ? _b : "stage";
+          this.selectedStage = opts.editData.stage ?? 0;
+          this.selectedType = opts.editData.type === "nostage" ? "longterm" : opts.editData.type ?? "stage";
         }
       }
       onOpen() {
@@ -374,11 +374,10 @@ var init_ProjectModal = __esm({
         if (ed) endInput.value = ed.endDate || "";
         for (const input of [startInput, endInput]) {
           input.addEventListener("click", () => {
-            var _a2;
             const picker = input;
             try {
-              (_a2 = picker.showPicker) == null ? void 0 : _a2.call(picker);
-            } catch (e) {
+              picker.showPicker?.();
+            } catch {
             }
           });
         }
@@ -500,7 +499,6 @@ var init_TaskModal = __esm({
         this.opts = opts;
       }
       onOpen() {
-        var _a2, _b, _c;
         const { contentEl } = this;
         contentEl.addClass("ad-task-modal");
         contentEl.createEl("h3", { cls: "ad-modal-title", text: "\u65B0\u5EFA\u4EFB\u52A1" });
@@ -514,7 +512,7 @@ var init_TaskModal = __esm({
         for (const p of this.opts.projects) {
           projSel.createEl("option", { text: p.name, attr: { value: p.name } });
         }
-        const initialProject = (_b = this.opts.defaultProject) != null ? _b : (_a2 = this.opts.projects[0]) == null ? void 0 : _a2.name;
+        const initialProject = this.opts.defaultProject ?? this.opts.projects[0]?.name;
         if (initialProject) {
           const match = Array.from(projSel.options).find((o) => o.value === initialProject);
           if (match) match.selected = true;
@@ -664,10 +662,9 @@ var init_TaskModal = __esm({
         const btns = contentEl.createDiv({ cls: "ad-modal-btns" });
         btns.createEl("button", { cls: "ad-modal-btn", text: UI_TEXT.cancel }).addEventListener("click", () => this.close());
         btns.createEl("button", { cls: "ad-modal-btn ad-modal-btn--primary", text: "\u521B\u5EFA\u4EFB\u52A1" }).addEventListener("click", () => {
-          var _a3;
           contentEl.querySelectorAll(".ad-input-error").forEach((el) => el.removeClass("ad-input-error"));
           const titleEl = contentEl.querySelector(".ad-input-title");
-          const title = (_a3 = titleEl == null ? void 0 : titleEl.value) == null ? void 0 : _a3.trim();
+          const title = titleEl?.value?.trim();
           const fields = [
             [titleEl, title || ""],
             [projSel, projSel.value],
@@ -714,7 +711,7 @@ var init_TaskModal = __esm({
           this.opts.onSave(data);
           this.close();
         });
-        (_c = contentEl.querySelector(".ad-input-title")) == null ? void 0 : _c.focus();
+        contentEl.querySelector(".ad-input-title")?.focus();
       }
       label(parent, text) {
         parent.createEl("label", { cls: "ad-modal-label", text });
@@ -746,7 +743,7 @@ __export(main_exports, {
   default: () => Dashboard
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian17 = require("obsidian");
+var import_obsidian18 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian = require("obsidian");
@@ -763,7 +760,18 @@ var DEFAULT_SETTINGS = {
     namingPattern: "YYYY-MM-DD",
     templateFile: ""
   },
+  knowledgeWorkbench: {
+    enabled: true,
+    serverRoot: "/Users/yqing/Documents/Project/work-space/Knowledge-workbench-server",
+    nodePath: "node",
+    host: "127.0.0.1",
+    port: 5173,
+    vaultRoot: "/Users/yqing/Documents/Project/work-space/\u9E23\u8C26\u77E5\u8BC6\u5E93",
+    extraRawScanPaths: []
+  },
   todoSourceFolder: "",
+  todoShowCompleted: false,
+  taskDetailMode: "detail",
   projectsFolder: "Projects",
   currentPoView: "gantt",
   poProjectOrder: [],
@@ -946,31 +954,22 @@ var DashboardSettingTab = class extends import_obsidian.PluginSettingTab {
       const idx = i;
       const st = this.plugin.settings.boardStages[idx];
       new import_obsidian.Setting(boardOptions).setName(`\u9636\u6BB5 ${idx + 1}`).setDesc(`\u81EA\u5B9A\u4E49\u7B2C ${idx + 1} \u4E2A\u9636\u6BB5\u7684\u540D\u79F0\u3001\u989C\u8272\uFF0C\u4EE5\u53CA\u662F\u5426\u5728\u8BE5\u9636\u6BB5\u542F\u7528\u8F93\u5165\u6846`).addText(
-        (t) => {
-          var _a2;
-          return t.setPlaceholder(`\u9636\u6BB5 ${idx + 1}`).setValue((_a2 = st == null ? void 0 : st.label) != null ? _a2 : "").onChange(async (v) => {
-            this.plugin.settings.boardStages[idx].label = v;
-            await this.plugin.saveSettings();
-            this.plugin.refreshNav();
-          });
-        }
+        (t) => t.setPlaceholder(`\u9636\u6BB5 ${idx + 1}`).setValue(st?.label ?? "").onChange(async (v) => {
+          this.plugin.settings.boardStages[idx].label = v;
+          await this.plugin.saveSettings();
+          this.plugin.refreshNav();
+        })
       ).addText(
-        (t) => {
-          var _a2;
-          return t.setPlaceholder("#888780").setValue((_a2 = st == null ? void 0 : st.color) != null ? _a2 : "").onChange(async (v) => {
-            this.plugin.settings.boardStages[idx].color = v.trim() || "#888780";
-            await this.plugin.saveSettings();
-            this.plugin.refreshNav();
-          });
-        }
+        (t) => t.setPlaceholder("#888780").setValue(st?.color ?? "").onChange(async (v) => {
+          this.plugin.settings.boardStages[idx].color = v.trim() || "#888780";
+          await this.plugin.saveSettings();
+          this.plugin.refreshNav();
+        })
       ).addToggle(
-        (tg) => {
-          var _a2;
-          return tg.setTooltip("\u542F\u7528\u540E\uFF0C\u5904\u4E8E\u8BE5\u9636\u6BB5\u7684\u6761\u76EE\u5728\u7F16\u8F91\u65F6\u4F1A\u51FA\u73B0\u4E00\u4E2A\u6807\u9898\u4E0E\u8BE5\u9636\u6BB5\u540D\u4E00\u81F4\u7684\u8F93\u5165\u6846").setValue((_a2 = st == null ? void 0 : st.hasInput) != null ? _a2 : false).onChange(async (v) => {
-            this.plugin.settings.boardStages[idx].hasInput = v;
-            await this.plugin.saveSettings();
-          });
-        }
+        (tg) => tg.setTooltip("\u542F\u7528\u540E\uFF0C\u5904\u4E8E\u8BE5\u9636\u6BB5\u7684\u6761\u76EE\u5728\u7F16\u8F91\u65F6\u4F1A\u51FA\u73B0\u4E00\u4E2A\u6807\u9898\u4E0E\u8BE5\u9636\u6BB5\u540D\u4E00\u81F4\u7684\u8F93\u5165\u6846").setValue(st?.hasInput ?? false).onChange(async (v) => {
+          this.plugin.settings.boardStages[idx].hasInput = v;
+          await this.plugin.saveSettings();
+        })
       );
     }
     new import_obsidian.Setting(containerEl).setName("\u65B0\u65E5\u8BB0").setHeading();
@@ -992,6 +991,62 @@ var DashboardSettingTab = class extends import_obsidian.PluginSettingTab {
     new import_obsidian.Setting(containerEl).setName("\u6A21\u677F\u6587\u4EF6").setDesc("\u8F93\u5165\u6A21\u677F\u8DEF\u5F84\uFF0C\u4E0D\u4F7F\u7528\u6A21\u677F\u5219\u4E3A\u7A7A").addText(
       (t) => t.setPlaceholder("Templates/\u65E5\u8BB0.md").setValue(this.plugin.settings.diary.templateFile).onChange(async (v) => {
         this.plugin.settings.diary.templateFile = v.trim();
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("\u4EFB\u52A1\u5C55\u793A").setHeading();
+    new import_obsidian.Setting(containerEl).setName("\u5B8C\u6210\u540E\u4FDD\u7559\u5728\u9996\u9875").setDesc("\u5728 TODO \u4E0E\u672C\u5468\u5F85\u529E\u5361\u7247\u4E2D\u4FDD\u7559\u4ECA\u5929\u6216\u672C\u5468\u5B8C\u6210\u7684\u4EFB\u52A1\uFF0C\u5E76\u4EE5\u7070\u8272\u5220\u9664\u7EBF\u663E\u793A").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.todoShowCompleted).onChange(async (value) => {
+        this.plugin.settings.todoShowCompleted = value;
+        await this.plugin.saveSettings();
+        this.plugin.refreshTodoHome();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("\u4EFB\u52A1\u8BE6\u60C5\u663E\u793A").setDesc("\u7B80\u6D01\u6A21\u5F0F\u9690\u85CF\u9879\u76EE\u5F52\u5C5E\u3001\u4EFB\u52A1\u7C7B\u578B\u548C\u7236\u4EFB\u52A1\uFF1B\u4FDD\u5B58\u65F6\u4ECD\u4FDD\u7559\u539F\u6709\u503C").addDropdown(
+      (dropdown) => dropdown.addOption("detail", "\u5B8C\u6574").addOption("compact", "\u7B80\u6D01").setValue(this.plugin.settings.taskDetailMode).onChange(async (value) => {
+        this.plugin.settings.taskDetailMode = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("\u77E5\u8BC6\u5DE5\u4F5C\u53F0").setHeading();
+    new import_obsidian.Setting(containerEl).setName("\u542F\u7528\u77E5\u8BC6\u5DE5\u4F5C\u53F0").setDesc("\u63D2\u4EF6\u52A0\u8F7D\u65F6\u81EA\u52A8\u542F\u52A8\u72EC\u7ACB Knowledge Workbench HTTP \u670D\u52A1\uFF1B\u5173\u95ED\u540E\u4E0D\u542F\u52A8\u670D\u52A1").addToggle(
+      (t) => t.setValue(this.plugin.settings.knowledgeWorkbench.enabled).onChange(async (v) => {
+        this.plugin.settings.knowledgeWorkbench.enabled = v;
+        await this.plugin.saveSettings();
+        if (v) void this.plugin.restartKnowledgeWorkbench();
+        else await this.plugin.knowledgeWorkbench.stopOwnedProcess();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("\u670D\u52A1\u4EE3\u7801\u6839\u76EE\u5F55").setDesc("\u5305\u542B runtime/\u5DE5\u4F5C\u53F0/server.js \u7684\u76EE\u5F55\u3002\u9ED8\u8BA4\u4F4D\u4E8E\u5F53\u524D\u5DE5\u4F5C\u7A7A\u95F4\u7684 Knowledge-workbench-server").addText(
+      (t) => t.setPlaceholder("/Users/yqing/Documents/Project/work-space/Knowledge-workbench-server").setValue(this.plugin.settings.knowledgeWorkbench.serverRoot).onChange(async (v) => {
+        this.plugin.settings.knowledgeWorkbench.serverRoot = v.trim();
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("Node \u547D\u4EE4").setDesc("\u7528\u4E8E\u542F\u52A8 server.js \u7684\u547D\u4EE4\u6216\u7EDD\u5BF9\u8DEF\u5F84\uFF1B\u9ED8\u8BA4\u81EA\u52A8\u67E5\u627E node\u3001/opt/homebrew/bin/node \u548C /usr/local/bin/node").addText(
+      (t) => t.setPlaceholder("node").setValue(this.plugin.settings.knowledgeWorkbench.nodePath).onChange(async (v) => {
+        this.plugin.settings.knowledgeWorkbench.nodePath = v.trim() || "node";
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("\u670D\u52A1\u7AEF\u53E3").setDesc("\u4F18\u5148\u4F7F\u7528 5173\uFF1B\u82E5\u88AB\u5360\u7528\u5219\u81EA\u52A8\u4ECE 5174\uFF5E5180 \u9009\u62E9\u53EF\u7528\u7AEF\u53E3\u3002\u670D\u52A1\u53EA\u76D1\u542C\u672C\u673A 127.0.0.1").addText(
+      (t) => t.setPlaceholder("5173").setValue(String(this.plugin.settings.knowledgeWorkbench.port || 5173)).onChange(async (v) => {
+        const n = Number(v);
+        if (Number.isInteger(n) && n >= 1024 && n <= 65535) {
+          this.plugin.settings.knowledgeWorkbench.port = n;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("Vault \u6839\u76EE\u5F55").setDesc("Knowledge Workbench \u8BFB\u53D6\u548C\u5199\u5165\u7684\u5F53\u524D\u77E5\u8BC6\u5E93\u8DEF\u5F84\uFF1B\u539F\u59CB\u6587\u4EF6\u53EA\u8BFB\u626B\u63CF").addText(
+      (t) => t.setPlaceholder("/Users/yqing/Documents/Project/work-space/\u9E23\u8C26\u77E5\u8BC6\u5E93").setValue(this.plugin.settings.knowledgeWorkbench.vaultRoot).onChange(async (v) => {
+        this.plugin.settings.knowledgeWorkbench.vaultRoot = v.trim();
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("\u989D\u5916\u5916\u90E8\u626B\u63CF\u8DEF\u5F84").setDesc("\u6BCF\u884C\u4E00\u4E2A\u7EDD\u5BF9\u8DEF\u5F84\u6216\u5F53\u524D Vault \u5185\u76F8\u5BF9\u8DEF\u5F84\uFF0C\u4EC5\u626B\u63CF\u5217\u8868\u548C Markdown \u5185\u5BB9\uFF0C\u4E0D\u79FB\u52A8\u3001\u590D\u5236\u3001\u4FEE\u6539\u6216\u5220\u9664\u539F\u6587\u4EF6").addTextArea(
+      (t) => t.setPlaceholder("/Users/yqing/Documents/\u5916\u90E8\u7D20\u6750").setValue((this.plugin.settings.knowledgeWorkbench.extraRawScanPaths || []).join("\n")).onChange(async (v) => {
+        this.plugin.settings.knowledgeWorkbench.extraRawScanPaths = v.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
         await this.plugin.saveSettings();
       })
     );
@@ -1045,22 +1100,18 @@ var DashboardSettingTab = class extends import_obsidian.PluginSettingTab {
     for (let i = 0; i < this.plugin.settings.npdpStages.length; i++) {
       const idx = i;
       new import_obsidian.Setting(containerEl).setName(`\u9636\u6BB5 ${idx + 1} \u540D\u79F0`).setDesc(`\u81EA\u5B9A\u4E49\u7B2C ${idx + 1} \u4E2A\u9636\u6BB5\u7684\u540D\u79F0`).addText(
-        (t) => {
-          var _a2;
-          return t.setPlaceholder(`\u9636\u6BB5 ${idx + 1}`).setValue((_a2 = this.plugin.settings.npdpStages[idx]) != null ? _a2 : "").onChange(async (v) => {
-            this.plugin.settings.npdpStages[idx] = v;
-            await this.plugin.saveSettings();
-          });
-        }
+        (t) => t.setPlaceholder(`\u9636\u6BB5 ${idx + 1}`).setValue(this.plugin.settings.npdpStages[idx] ?? "").onChange(async (v) => {
+          this.plugin.settings.npdpStages[idx] = v;
+          await this.plugin.saveSettings();
+        })
       );
     }
     new import_obsidian.Setting(containerEl).setName("\u9879\u76EE\u8FDB\u5EA6\u5361\u7247\u7B5B\u9009").setDesc('\u4E3B\u9875"\u9879\u76EE\u8FDB\u5EA6"\u5361\u7247\u663E\u793A\u4E0D\u8D85\u8FC7\u6240\u9009\u9636\u6BB5\u7684\u9879\u76EE').addDropdown((dropdown) => {
-      var _a2;
       for (let i = 0; i < this.plugin.settings.npdpStages.length; i++) {
         dropdown.addOption(String(i), `\u2264 ${this.plugin.settings.npdpStages[i]}`);
       }
       dropdown.addOption(String(this.plugin.settings.npdpStages.length), "\u663E\u793A\u5168\u90E8");
-      dropdown.setValue(String((_a2 = this.plugin.settings.npdpProgressFilter) != null ? _a2 : this.plugin.settings.npdpStages.length));
+      dropdown.setValue(String(this.plugin.settings.npdpProgressFilter ?? this.plugin.settings.npdpStages.length));
       dropdown.onChange(async (v) => {
         this.plugin.settings.npdpProgressFilter = parseInt(v);
         await this.plugin.saveSettings();
@@ -1071,8 +1122,7 @@ var DashboardSettingTab = class extends import_obsidian.PluginSettingTab {
     const t = this.plugin.settings.theme;
     const effective = t === "auto" ? document.body.classList.contains("theme-light") ? "light" : "dark" : t;
     this.app.workspace.getLeavesOfType("dashboard-view").forEach((leaf) => {
-      var _a2, _b, _c;
-      (_c = (_b = (_a2 = leaf.view) == null ? void 0 : _a2.containerEl) == null ? void 0 : _b.querySelector(".dashboard-plugin")) == null ? void 0 : _c.setAttribute("data-theme", effective);
+      leaf.view?.containerEl?.querySelector(".dashboard-plugin")?.setAttribute("data-theme", effective);
     });
     document.querySelectorAll(".dashboard-plugin").forEach((el) => el.setAttribute("data-theme", effective));
     this.plugin.refreshThemeButtons();
@@ -1242,8 +1292,7 @@ var BannerModal = class extends import_obsidian2.Modal {
     }, { passive: false });
   }
   onClose() {
-    var _a2;
-    (_a2 = this.cleanup) == null ? void 0 : _a2.call(this);
+    this.cleanup?.();
     this.contentEl.empty();
   }
 };
@@ -1274,7 +1323,7 @@ var LEFT_STAT_OPTIONS = ["totalNotes", "tagsCount", "totalLinks", "newThisMonth"
 var CENTER_STAT_OPTIONS = ["streak", "taskCompletion", "connectivity", "newThisWeek"];
 var RIGHT_STAT_OPTIONS = ["taskCompletion", "overdueRate", "avgLinksPerNote", "connectivity", "orphanRate"];
 function resolveBannerStats(config) {
-  const selected = Array.isArray(config == null ? void 0 : config.rightStats) ? [...config.rightStats] : [...DEFAULT_BANNER_STATS.rightStats];
+  const selected = Array.isArray(config?.rightStats) ? [...config.rightStats] : [...DEFAULT_BANNER_STATS.rightStats];
   return { ...DEFAULT_BANNER_STATS, ...config, rightStats: selected };
 }
 function dayKey(value) {
@@ -1284,7 +1333,6 @@ function startOfDay(value) {
   return new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
 }
 async function computeBannerStats(app, taskStore) {
-  var _a2, _b;
   const files = app.vault.getMarkdownFiles().filter((file) => !file.path.startsWith("."));
   const now = /* @__PURE__ */ new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
@@ -1315,8 +1363,8 @@ async function computeBannerStats(app, taskStore) {
   const tags = /* @__PURE__ */ new Set();
   for (const file of files) {
     const cache = app.metadataCache.getFileCache(file);
-    for (const tag of (_a2 = cache == null ? void 0 : cache.tags) != null ? _a2 : []) tags.add(tag.tag.replace(/^#/, ""));
-    const raw = (_b = cache == null ? void 0 : cache.frontmatter) == null ? void 0 : _b.tags;
+    for (const tag of cache?.tags ?? []) tags.add(tag.tag.replace(/^#/, ""));
+    const raw = cache?.frontmatter?.tags;
     if (Array.isArray(raw)) raw.forEach((tag) => tags.add(String(tag).replace(/^#/, "")));
     else if (raw) tags.add(String(raw).replace(/^#/, ""));
   }
@@ -1353,9 +1401,8 @@ async function computeBannerStats(app, taskStore) {
   };
 }
 function applyBannerStatsBackdrop(banner, config) {
-  var _a2, _b;
-  const darkness = (_a2 = config.darkness) != null ? _a2 : 20;
-  banner.style.setProperty("--banner-blur", `${(_b = config.blur) != null ? _b : 2}px`);
+  const darkness = config.darkness ?? 20;
+  banner.style.setProperty("--banner-blur", `${config.blur ?? 2}px`);
   banner.style.setProperty("--banner-bright", String(Math.max(0.3, 1 - darkness / 100 * 0.7)));
   banner.style.setProperty("--banner-scrim", String(0.25 + darkness / 100 * 0.5));
   banner.style.setProperty("--banner-stat-accent", config.accent || "#bff038");
@@ -1378,8 +1425,7 @@ var labels = {
 };
 var icons = { totalNotes: "file-text", tagsCount: "hash", totalLinks: "link", newThisMonth: "calendar-plus", newThisWeek: "calendar-check", totalTasks: "list-checks", doneTasks: "check-check", pendingTasks: "circle-dashed", streak: "flame", taskCompletion: "list-checks", overdueRate: "clock-alert", connectivity: "network", orphanRate: "circle-slash", avgLinksPerNote: "link" };
 function statValue(stat, r) {
-  var _a2;
-  const value = (_a2 = r[stat]) != null ? _a2 : 0;
+  const value = r[stat] ?? 0;
   if (stat === "taskCompletion" || stat === "overdueRate" || stat === "connectivity" || stat === "orphanRate") return `${value}%`;
   if (stat === "avgLinksPerNote") return value.toFixed(1);
   if (stat === "streak") return `${value}\u5929`;
@@ -1414,7 +1460,7 @@ async function renderBannerStats(parent, config, app, taskStore, dashboardTitle)
   if (resolved.showCenter !== false) {
     const stat = resolved.centerStat || "streak";
     const col = el.createDiv({ cls: "ad-banner-stat-col ad-banner-stat-col--center" });
-    hero(col, stat, statValue(stat, result), stat === "streak" ? (dashboardTitle == null ? void 0 : dashboardTitle.trim()) || void 0 : void 0);
+    hero(col, stat, statValue(stat, result), stat === "streak" ? dashboardTitle?.trim() || void 0 : void 0);
     if (resolved.showDetails !== false) {
       col.createDiv({ cls: "ad-banner-stat-sub", text: stat === "taskCompletion" ? `${result.doneTasks} / ${result.totalTasks} \u4E2A\u4EFB\u52A1\u5DF2\u5B8C\u6210` : `\u672C\u5468\u65B0\u589E ${result.newThisWeek} \xB7 \u672C\u6708\u65B0\u589E ${result.newThisMonth}` });
       const chart = col.createDiv({ cls: "ad-banner-stat-chart" });
@@ -1501,7 +1547,6 @@ var BannerEditModal = class extends import_obsidian4.Modal {
     actions.createEl("button", { cls: "mod-cta", text: "\u4FDD\u5B58" }).addEventListener("click", () => this.save());
   }
   renderBody() {
-    var _a2, _b, _c, _d;
     this.form.empty();
     if (this.mode === "poster") {
       this.form.createDiv({ cls: "ad-banner-modal__section-title", text: "\u6D77\u62A5\u6A21\u5F0F" });
@@ -1519,7 +1564,7 @@ var BannerEditModal = class extends import_obsidian4.Modal {
     for (const stat of RIGHT_STAT_OPTIONS) {
       const label = right.createEl("label", { cls: "ad-banner-modal__check" });
       const input = label.createEl("input", { attr: { type: "checkbox" } });
-      input.checked = (_b = (_a2 = this.draft.rightStats) == null ? void 0 : _a2.includes(stat)) != null ? _b : false;
+      input.checked = this.draft.rightStats?.includes(stat) ?? false;
       input.addEventListener("change", () => {
         const selected = new Set(this.draft.rightStats || []);
         input.checked ? selected.add(stat) : selected.delete(stat);
@@ -1529,8 +1574,8 @@ var BannerEditModal = class extends import_obsidian4.Modal {
     }
     const appearance = this.form.createDiv({ cls: "ad-banner-modal__appearance" });
     appearance.createDiv({ cls: "ad-banner-modal__section-title", text: "\u5916\u89C2" });
-    this.addRange(appearance, "\u80CC\u666F\u6A21\u7CCA", "blur", (_c = this.draft.blur) != null ? _c : 2, 0, 16);
-    this.addRange(appearance, "\u80CC\u666F\u6697\u5EA6", "darkness", (_d = this.draft.darkness) != null ? _d : 20, 0, 100);
+    this.addRange(appearance, "\u80CC\u666F\u6A21\u7CCA", "blur", this.draft.blur ?? 2, 0, 16);
+    this.addRange(appearance, "\u80CC\u666F\u6697\u5EA6", "darkness", this.draft.darkness ?? 20, 0, 100);
     const accent = appearance.createDiv({ cls: "ad-banner-modal__row" });
     accent.createSpan({ text: "\u5F3A\u8C03\u8272" });
     const color = accent.createEl("input", { attr: { type: "color" } });
@@ -1715,6 +1760,44 @@ var TaskEditModal = class extends import_obsidian7.Modal {
     this.field("\u4EFB\u52A1\u540D\u79F0 *", (wrap) => {
       wrap.createEl("input", { cls: "ad-modal-input ad-edit-title", attr: { type: "text", value: task.content } });
     });
+    const assignment = contentEl.createDiv({ cls: "ad-modal-row" });
+    const projectCol = assignment.createDiv({ cls: "ad-modal-col" });
+    projectCol.createEl("label", { cls: "ad-modal-label", text: "\u6240\u5C5E\u9879\u76EE" });
+    const projectSel = projectCol.createEl("select", { cls: "ad-modal-input" });
+    const currentProject = this.opts.projects.find((project) => project.name === task.projectId);
+    if (!currentProject && task.projectId) {
+      projectSel.createEl("option", { value: "", text: task.projectId });
+    }
+    for (const project of this.opts.projects) {
+      projectSel.createEl("option", { value: project.path, text: project.name });
+    }
+    projectSel.value = currentProject?.path ?? "";
+    const typeCol = assignment.createDiv({ cls: "ad-modal-col" });
+    typeCol.createEl("label", { cls: "ad-modal-label", text: "\u4EFB\u52A1\u7C7B\u578B" });
+    const typeSel = typeCol.createEl("select", { cls: "ad-modal-input" });
+    typeSel.createEl("option", { value: "\u666E\u901A", text: "\u666E\u901A" });
+    typeSel.createEl("option", { value: "\u91CD\u590D", text: "\u91CD\u590D" });
+    typeSel.value = task.type === "\u91CD\u590D" ? "\u91CD\u590D" : "\u666E\u901A";
+    const parentField = contentEl.createDiv({ cls: "ad-modal-field" });
+    parentField.createEl("label", { cls: "ad-modal-label", text: "\u7236\u4EFB\u52A1" });
+    const parentSel = parentField.createEl("select", { cls: "ad-modal-input" });
+    const populateParents = (projectPath) => {
+      parentSel.empty();
+      parentSel.createEl("option", { value: "", text: "\u65E0\u7236\u4EFB\u52A1" });
+      const projectName = this.opts.projects.find((project) => project.path === projectPath)?.name ?? task.projectId;
+      for (const candidate of this.opts.allTasks) {
+        if (candidate.projectId === projectName && candidate.id !== task.id) {
+          parentSel.createEl("option", { value: candidate.content, text: candidate.content });
+        }
+      }
+      parentSel.value = task.parent || "";
+    };
+    populateParents(projectSel.value);
+    projectSel.addEventListener("change", () => populateParents(projectSel.value));
+    if (this.opts.taskDetailMode === "compact") {
+      assignment.hide();
+      parentField.hide();
+    }
     contentEl.createEl("label", { cls: "ad-modal-label", text: "\u72B6\u6001" });
     const statusSel = contentEl.createEl("select", { cls: "ad-modal-input" });
     for (const s of STATUS_LIST) {
@@ -1746,17 +1829,16 @@ var TaskEditModal = class extends import_obsidian7.Modal {
     const btns = contentEl.createDiv({ cls: "ad-modal-btns" });
     btns.createEl("button", { cls: "ad-modal-btn", text: UI_TEXT.cancel }).addEventListener("click", () => this.close());
     btns.createEl("button", { cls: "ad-modal-btn ad-modal-btn--primary", text: UI_TEXT.save }).addEventListener("click", () => {
-      var _a2, _b;
       const titleEl = contentEl.querySelector(".ad-edit-title");
       const nodeNoteEl = contentEl.querySelector(".ad-node-note");
-      void this.saveTask(((_a2 = titleEl == null ? void 0 : titleEl.value) == null ? void 0 : _a2.trim()) || task.content, statusSel.value, prioSel.value, startInput.value, endInput.value, notesArea.value, (_b = nodeNoteEl == null ? void 0 : nodeNoteEl.value) != null ? _b : "");
+      void this.saveTask(titleEl?.value?.trim() || task.content, statusSel.value, prioSel.value, startInput.value, endInput.value, notesArea.value, projectSel.value, parentSel.value, typeSel.value, nodeNoteEl?.value ?? "");
     });
   }
-  async saveTask(title, status, priority, startDate, endDate, notes, nodeNote) {
-    var _a2, _b, _c, _d, _e;
+  async saveTask(title, status, priority, startDate, endDate, notes, projectPath, parent, type, nodeNote) {
     const task = this.opts.task;
     const file = this.app.vault.getAbstractFileByPath(task.sourceFile);
     if (!(file instanceof import_obsidian7.TFile)) return;
+    const selectedProject = this.opts.projects.find((project) => project.path === projectPath);
     const newTitle = title.trim();
     if (newTitle && newTitle !== task.content) {
       const dir = file.path.includes("/") ? file.path.slice(0, file.path.lastIndexOf("/")) : "";
@@ -1766,6 +1848,23 @@ var TaskEditModal = class extends import_obsidian7.Modal {
         task.content = newTitle;
         task.id = newPath;
         task.sourceFile = newPath;
+      }
+    }
+    if (selectedProject && file.parent?.path !== selectedProject.path) {
+      const targetPath = `${selectedProject.path}/${file.name}`;
+      if (this.app.vault.getAbstractFileByPath(targetPath)) return;
+      await this.app.fileManager.renameFile(file, targetPath);
+      task.id = targetPath;
+      task.sourceFile = targetPath;
+    }
+    if (parent) {
+      let cursor = parent;
+      let guard = 0;
+      while (cursor) {
+        if (cursor === task.content) return;
+        const ancestor = this.opts.allTasks.find((candidate) => candidate.content === cursor && candidate.projectId === (selectedProject?.name ?? task.projectId));
+        cursor = ancestor?.parent ?? "";
+        if (++guard > 100) return;
       }
     }
     const content = await this.app.vault.read(file);
@@ -1799,16 +1898,21 @@ var TaskEditModal = class extends import_obsidian7.Modal {
     if (priority && !hasPriority && statusLineIdx >= 0) {
       lines.splice(statusLineIdx + 1, 0, `\u4F18\u5148\u7EA7: ${yamlScalar(priority)}`);
     }
+    applyFrontmatterUpdates(lines, {
+      "\u9879\u76EE": selectedProject?.name ?? task.projectId,
+      "\u7C7B\u578B": type,
+      "\u7236\u4EFB\u52A1": parent || null
+    });
     const today = todayStr();
     const nodes = { ...task.dailyNodes };
     const noteTrim = nodeNote.trim();
     if (this.activeState || noteTrim) {
-      nodes[today] = { s: (_a2 = this.activeState) != null ? _a2 : "todo", n: noteTrim };
+      nodes[today] = { s: this.activeState ?? "todo", n: noteTrim };
     } else {
       delete nodes[today];
     }
     {
-      const ni = lines.findIndex((l) => l == null ? void 0 : l.startsWith("\u6BCF\u65E5\u8282\u70B9:"));
+      const ni = lines.findIndex((l) => l?.startsWith("\u6BCF\u65E5\u8282\u70B9:"));
       if (ni >= 0) lines.splice(ni, 1);
     }
     const wasDone = task.status === "\u5DF2\u5B8C\u6210";
@@ -1832,29 +1936,29 @@ var TaskEditModal = class extends import_obsidian7.Modal {
       }
       if (!found) {
         const si = lines.findIndex((l, idx) => {
-          return (l == null ? void 0 : l.startsWith("\u72B6\u6001:")) && idx <= (statusLineIdx >= 0 ? statusLineIdx + 2 : lines.length);
+          return l?.startsWith("\u72B6\u6001:") && idx <= (statusLineIdx >= 0 ? statusLineIdx + 2 : lines.length);
         });
         if (si >= 0) lines.splice(si + 1, 0, `\u5B8C\u6210\u65F6\u95F4: ${nowFmt()}`);
       }
     } else if (!willDone && wasDone) {
-      const ci = lines.findIndex((l) => l == null ? void 0 : l.startsWith("\u5B8C\u6210\u65F6\u95F4:"));
+      const ci = lines.findIndex((l) => l?.startsWith("\u5B8C\u6210\u65F6\u95F4:"));
       if (ci >= 0) lines.splice(ci, 1);
     }
     {
       let fmEnd = 0;
-      if (((_b = lines[0]) == null ? void 0 : _b.trim()) === "---") {
+      if (lines[0]?.trim() === "---") {
         for (let i = 1; i < lines.length; i++) {
-          if (((_c = lines[i]) == null ? void 0 : _c.trim()) === "---") {
+          if (lines[i]?.trim() === "---") {
             fmEnd = i;
             break;
           }
         }
       }
-      const headIdx = lines.findIndex((l, idx) => idx > fmEnd && /^#{1,6}\s+每日节点\s*$/.test(l != null ? l : ""));
+      const headIdx = lines.findIndex((l, idx) => idx > fmEnd && /^#{1,6}\s+每日节点\s*$/.test(l ?? ""));
       if (headIdx >= 0) {
         let end = headIdx + 1;
         for (; end < lines.length; end++) {
-          const l = ((_d = lines[end]) != null ? _d : "").trim();
+          const l = (lines[end] ?? "").trim();
           if (l === "") continue;
           if (/^-\s*\d{4}-\d{2}-\d{2}/.test(l)) continue;
           break;
@@ -1863,7 +1967,7 @@ var TaskEditModal = class extends import_obsidian7.Modal {
       }
       const block = serializeDailyNodesBlock(nodes);
       if (block) {
-        while (lines.length && ((_e = lines[lines.length - 1]) != null ? _e : "").trim() === "") lines.pop();
+        while (lines.length && (lines[lines.length - 1] ?? "").trim() === "") lines.pop();
         lines.push("", block, "");
       }
     }
@@ -1873,6 +1977,9 @@ var TaskEditModal = class extends import_obsidian7.Modal {
     task.startDate = startDate || null;
     task.dueDate = endDate || null;
     task.notes = notes;
+    task.projectId = selectedProject?.name ?? task.projectId;
+    task.parent = parent;
+    task.type = type === "\u91CD\u590D" ? "\u91CD\u590D" : "\u666E\u901A";
     task.dailyNodes = nodes;
     if (willDone && !wasDone) {
       task.completeTime = nowFmt();
@@ -1883,7 +1990,6 @@ var TaskEditModal = class extends import_obsidian7.Modal {
     this.close();
   }
   renderNodeAxis(parent, task) {
-    var _a2, _b;
     const today = todayStr();
     const due = task.dueDate;
     const isDone = task.status === "\u5DF2\u5B8C\u6210";
@@ -1902,14 +2008,14 @@ var TaskEditModal = class extends import_obsidian7.Modal {
     for (let i = 0; i < firstDow; i++) grid.createSpan({ cls: "ad-node-cell ad-node-cell--empty" });
     for (const date of dates) {
       let node = task.dailyNodes[date];
-      if (isDone && date === completeDate && (node == null ? void 0 : node.s) !== "done") {
-        node = { s: "done", n: (_a2 = node == null ? void 0 : node.n) != null ? _a2 : "" };
+      if (isDone && date === completeDate && node?.s !== "done") {
+        node = { s: "done", n: node?.n ?? "" };
       }
       const isOverdue = date > due;
       const isCompleteDay = isDone && date === completeDate;
       const cell = grid.createSpan({ cls: "ad-node-cell" + this.cellClass(date, today, node, isOverdue, isCompleteDay) });
       cell.setAttribute("data-date", date);
-      const note = (node == null ? void 0 : node.n) ? node.n : "\uFF08\u65E0\u5907\u6CE8\uFF09";
+      const note = node?.n ? node.n : "\uFF08\u65E0\u5907\u6CE8\uFF09";
       const tag = isOverdue ? "\uFF08\u5EF6\u671F\uFF09" : "";
       cell.setAttribute("title", `${date} ${weekdayLabel(date)}${tag}
 ${note}`);
@@ -1920,7 +2026,7 @@ ${note}`);
     right.createEl("label", { cls: "ad-modal-label", text: `\u4ECA\u65E5\u5907\u6CE8\uFF08${fmtMD(today)}\uFF09` });
     const noteArea = right.createEl("textarea", { cls: "ad-modal-input ad-node-note", attr: { rows: "4" } });
     const existing = task.dailyNodes[today];
-    this.activeState = (_b = this.presetTodayNode) != null ? _b : existing ? existing.s : void 0;
+    this.activeState = this.presetTodayNode ?? (existing ? existing.s : void 0);
     if (existing) noteArea.value = existing.n;
     if (this.presetTodayNode) window.setTimeout(() => noteArea.focus(), 50);
     const refresh = () => {
@@ -1946,7 +2052,7 @@ ${noteArea.value ? noteArea.value : "\uFF08\u65E0\u5907\u6CE8\uFF09"}`);
     refresh();
   }
   cellClass(date, today, node, isOverdue, isCompleteDay) {
-    const s = isCompleteDay ? "done" : node == null ? void 0 : node.s;
+    const s = isCompleteDay ? "done" : node?.s;
     let c = "";
     if (s === "done") {
       c = isOverdue ? " is-done-overdue" : " is-done";
@@ -1986,9 +2092,8 @@ function fmtDate(d) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 function fmtMD(s) {
-  var _a2, _b;
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  return m ? `${parseInt((_a2 = m[2]) != null ? _a2 : "0", 10)}/${parseInt((_b = m[3]) != null ? _b : "0", 10)}` : s;
+  return m ? `${parseInt(m[2] ?? "0", 10)}/${parseInt(m[3] ?? "0", 10)}` : s;
 }
 function eachDate(start, end) {
   const out = [];
@@ -1998,9 +2103,8 @@ function eachDate(start, end) {
   return out;
 }
 function weekdayLabel(date) {
-  var _a2;
   const d = (/* @__PURE__ */ new Date(date + "T00:00:00")).getDay();
-  return (_a2 = ["\u65E5", "\u4E00", "\u4E8C", "\u4E09", "\u56DB", "\u4E94", "\u516D"][d]) != null ? _a2 : "\u65E5";
+  return ["\u65E5", "\u4E00", "\u4E8C", "\u4E09", "\u56DB", "\u4E94", "\u516D"][d] ?? "\u65E5";
 }
 
 // src/views/DashboardView.ts
@@ -2013,9 +2117,9 @@ init_taskParser();
 init_parserDiagnostics();
 var TaskStore = class {
   constructor(app, getSettings, onWarn) {
-    this.app = app;
-    this.getSettings = getSettings;
-    this.onWarn = onWarn;
+    __publicField(this, "app", app);
+    __publicField(this, "getSettings", getSettings);
+    __publicField(this, "onWarn", onWarn);
     /** 共享扫描缓存：projects 与 tasks 来自同一次遍历（300ms）。
      *  此前 scanAllTasks 会先跑一遍 scanAllProjects（内部已读取每个任务文件），
      *  再对每个项目把任务文件重读一遍 —— 每文件 2 次 IO；pulse 与首页卡片
@@ -2057,7 +2161,6 @@ var TaskStore = class {
    * 缓存，Promise.all 并发安全），替代此前「逐文件串行 await」的实现。
    */
   async scanAllWithTasks() {
-    var _a2;
     const now = Date.now();
     if (this.scanCache && now - this.scanCache.at < 300) return this.scanCache;
     clearParseIssues();
@@ -2071,7 +2174,7 @@ var TaskStore = class {
     } else {
       if (!this.warnedProjectsFallback) {
         this.warnedProjectsFallback = true;
-        (_a2 = this.onWarn) == null ? void 0 : _a2.call(this, "\u672A\u627E\u5230\u9879\u76EE\u6587\u4EF6\u5939\u300C" + rootPath + "\u300D\uFF0C\u8BF7\u5728\u8BBE\u7F6E\u4E2D\u914D\u7F6E\u4EE5\u7F29\u5C0F\u626B\u63CF\u8303\u56F4");
+        this.onWarn?.("\u672A\u627E\u5230\u9879\u76EE\u6587\u4EF6\u5939\u300C" + rootPath + "\u300D\uFF0C\u8BF7\u5728\u8BBE\u7F6E\u4E2D\u914D\u7F6E\u4EE5\u7F29\u5C0F\u626B\u63CF\u8303\u56F4");
         console.warn('[Dashboard] projectsFolder "' + rootPath + '" not found; fell back to scanning the whole vault root.');
       }
       root = this.app.vault.getRoot();
@@ -2083,7 +2186,6 @@ var TaskStore = class {
   /** Scan a folder and its children for project-{name}.md;
    *  each project's tasks are also appended into acc (single traversal). */
   async scanProjectsInFolder(folder, projects, acc) {
-    var _a2, _b;
     for (const child of folder.children) {
       if (child instanceof import_obsidian8.TFolder) {
         const projectFilePath = `${child.path}/project-${child.name}.md`;
@@ -2100,7 +2202,7 @@ var TaskStore = class {
           const taskFiles = await this.scanTasksInFolder(child, meta.name || child.name, projColor);
           acc.push(...taskFiles);
           const activeCount = taskFiles.filter((t) => t.status !== "\u5DF2\u5B8C\u6210" && t.status !== "\u5DF2\u53D6\u6D88").length;
-          const projStage = (_a2 = meta.stage) != null ? _a2 : 0;
+          const projStage = meta.stage ?? 0;
           const stages = isLongTermProject(meta.type) ? LONG_TERM_STAGES : this.getSettings().npdpStages;
           projects.push({
             name: meta.name || child.name,
@@ -2114,7 +2216,7 @@ var TaskStore = class {
             path: child.path,
             stage: Math.min(projStage, stages.length - 1),
             stages,
-            type: (_b = meta.type) != null ? _b : "stage"
+            type: meta.type ?? "stage"
           });
         }
         await this.scanProjectsInFolder(child, projects, acc);
@@ -2190,7 +2292,7 @@ var DashboardStore = class {
     this.taskSource.invalidate();
     try {
       this.tasks = await this.taskSource.scanAllTasks();
-    } catch (e) {
+    } catch {
       this.tasks = null;
     }
     this.notify();
@@ -2219,9 +2321,8 @@ function sanitizeWikiName(name) {
   return name.replace(/[\[\]#^|/]/g, " ").replace(/\s+/g, " ").trim();
 }
 function extractWikiName(link) {
-  var _a2, _b;
   const cleaned = link.replace(/^\[\[/, "").replace(/\]\]$/, "").trim();
-  const name = (_b = ((_a2 = cleaned.split("|")[0]) != null ? _a2 : "").split("#")[0]) != null ? _b : "";
+  const name = (cleaned.split("|")[0] ?? "").split("#")[0] ?? "";
   return name.trim();
 }
 var FileSuggest = class extends import_obsidian9.AbstractInputSuggest {
@@ -2243,7 +2344,6 @@ var FileSuggest = class extends import_obsidian9.AbstractInputSuggest {
 };
 var OpportunityModal = class extends import_obsidian9.Modal {
   constructor(opts) {
-    var _a2, _b;
     super(opts.app);
     __publicField(this, "opts");
     __publicField(this, "isEdit");
@@ -2258,10 +2358,9 @@ var OpportunityModal = class extends import_obsidian9.Modal {
       this.starred = opts.editData.starred;
       this.stageNotes = { ...opts.editData.stageNotes || {} };
     }
-    if (!this.selectedStatus && opts.stages.length) this.selectedStatus = (_b = (_a2 = opts.stages[0]) == null ? void 0 : _a2.label) != null ? _b : "";
+    if (!this.selectedStatus && opts.stages.length) this.selectedStatus = opts.stages[0]?.label ?? "";
   }
   onOpen() {
-    var _a2, _b;
     const { contentEl } = this;
     const ed = this.opts.editData;
     const title = this.opts.title;
@@ -2273,7 +2372,7 @@ var OpportunityModal = class extends import_obsidian9.Modal {
       attr: { type: "text", placeholder: "\u8F93\u5165" + title + "\u540D\u79F0" }
     });
     if (ed) nameInput.value = ed.title;
-    (_a2 = nameInput.focus) == null ? void 0 : _a2.call(nameInput);
+    nameInput.focus?.();
     contentEl.createEl("label", { cls: "ad-modal-label", text: "\u72B6\u6001" });
     const statusSelect = contentEl.createEl("select", { cls: "ad-modal-input" });
     for (const s of this.opts.stages) statusSelect.createEl("option", { value: s.label, text: s.label });
@@ -2310,7 +2409,7 @@ var OpportunityModal = class extends import_obsidian9.Modal {
       attr: { type: "text", placeholder: "[[xxx-\u8BE6\u60C5]] \u6216\u7559\u7A7A\uFF08\u8F93\u5165 [ \u81EA\u52A8\u641C\u7D22\u7B14\u8BB0\uFF09" }
     });
     if (ed) linkInput.value = ed.link;
-    (_b = this.linkSuggest) == null ? void 0 : _b.close();
+    this.linkSuggest?.close();
     this.linkSuggest = new FileSuggest(this.app, linkInput);
     const linkBtn = contentEl.createEl("button", {
       cls: "ad-modal-btn ad-modal-btn--ghost",
@@ -2318,13 +2417,12 @@ var OpportunityModal = class extends import_obsidian9.Modal {
     });
     linkBtn.addEventListener("click", () => {
       void (async () => {
-        var _a3;
         const t = String(nameInput.value || "").trim();
         if (!t) {
           nameInput.focus();
           return;
         }
-        const rawLink = ((_a3 = linkInput.value) != null ? _a3 : "").toString().trim();
+        const rawLink = (linkInput.value ?? "").toString().trim();
         const finalLink = rawLink.length ? rawLink : `[[${sanitizeWikiName(t)}-\u8BE6\u60C5]]`;
         linkInput.value = finalLink;
         await this.ensureAndOpenNote(extractWikiName(finalLink));
@@ -2388,8 +2486,7 @@ ${backlink}
     }
   }
   onClose() {
-    var _a2;
-    (_a2 = this.linkSuggest) == null ? void 0 : _a2.close();
+    this.linkSuggest?.close();
     this.linkSuggest = null;
     this.contentEl.empty();
   }
@@ -2409,19 +2506,17 @@ var STATUS_REMAP = {
   "\u5DF2\u5426\u51B3": "\u5DF2\u653E\u5F03"
 };
 function migrateStatus(old) {
-  var _a2;
-  return (_a2 = STATUS_REMAP[old]) != null ? _a2 : old;
+  return STATUS_REMAP[old] ?? old;
 }
 var TABLE_START = "<!-- OPPORTUNITIES_TABLE_START -->";
 var TABLE_END = "<!-- OPPORTUNITIES_TABLE_END -->";
 function sortBoardItems(items, stageLabels) {
   const known = new Set(stageLabels);
   return [...items].sort((a, b) => {
-    var _a2, _b;
     const wa = known.has(a.status) ? stageLabels.indexOf(a.status) : stageLabels.length;
     const wb = known.has(b.status) ? stageLabels.indexOf(b.status) : stageLabels.length;
     if (wa !== wb) return wa - wb;
-    const ow = ((_a2 = a.order) != null ? _a2 : 0) - ((_b = b.order) != null ? _b : 0);
+    const ow = (a.order ?? 0) - (b.order ?? 0);
     if (ow) return ow;
     return (b.createDate || "").localeCompare(a.createDate || "");
   });
@@ -2490,12 +2585,11 @@ function fromFmObject(raw, fallbackId) {
   };
 }
 function stripFrontmatter(content) {
-  var _a2, _b;
   const lines = content.split(/\r?\n/);
-  if (((_a2 = lines[0]) == null ? void 0 : _a2.trim()) !== "---") return content;
+  if (lines[0]?.trim() !== "---") return content;
   let i = 1;
   for (; i < lines.length; i++) {
-    if (((_b = lines[i]) == null ? void 0 : _b.trim()) === "---") {
+    if (lines[i]?.trim() === "---") {
       i++;
       break;
     }
@@ -2831,14 +2925,13 @@ var OpportunityBoard = class {
     ];
   }
   renderKanban(panel, items) {
-    var _a2, _b;
     const singleMode = this.selectedStatus !== "all" && !this.showStarredOnly;
     const stages = singleMode ? this.activeStages().filter((s) => s.label === this.selectedStatus) : this.activeStages();
     const board = panel.createDiv({ cls: "po-kanban op-kanban" + (singleMode ? " op-kanban--single" : "") });
     if (singleMode) {
       const ordered = sortBoardItems(items, this.stageLabels());
       if (!this.selectedDetailId || !items.some((i) => i.id === this.selectedDetailId)) {
-        this.selectedDetailId = ordered.length ? (_b = (_a2 = ordered[0]) == null ? void 0 : _a2.id) != null ? _b : null : null;
+        this.selectedDetailId = ordered.length ? ordered[0]?.id ?? null : null;
       }
     }
     for (const st of stages) {
@@ -2846,10 +2939,7 @@ var OpportunityBoard = class {
       colEl.dataset.status = st.label;
       const hd = colEl.createDiv({ cls: "po-kanban__hd" });
       hd.createSpan({ text: st.label });
-      const ct = items.filter((i) => i.status === st.label).sort((a, b) => {
-        var _a3, _b2;
-        return ((_a3 = a.order) != null ? _a3 : 0) - ((_b2 = b.order) != null ? _b2 : 0);
-      });
+      const ct = items.filter((i) => i.status === st.label).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
       hd.createSpan({ cls: "po-kanban__count", text: String(ct.length) });
       if (ct.length === 0) colEl.createDiv({ cls: "op-empty-col" });
       ct.forEach((it) => {
@@ -2897,9 +2987,8 @@ var OpportunityBoard = class {
           menu.showAtMouseEvent(e);
         });
         card.addEventListener("dragstart", (e) => {
-          var _a3;
           this.draggedId = it.id;
-          (_a3 = e.dataTransfer) == null ? void 0 : _a3.setData("text/opp-id", it.id);
+          e.dataTransfer?.setData("text/opp-id", it.id);
           if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
           card.addClass("po-kanban__card--dragging");
         });
@@ -2914,11 +3003,10 @@ var OpportunityBoard = class {
         });
         card.addEventListener("dragleave", () => card.removeClass("op-card--drag-over"));
         card.addEventListener("drop", (e) => {
-          var _a3, _b2;
           e.preventDefault();
           e.stopPropagation();
           card.removeClass("op-card--drag-over");
-          const id = (_b2 = this.draggedId) != null ? _b2 : (_a3 = e.dataTransfer) == null ? void 0 : _a3.getData("text/opp-id");
+          const id = this.draggedId ?? e.dataTransfer?.getData("text/opp-id");
           this.draggedId = null;
           if (!id) return;
           void this.reorder(id, st.label, it.id);
@@ -2930,10 +3018,9 @@ var OpportunityBoard = class {
       });
       colEl.addEventListener("dragleave", () => colEl.removeClass("po-kanban__col--drag-over"));
       colEl.addEventListener("drop", (e) => {
-        var _a3, _b2;
         e.preventDefault();
         colEl.removeClass("po-kanban__col--drag-over");
-        const id = (_b2 = this.draggedId) != null ? _b2 : (_a3 = e.dataTransfer) == null ? void 0 : _a3.getData("text/opp-id");
+        const id = this.draggedId ?? e.dataTransfer?.getData("text/opp-id");
         this.draggedId = null;
         if (!id) return;
         void this.reorder(id, st.label);
@@ -2952,10 +3039,7 @@ var OpportunityBoard = class {
     const items = this.currentItems;
     const dragged = items.find((i) => i.id === draggedId);
     if (!dragged) return;
-    const colItems = items.filter((i) => i.status === targetStatus && i.id !== draggedId).sort((a, b) => {
-      var _a2, _b;
-      return ((_a2 = a.order) != null ? _a2 : 0) - ((_b = b.order) != null ? _b : 0);
-    });
+    const colItems = items.filter((i) => i.status === targetStatus && i.id !== draggedId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     let insertIdx = colItems.length;
     if (beforeId) {
       const bi = colItems.findIndex((i) => i.id === beforeId);
@@ -2974,10 +3058,7 @@ var OpportunityBoard = class {
       }
     }
     const map = new Map(reordered.map((i) => [i.id, i]));
-    const next = items.map((i) => {
-      var _a2;
-      return (_a2 = map.get(i.id)) != null ? _a2 : i;
-    });
+    const next = items.map((i) => map.get(i.id) ?? i);
     this.currentItems = sortBoardItems(next, this.stageLabels());
     await this.saveItems(this.currentItems);
     void this.refreshBoard();
@@ -3109,19 +3190,17 @@ var OpportunityBoard = class {
     }
   }
   rerenderSidebarAndPanels() {
-    var _a2;
-    const sidebar = (_a2 = this.host.boardEl) == null ? void 0 : _a2.querySelector(".op-sidebar");
+    const sidebar = this.host.boardEl?.querySelector(".op-sidebar");
     if (sidebar) this.renderSidebar(sidebar);
     this.renderPanels();
   }
   sortList(key) {
-    var _a2;
     if (this.sortCol === key) this.sortDir = this.sortDir === "asc" ? "desc" : "asc";
     else {
       this.sortCol = key;
       this.sortDir = "asc";
     }
-    const panel = (_a2 = this.mainEl) == null ? void 0 : _a2.querySelector('.po-panel[data-view="list"]');
+    const panel = this.mainEl?.querySelector('.po-panel[data-view="list"]');
     if (panel) this.renderPanel("list", panel, this.filteredItems());
   }
   sortedList(items) {
@@ -3133,15 +3212,14 @@ var OpportunityBoard = class {
       return "";
     };
     return [...items].sort((a, b) => {
-      var _a2, _b;
       let av;
       let bv;
       if (col === "starred") {
         av = a.starred ? "1" : "0";
         bv = b.starred ? "1" : "0";
       } else {
-        av = cellStr((_a2 = a[col]) != null ? _a2 : "");
-        bv = cellStr((_b = b[col]) != null ? _b : "");
+        av = cellStr(a[col] ?? "");
+        bv = cellStr(b[col] ?? "");
       }
       return av.localeCompare(bv, "zh-CN") * dir;
     });
@@ -3232,12 +3310,11 @@ var OpportunityBoard = class {
     void this.refreshBoard();
   }
   async refreshBoard() {
-    var _a2;
     if (this.host.currentPage !== "opportunity") return;
     const items = await this.loadItems();
     if (this.host.currentPage !== "opportunity" || !this.host.boardEl) return;
     this.currentItems = items;
-    const sidebar = (_a2 = this.host.boardEl) == null ? void 0 : _a2.querySelector(".op-sidebar");
+    const sidebar = this.host.boardEl?.querySelector(".op-sidebar");
     if (sidebar) this.renderSidebar(sidebar);
     this.renderPanels();
   }
@@ -3259,7 +3336,6 @@ function nowFmt2(today = /* @__PURE__ */ new Date()) {
   return `${today.getFullYear()}-${p(today.getMonth() + 1)}-${p(today.getDate())} ${p(today.getHours())}:${p(today.getMinutes())}`;
 }
 function calcNextRemindDate(task, today = /* @__PURE__ */ new Date()) {
-  var _a2;
   const rule = task.repeatRule;
   if (!rule) return null;
   const freq = rule["\u9891\u7387"] || "";
@@ -3280,7 +3356,7 @@ function calcNextRemindDate(task, today = /* @__PURE__ */ new Date()) {
       if (nextDay) {
         next.setDate(next.getDate() + (nextDay - todayDow));
       } else {
-        next.setDate(next.getDate() + (7 - todayDow + ((_a2 = sorted[0]) != null ? _a2 : 1)));
+        next.setDate(next.getDate() + (7 - todayDow + (sorted[0] ?? 1)));
       }
     } else {
       next.setDate(next.getDate() + 7);
@@ -3321,11 +3397,17 @@ function getTodayUniverse(tasks, today = todayStr3()) {
     return false;
   });
 }
-function getTodayTasks(tasks, today = todayStr3()) {
+function getTodayTasks(tasks, today = todayStr3(), keepDone = false) {
   return getTodayUniverse(tasks, today).filter((t) => {
+    const node = t.dailyNodes?.[today];
+    if (node?.s === "skip") return false;
+    if (keepDone) {
+      if (t.status === "\u5DF2\u5B8C\u6210") return !!t.completeTime?.startsWith(today);
+      if (t.completeTime?.startsWith(today) || node?.s === "done") return true;
+    }
     if (t.status === "\u5DF2\u5B8C\u6210") return false;
-    if (t.completeTime && t.completeTime.startsWith(today)) return false;
-    if (t.dailyNodes && t.dailyNodes[today] && (t.dailyNodes[today].s === "done" || t.dailyNodes[today].s === "skip")) return false;
+    if (t.completeTime?.startsWith(today)) return false;
+    if (node?.s === "done") return false;
     return true;
   });
 }
@@ -3363,11 +3445,10 @@ function urgencyMeta(priority) {
 
 // src/data/virtualList.ts
 function computeWindow(opts) {
-  var _a2;
   const total = Math.max(0, Math.floor(opts.total));
   if (total === 0) return { start: 0, end: 0 };
   const rowHeight = opts.rowHeight > 0 ? opts.rowHeight : 1;
-  const overscan = Math.max(0, (_a2 = opts.overscan) != null ? _a2 : 10);
+  const overscan = Math.max(0, opts.overscan ?? 10);
   const viewportHeight = Math.max(0, opts.viewportHeight);
   const visible = Math.max(1, Math.ceil(viewportHeight / rowHeight));
   const first = Math.max(0, Math.floor(opts.scrollTop / rowHeight) - overscan);
@@ -3568,11 +3649,10 @@ var ProjectBoard = class {
   }
   /** Render NPDP stage pipeline for selected project — compact card-style dots (like home page project card) */
   renderStagePipeline(container) {
-    var _a2, _b;
     const proj = this.currentProjects.find((p) => p.name === this.selectedProject);
     if (!proj) return;
-    const stages = (_a2 = proj.stages) != null ? _a2 : isLongTermProject(proj.type) ? LONG_TERM_STAGES : this.plugin.settings.npdpStages;
-    const currentStage = (_b = proj.stage) != null ? _b : 0;
+    const stages = proj.stages ?? (isLongTermProject(proj.type) ? LONG_TERM_STAGES : this.plugin.settings.npdpStages);
+    const currentStage = proj.stage ?? 0;
     const bar = container.createDiv({ cls: "ad-proj__stages po-stage-compact" });
     const stageMinW = Math.max(20, Math.min(36, Math.floor(160 / stages.length)));
     bar.style.gap = `${Math.max(1, Math.floor(4 / (stages.length / 4)))}px`;
@@ -3588,7 +3668,6 @@ var ProjectBoard = class {
   }
   /** Set project stage and persist to project-{name}.md frontmatter */
   async setProjectStage(proj, stage) {
-    var _a2, _b, _c;
     proj.stage = stage;
     const folderName = proj.path.split("/").pop() || proj.name;
     const projectFilePath = `${proj.path}/project-${folderName}.md`;
@@ -3597,10 +3676,10 @@ var ProjectBoard = class {
       await this.writeFrontmatter(file, { "\u9636\u6BB5": String(stage) });
     }
     this.renderPanels();
-    const sidebar = (_a2 = this.boardEl) == null ? void 0 : _a2.querySelector(".po-sidebar");
+    const sidebar = this.boardEl?.querySelector(".po-sidebar");
     if (sidebar) this.renderSidebar(sidebar);
-    const stages = (_b = proj.stages) != null ? _b : isLongTermProject(proj.type) ? LONG_TERM_STAGES : this.plugin.settings.npdpStages;
-    this.showToast(`\u2728 ${proj.name} \u9636\u6BB5\u5DF2\u66F4\u65B0\u4E3A "${(_c = stages[stage]) != null ? _c : stages[0]}"`);
+    const stages = proj.stages ?? (isLongTermProject(proj.type) ? LONG_TERM_STAGES : this.plugin.settings.npdpStages);
+    this.showToast(`\u2728 ${proj.name} \u9636\u6BB5\u5DF2\u66F4\u65B0\u4E3A "${stages[stage] ?? stages[0]}"`);
   }
   /** Render the project sidebar with filtering */
   renderSidebar(sidebar) {
@@ -3645,8 +3724,7 @@ var ProjectBoard = class {
       item.draggable = true;
       item.dataset.projIdx = String(this.currentProjects.indexOf(p));
       item.addEventListener("dragstart", (e) => {
-        var _a2;
-        (_a2 = e.dataTransfer) == null ? void 0 : _a2.setData("text/proj-idx", String(this.currentProjects.indexOf(p)));
+        e.dataTransfer?.setData("text/proj-idx", String(this.currentProjects.indexOf(p)));
         item.addClass("po-sidebar__item--dragging");
       });
       item.addEventListener("dragend", () => item.removeClass("po-sidebar__item--dragging"));
@@ -3656,15 +3734,14 @@ var ProjectBoard = class {
       });
       item.addEventListener("dragleave", () => item.removeClass("po-sidebar__item--drag-over"));
       item.addEventListener("drop", (e) => {
-        var _a2, _b;
         e.preventDefault();
         item.removeClass("po-sidebar__item--drag-over");
-        const taskId = (_a2 = e.dataTransfer) == null ? void 0 : _a2.getData("text/task-id");
+        const taskId = e.dataTransfer?.getData("text/task-id");
         if (taskId) {
           void this.moveTaskToProject(taskId, p.name, sidebar);
           return;
         }
-        const fromIdx = parseInt(((_b = e.dataTransfer) == null ? void 0 : _b.getData("text/proj-idx")) || "-1");
+        const fromIdx = parseInt(e.dataTransfer?.getData("text/proj-idx") || "-1");
         const toIdx = this.currentProjects.indexOf(p);
         if (fromIdx < 0 || fromIdx === toIdx) return;
         const moved = this.currentProjects.splice(fromIdx, 1)[0];
@@ -3748,7 +3825,6 @@ var ProjectBoard = class {
   }
   /** Refresh project overview data and re-render */
   async refresh() {
-    var _a2;
     if (this.currentPage !== "project") return;
     const projects = await this.taskStore.scanAllProjects();
     const allTasks = await this.taskStore.scanAllTasks();
@@ -3756,13 +3832,12 @@ var ProjectBoard = class {
     this.currentProjects = projects;
     this.currentTasks = allTasks;
     this.applyProjectOrder();
-    const sidebar = (_a2 = this.boardEl) == null ? void 0 : _a2.querySelector(".po-sidebar");
+    const sidebar = this.boardEl?.querySelector(".po-sidebar");
     if (sidebar) this.renderSidebar(sidebar);
     this.renderPanels();
   }
   /* ---- Gantt Panel (ported architecture: SVG axis + left labels / right scroll) ---- */
   renderGanttPanel(panel, tasks, projects) {
-    var _a2, _b;
     if (this.ganttStatusFilter.length > 0) {
       tasks = tasks.filter((t) => this.ganttStatusFilter.includes(t.status));
     }
@@ -3819,9 +3894,8 @@ var ProjectBoard = class {
     const manualIdx = /* @__PURE__ */ new Map();
     manualOrder.forEach((id, i) => manualIdx.set(id, i));
     const groupSort = (a, b) => {
-      var _a3, _b2;
-      const ia = manualIdx.has(a.id) ? (_a3 = manualIdx.get(a.id)) != null ? _a3 : Number.MAX_SAFE_INTEGER : Number.MAX_SAFE_INTEGER;
-      const ib = manualIdx.has(b.id) ? (_b2 = manualIdx.get(b.id)) != null ? _b2 : Number.MAX_SAFE_INTEGER : Number.MAX_SAFE_INTEGER;
+      const ia = manualIdx.has(a.id) ? manualIdx.get(a.id) ?? Number.MAX_SAFE_INTEGER : Number.MAX_SAFE_INTEGER;
+      const ib = manualIdx.has(b.id) ? manualIdx.get(b.id) ?? Number.MAX_SAFE_INTEGER : Number.MAX_SAFE_INTEGER;
       if (ia !== ib) return ia - ib;
       return timeSort(a, b);
     };
@@ -3847,7 +3921,7 @@ var ProjectBoard = class {
     const granularity = this.ganttZoom || "week";
     const DAY_WIDTH = { day: 36, week: 16, month: 7, quarter: 4 };
     const MIN_DAYS = { day: 30, week: 90, month: 365, quarter: 365 };
-    const dayWidth = (_a2 = DAY_WIDTH[granularity]) != null ? _a2 : 16;
+    const dayWidth = DAY_WIDTH[granularity] ?? 16;
     const HEADER_HEIGHT = 56;
     const ROW_HEIGHT = 34;
     const today = /* @__PURE__ */ new Date();
@@ -3868,7 +3942,7 @@ var ProjectBoard = class {
     if (today > maxD) maxD = new Date(today);
     minD.setDate(minD.getDate() - 7);
     maxD.setDate(maxD.getDate() + 14);
-    const minDaysForZoom = (_b = MIN_DAYS[granularity]) != null ? _b : 30;
+    const minDaysForZoom = MIN_DAYS[granularity] ?? 30;
     let spanDays = Math.round((maxD.getTime() - minD.getTime()) / 864e5);
     if (spanDays < minDaysForZoom) {
       const extra = Math.ceil((minDaysForZoom - spanDays) / 2);
@@ -4138,8 +4212,7 @@ var ProjectBoard = class {
       });
       lr.draggable = true;
       lr.addEventListener("dragstart", (e) => {
-        var _a3;
-        (_a3 = e.dataTransfer) == null ? void 0 : _a3.setData("text/task-id", t.id);
+        e.dataTransfer?.setData("text/task-id", t.id);
         lr.addClass("po-row--dragging");
       });
       lr.addEventListener("dragend", () => lr.removeClass("po-row--dragging"));
@@ -4149,10 +4222,9 @@ var ProjectBoard = class {
       });
       lr.addEventListener("dragleave", () => lr.removeClass("po-row--drag-over"));
       lr.addEventListener("drop", (e) => {
-        var _a3;
         e.preventDefault();
         lr.removeClass("po-row--drag-over");
-        const draggedId = (_a3 = e.dataTransfer) == null ? void 0 : _a3.getData("text/task-id");
+        const draggedId = e.dataTransfer?.getData("text/task-id");
         if (!draggedId || draggedId === t.id) return;
         const rows = Array.from(leftBody.querySelectorAll(".po-gantt__label-row"));
         const ids = rows.map((r) => r.dataset.taskId).filter((id) => !!id);
@@ -4317,7 +4389,7 @@ var ProjectBoard = class {
     const tableResult = this.renderTaskTable(panel, "po-tb1", tasks, projects);
     tableResult.tbody.addEventListener("click", (e) => {
       const tr = e.target.closest("tr");
-      const idxStr = tr == null ? void 0 : tr.dataset.origIndex;
+      const idxStr = tr?.dataset.origIndex;
       if (idxStr === void 0) return;
       const idx = Number(idxStr);
       this.clearHighlights(bars, tableResult.rows);
@@ -4346,7 +4418,7 @@ var ProjectBoard = class {
       this.highlightedRow = null;
     }
     bars.forEach((b) => b.classList.remove("po-bar--highlight"));
-    rows.forEach((r) => r == null ? void 0 : r.removeClass("po-row--highlight"));
+    rows.forEach((r) => r?.removeClass("po-row--highlight"));
   }
   setupResizeHandle(handle, gantt) {
     let startY = 0;
@@ -4464,10 +4536,7 @@ var ProjectBoard = class {
     const OVERSCAN = 10;
     let rowHeight = ROW_HEIGHT_FALLBACK;
     let rowHeightMeasured = false;
-    let visible = filterWithOrig(sortedTasks, (t) => {
-      var _a2, _b;
-      return (_b = (_a2 = FILTER_KEYS[this.taskListFilter]) == null ? void 0 : _a2.call(FILTER_KEYS, t.status)) != null ? _b : true;
-    });
+    let visible = filterWithOrig(sortedTasks, (t) => FILTER_KEYS[this.taskListFilter]?.(t.status) ?? true);
     const rows = new Array(sortedTasks.length).fill(null);
     let lastRendered = [];
     const renderWindow = () => {
@@ -4525,7 +4594,7 @@ var ProjectBoard = class {
     });
     thead.addEventListener("click", (e) => {
       const th = e.target.closest("th");
-      if (!(th == null ? void 0 : th.dataset.sortKey)) return;
+      if (!th?.dataset.sortKey) return;
       const key = th.dataset.sortKey;
       if (this.sortCol === key) {
         this.sortDir = this.sortDir === "asc" ? "desc" : "asc";
@@ -4540,24 +4609,17 @@ var ProjectBoard = class {
       const arrow = th.querySelector(".po-sort-arrow");
       if (arrow) arrow.textContent = this.sortDir === "asc" ? " \u2191" : " \u2193";
       applySort();
-      visible = filterWithOrig(sortedTasks, (t) => {
-        var _a2, _b;
-        return (_b = (_a2 = FILTER_KEYS[this.taskListFilter]) == null ? void 0 : _a2.call(FILTER_KEYS, t.status)) != null ? _b : true;
-      });
+      visible = filterWithOrig(sortedTasks, (t) => FILTER_KEYS[this.taskListFilter]?.(t.status) ?? true);
       wrap.scrollTop = 0;
       renderWindow();
     });
     toolbar.addEventListener("click", (e) => {
-      var _a2;
       const chip = e.target.closest(".po-chip");
       if (!chip) return;
       toolbar.querySelectorAll(".po-chip").forEach((c) => c.removeClass("is-active"));
       chip.addClass("is-active");
-      this.taskListFilter = (_a2 = chip.dataset.filter) != null ? _a2 : "all";
-      visible = filterWithOrig(sortedTasks, (t) => {
-        var _a3, _b;
-        return (_b = (_a3 = FILTER_KEYS[this.taskListFilter]) == null ? void 0 : _a3.call(FILTER_KEYS, t.status)) != null ? _b : true;
-      });
+      this.taskListFilter = chip.dataset.filter ?? "all";
+      visible = filterWithOrig(sortedTasks, (t) => FILTER_KEYS[this.taskListFilter]?.(t.status) ?? true);
       wrap.scrollTop = 0;
       renderWindow();
     });
@@ -4705,8 +4767,7 @@ var ProjectBoard = class {
             });
             row.createSpan({ cls: "po-status " + (t.status === "\u5DF2\u5B8C\u6210" ? "po-done" : "po-todo"), text: t.status });
             row.addEventListener("dragstart", (ev) => {
-              var _a2;
-              (_a2 = ev.dataTransfer) == null ? void 0 : _a2.setData("text/plain", t.id);
+              ev.dataTransfer?.setData("text/plain", t.id);
             });
           });
         } else {
@@ -4715,7 +4776,7 @@ var ProjectBoard = class {
       });
       grid.addEventListener("dragover", (e) => {
         const dayEl = e.target.closest(".po-cal__day");
-        if (dayEl == null ? void 0 : dayEl.dataset.date) {
+        if (dayEl?.dataset.date) {
           e.preventDefault();
           dayEl.addClass("po-cal__day--drag-over");
         }
@@ -4725,12 +4786,11 @@ var ProjectBoard = class {
         if (dayEl) dayEl.removeClass("po-cal__day--drag-over");
       });
       grid.addEventListener("drop", (e) => {
-        var _a2;
         e.preventDefault();
         const dayEl = e.target.closest(".po-cal__day");
-        if (!(dayEl == null ? void 0 : dayEl.dataset.date)) return;
+        if (!dayEl?.dataset.date) return;
         dayEl.removeClass("po-cal__day--drag-over");
-        const taskId = (_a2 = e.dataTransfer) == null ? void 0 : _a2.getData("text/plain");
+        const taskId = e.dataTransfer?.getData("text/plain");
         if (!taskId) return;
         const task = tasks.find((t) => t.id === taskId);
         if (!task) return;
@@ -4816,8 +4876,7 @@ var ProjectBoard = class {
           menu.showAtMouseEvent(e);
         });
         card.addEventListener("dragstart", (e) => {
-          var _a2;
-          (_a2 = e.dataTransfer) == null ? void 0 : _a2.setData("text/plain", t.id);
+          e.dataTransfer?.setData("text/plain", t.id);
           card.addClass("po-kanban__card--dragging");
         });
         card.addEventListener("dragend", () => {
@@ -4832,10 +4891,9 @@ var ProjectBoard = class {
         colEl.removeClass("po-kanban__col--drag-over");
       });
       colEl.addEventListener("drop", (e) => {
-        var _a2;
         e.preventDefault();
         colEl.removeClass("po-kanban__col--drag-over");
-        const taskId = (_a2 = e.dataTransfer) == null ? void 0 : _a2.getData("text/plain");
+        const taskId = e.dataTransfer?.getData("text/plain");
         if (!taskId) return;
         const task = tasks.find((t) => t.id === taskId);
         if (!task || task.status === col.key) return;
@@ -4892,7 +4950,7 @@ var RING_ANIM = {
   easing: (t) => 1 - Math.pow(1 - t, 3)
 };
 function clampSpan(v) {
-  const n = typeof v === "number" ? Math.round(v) : parseInt(String(v != null ? v : ""), 10);
+  const n = typeof v === "number" ? Math.round(v) : parseInt(String(v ?? ""), 10);
   if (!Number.isFinite(n) || n < 1) return 1;
   return Math.min(MAX_SPAN, n);
 }
@@ -4921,7 +4979,6 @@ function buildRepeatRule(data) {
   return rule;
 }
 function calcHeatmapStats(data, year, today) {
-  var _a2;
   let total = 0;
   let active = 0;
   const prefix = `${year}-`;
@@ -4935,22 +4992,21 @@ function calcHeatmapStats(data, year, today) {
   const d = new Date(today);
   while (d.getFullYear() === year) {
     const key = fmtDate2(d);
-    if (((_a2 = data.get(key)) != null ? _a2 : 0) > 0) streak++;
+    if ((data.get(key) ?? 0) > 0) streak++;
     else break;
     d.setDate(d.getDate() - 1);
   }
   return { total, active, streak };
 }
 function getLunarDate(d) {
-  var _a2, _b, _c, _d, _e, _f;
   try {
     const parts = new Intl.DateTimeFormat("zh-CN-u-ca-chinese", {
       timeZone: "Asia/Shanghai",
       month: "long",
       day: "numeric"
     }).formatToParts(d);
-    const monthStr = (_b = (_a2 = parts.find((p) => p.type === "month")) == null ? void 0 : _a2.value) != null ? _b : "";
-    const dayStr = (_d = (_c = parts.find((p) => p.type === "day")) == null ? void 0 : _c.value) != null ? _d : "";
+    const monthStr = parts.find((p) => p.type === "month")?.value ?? "";
+    const dayStr = parts.find((p) => p.type === "day")?.value ?? "";
     if (/[\u4e00-\u9fff]/.test(monthStr)) {
       const dayNum = parseInt(dayStr);
       if (!isNaN(dayNum) && dayNum >= 1 && dayNum <= 30) {
@@ -4986,7 +5042,7 @@ function getLunarDate(d) {
           "\u5EFF\u4E5D",
           "\u4E09\u5341"
         ];
-        return monthStr + ((_e = LUNAR_DAYS[dayNum - 1]) != null ? _e : dayStr);
+        return monthStr + (LUNAR_DAYS[dayNum - 1] ?? dayStr);
       }
       return monthStr + dayStr.replace("\u65E5", "");
     }
@@ -4994,8 +5050,8 @@ function getLunarDate(d) {
     const day = parseInt(dayStr) || 1;
     const MONTHS = ["\u6B63\u6708", "\u4E8C\u6708", "\u4E09\u6708", "\u56DB\u6708", "\u4E94\u6708", "\u516D\u6708", "\u4E03\u6708", "\u516B\u6708", "\u4E5D\u6708", "\u5341\u6708", "\u51AC\u6708", "\u814A\u6708"];
     const DAYS = ["\u521D\u4E00", "\u521D\u4E8C", "\u521D\u4E09", "\u521D\u56DB", "\u521D\u4E94", "\u521D\u516D", "\u521D\u4E03", "\u521D\u516B", "\u521D\u4E5D", "\u521D\u5341", "\u5341\u4E00", "\u5341\u4E8C", "\u5341\u4E09", "\u5341\u56DB", "\u5341\u4E94", "\u5341\u516D", "\u5341\u4E03", "\u5341\u516B", "\u5341\u4E5D", "\u4E8C\u5341", "\u5EFF\u4E00", "\u5EFF\u4E8C", "\u5EFF\u4E09", "\u5EFF\u56DB", "\u5EFF\u4E94", "\u5EFF\u516D", "\u5EFF\u4E03", "\u5EFF\u516B", "\u5EFF\u4E5D", "\u4E09\u5341"];
-    return MONTHS[m - 1] + ((_f = DAYS[day - 1]) != null ? _f : "");
-  } catch (e) {
+    return MONTHS[m - 1] + (DAYS[day - 1] ?? "");
+  } catch {
     return "";
   }
 }
@@ -5067,8 +5123,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
       { id: "progress", title: "\u5DE5\u4F5C\u8FDB\u5EA6", cardCls: "ad-card ad-b-progress", render: (b, t) => void this.renderProgress(b, t) },
       { id: "weekly", title: "\u672C\u5468\u5F85\u529E & \u903E\u671F", cardCls: "ad-card ad-b-weekly", render: (b, t) => void this.renderWeekly(b, t) },
       { id: "projects", title: "\u9879\u76EE\u60C5\u51B5", cardCls: "ad-card ad-b-project", render: (b) => void this.renderProjects(b) },
-      { id: "heatmap", title: "\u7B14\u8BB0\u7EDF\u8BA1", cardCls: "ad-card ad-b-heatmap", live: false, render: (b) => this.renderHeatmap(b) },
-      { id: "countdown", title: "\u5012\u8BA1\u65F6", cardCls: "ad-card ad-b-countdown", live: false, render: (b) => this.renderCountdown(b) }
+      { id: "heatmap", title: "\u7B14\u8BB0\u7EDF\u8BA1", cardCls: "ad-card ad-b-heatmap", live: false, render: (b) => this.renderHeatmap(b) }
     ]);
     // Project overview state (renderer extracted into ProjectBoard)
     __publicField(this, "selectedProject", null);
@@ -5093,8 +5148,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     return t;
   }
   applyTheme() {
-    var _a2;
-    const root = (_a2 = this.dashboardEl) != null ? _a2 : this.containerEl.querySelector(".dashboard-plugin");
+    const root = this.dashboardEl ?? this.containerEl.querySelector(".dashboard-plugin");
     if (root) root.setAttribute("data-theme", this.effectiveTheme());
     this.refreshThemeButton();
   }
@@ -5116,7 +5170,6 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     return "layout-dashboard";
   }
   async onOpen() {
-    var _a2, _b;
     this.containerEl.empty();
     this.dashboardEl = this.containerEl.createDiv({ cls: "dashboard-plugin" });
     this.applyTheme();
@@ -5170,15 +5223,14 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     } catch (err) {
       try {
         const e = err instanceof Error ? err : new Error(String(err));
-        (_a2 = this.dashboardEl) == null ? void 0 : _a2.empty();
-        (_b = this.dashboardEl) == null ? void 0 : _b.createEl("pre", { cls: "ad-error", text: "Dashboard \u6E32\u67D3\u51FA\u9519\uFF1A\n" + (e.stack || e.message) });
-      } catch (e) {
+        this.dashboardEl?.empty();
+        this.dashboardEl?.createEl("pre", { cls: "ad-error", text: "Dashboard \u6E32\u67D3\u51FA\u9519\uFF1A\n" + (e.stack || e.message) });
+      } catch {
       }
       console.error("[Dashboard] render error", err);
     }
   }
   async onClose() {
-    var _a2;
     if (this.noiseId) {
       window.cancelAnimationFrame(this.noiseId);
       this.noiseId = null;
@@ -5202,7 +5254,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
       this.storeUnsub = null;
     }
     this.dashboardStore.dispose();
-    (_a2 = this.dashboardEl) == null ? void 0 : _a2.empty();
+    this.dashboardEl?.empty();
   }
   /* ============================================================
      BANNER — image insert via modal, vertical drag only
@@ -5240,13 +5292,11 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
       fileInput.click();
     });
     fileInput.addEventListener("change", () => {
-      var _a2;
-      const file = (_a2 = fileInput.files) == null ? void 0 : _a2[0];
+      const file = fileInput.files?.[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = (ev) => {
-        var _a3;
-        const dataUrl = (_a3 = ev.target) == null ? void 0 : _a3.result;
+        const dataUrl = ev.target?.result;
         this.openBannerModal(dataUrl, 0);
       };
       reader.readAsDataURL(file);
@@ -5288,10 +5338,9 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     });
     const settings = btns.createEl("button", { cls: "ad-header__settings", text: "\u2699 \u8BBE\u7F6E" });
     settings.addEventListener("click", () => {
-      var _a2, _b;
       const app = this.app;
-      (_a2 = app.setting) == null ? void 0 : _a2.open();
-      (_b = app.setting) == null ? void 0 : _b.openTabById(this.plugin.manifest.id);
+      app.setting?.open();
+      app.setting?.openTabById(this.plugin.manifest.id);
     });
     if (this.bannerClockId !== null) window.clearInterval(this.bannerClockId);
     this.bannerClockId = window.setInterval(() => {
@@ -5308,9 +5357,8 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
   }
   /** Replace only the banner so a setting or inline toggle takes effect immediately. */
   refreshBanner() {
-    var _a2;
     const old = this.bannerEl;
-    const parent = (_a2 = old == null ? void 0 : old.parentElement) != null ? _a2 : this.dashboardEl;
+    const parent = old?.parentElement ?? this.dashboardEl;
     if (!parent) return;
     this.bannerState = { ...DEFAULT_SETTINGS.banner, ...this.plugin.settings.banner };
     const holder = document.createElement("div");
@@ -5337,9 +5385,8 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     if (banner.isConnected) this.bannerStatsEl = stats;
   }
   async refreshBannerStats() {
-    var _a2, _b;
-    if (this.bannerState.mode !== "stats" || !((_a2 = this.bannerEl) == null ? void 0 : _a2.isConnected)) return;
-    (_b = this.bannerStatsEl) == null ? void 0 : _b.remove();
+    if (this.bannerState.mode !== "stats" || !this.bannerEl?.isConnected) return;
+    this.bannerStatsEl?.remove();
     this.bannerStatsEl = null;
     await this.renderStatsBanner(this.bannerEl);
   }
@@ -5366,7 +5413,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     };
     img.src = dataUrl;
     img.removeClass("ad-banner__img--hidden");
-    ph == null ? void 0 : ph.addClass("ad-banner__ph--hidden");
+    ph?.addClass("ad-banner__ph--hidden");
   }
   async saveBanner() {
     this.plugin.settings.banner = { ...this.bannerState };
@@ -5374,13 +5421,12 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
   }
   /* ---- Vault note counts by creation date ---- */
   getVaultNoteCounts() {
-    var _a2;
     const counts = /* @__PURE__ */ new Map();
     const files = this.app.vault.getMarkdownFiles();
     for (const file of files) {
       const d = new Date(file.stat.ctime);
       const key = fmtDate2(d);
-      counts.set(key, ((_a2 = counts.get(key)) != null ? _a2 : 0) + 1);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
     }
     return counts;
   }
@@ -5436,18 +5482,17 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
      Pulse
      ============================================================ */
   async renderPulse(root, d) {
-    var _a2;
     const bar = root.createDiv({ cls: "ad-pulse" });
     const today = /* @__PURE__ */ new Date();
     const todayKey = todayStr3();
     const noteCounts = this.getVaultNoteCounts();
     const hs = calcHeatmapStats(noteCounts, today.getFullYear(), today);
-    const todayCount = (_a2 = noteCounts.get(todayKey)) != null ? _a2 : 0;
+    const todayCount = noteCounts.get(todayKey) ?? 0;
     let pendingCount = 0;
     try {
       const all = await this.taskStore.scanAllTasks();
       pendingCount = all.filter((t) => t.status !== "\u5DF2\u5B8C\u6210" && t.status !== "\u5DF2\u53D6\u6D88").length;
-    } catch (e) {
+    } catch {
     }
     const totalEl = bar.createSpan({ text: `${hs.total} NOTES` });
     bar.createSpan({ cls: "ad-pulse__sep", text: "\xB7" });
@@ -5466,13 +5511,12 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     this.pulseEls = { total: totalEl, pending: pendingEl, today: todayEl, streak: streakEl };
   }
   async updatePulse() {
-    var _a2;
     if (!this.pulseEls) return;
     const today = /* @__PURE__ */ new Date();
     const todayKey = todayStr3();
     const noteCounts = this.getVaultNoteCounts();
     const hs = calcHeatmapStats(noteCounts, today.getFullYear(), today);
-    const todayCount = (_a2 = noteCounts.get(todayKey)) != null ? _a2 : 0;
+    const todayCount = noteCounts.get(todayKey) ?? 0;
     this.pulseEls.total.textContent = `${hs.total} NOTES`;
     this.pulseEls.today.textContent = `\u0394 TODAY +${todayCount}`;
     this.pulseEls.streak.textContent = `${hs.streak}D STREAK`;
@@ -5480,28 +5524,26 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
       const all = await this.taskStore.scanAllTasks();
       const pending = all.filter((t) => t.status !== "\u5DF2\u5B8C\u6210" && t.status !== "\u5DF2\u53D6\u6D88").length;
       this.pulseEls.pending.textContent = `${pending} PENDING`;
-    } catch (e) {
+    } catch {
     }
   }
   /** Live-update only the dashboard title text (cheap; no full re-render). */
   refreshTitle() {
-    var _a2;
     if (this.adTitleEl) this.adTitleEl.textContent = this.plugin.settings.dashboardTitle || MOCK_DATA.header.title;
     if (this.bannerTitleEl) {
       this.bannerTitleEl.textContent = this.plugin.settings.dashboardTitle || "";
-      this.bannerTitleEl.toggleClass("is-hidden", !((_a2 = this.plugin.settings.dashboardTitle) == null ? void 0 : _a2.trim()));
+      this.bannerTitleEl.toggleClass("is-hidden", !this.plugin.settings.dashboardTitle?.trim());
     }
   }
   /* ============================================================
      Header
      ============================================================ */
   renderHeader(root, d) {
-    var _a2, _b;
     const h = root.createEl("header", { cls: "ad-header" });
     const left = h.createDiv({ cls: "ad-header__left" });
     left.createEl("p", { cls: "ad-eyebrow", text: d.header.eyebrow });
     this.adTitleEl = left.createEl("h1", { cls: "ad-title", text: this.plugin.settings.dashboardTitle || d.header.title });
-    left.createEl("p", { cls: "ad-subtitle", text: "Obsidian \xB7 Personal Dashboard \xB7 v" + ((_b = (_a2 = this.plugin.manifest) == null ? void 0 : _a2.version) != null ? _b : d.header.subtitle.replace(/^.*v/, "v")) });
+    left.createEl("p", { cls: "ad-subtitle", text: "Obsidian \xB7 Personal Dashboard \xB7 v" + (this.plugin.manifest?.version ?? d.header.subtitle.replace(/^.*v/, "v")) });
     const right = h.createDiv({ cls: "ad-header__right" });
     const now = /* @__PURE__ */ new Date();
     const dateStr = now.toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" });
@@ -5529,10 +5571,9 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     const settings = btns.createEl("button", { cls: "ad-header__settings" });
     settings.textContent = "\u2699 \u8BBE\u7F6E";
     settings.addEventListener("click", () => {
-      var _a3, _b2;
       const app = this.app;
-      (_a3 = app.setting) == null ? void 0 : _a3.open();
-      (_b2 = app.setting) == null ? void 0 : _b2.openTabById(this.plugin.manifest.id);
+      app.setting?.open();
+      app.setting?.openTabById(this.plugin.manifest.id);
     });
     this.registerInterval(window.setInterval(() => {
       const n = /* @__PURE__ */ new Date();
@@ -5574,12 +5615,11 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
       else glyphEl.textContent = it.glyph;
       btn.createSpan({ text: it.label });
       btn.addEventListener("click", () => {
-        var _a2;
         btn.addClass("is-active");
         try {
           if (it.action === "home") void this.showDashboard();
           if (it.action === "diary") void this.createDiary();
-          if (it.action === "task") void this.openTaskModal((_a2 = this.selectedProject) != null ? _a2 : void 0);
+          if (it.action === "task") void this.openTaskModal(this.selectedProject ?? void 0);
           if (it.action === "project") void this.createProjectFile();
           if (it.action === "all") void this.projectBoard.show();
           if (it.action === "opportunity") void this.oppBoard.show();
@@ -5663,7 +5703,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
       const projects = await this.taskStore.scanAllProjects();
       const tasks = await this.taskStore.scanAllTasks();
       if (projects.length > 0 || tasks.length > 0) return;
-    } catch (e) {
+    } catch {
       return;
     }
     const card = board.createDiv({ cls: "ad-card ad-card--guide" });
@@ -5675,10 +5715,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
       b.addEventListener("click", fn);
     };
     mk("\uFF0B \u65B0\u5EFA\u9879\u76EE", () => void this.createProjectFile());
-    mk("\uFF0B \u65B0\u5EFA\u4EFB\u52A1", () => {
-      var _a2;
-      return void this.openTaskModal((_a2 = this.selectedProject) != null ? _a2 : void 0);
-    });
+    mk("\uFF0B \u65B0\u5EFA\u4EFB\u52A1", () => void this.openTaskModal(this.selectedProject ?? void 0));
     mk("\uFF0B \u65B0\u5EFA\u65E5\u8BB0", () => void this.createDiary());
   }
   /* ============================================================
@@ -5828,10 +5865,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
       SS: pad(d.getSeconds()),
       A: meridiem
     };
-    const name = pattern.replace(/(dddd|ddd|YYYY|MMM|MM|DD|HH|hh|mm|ss|SS|A)/g, (m) => {
-      var _a2;
-      return (_a2 = map[m]) != null ? _a2 : m;
-    });
+    const name = pattern.replace(/(dddd|ddd|YYYY|MMM|MM|DD|HH|hh|mm|ss|SS|A)/g, (m) => map[m] ?? m);
     return name.replace(/[*"/<>:|?\\]/g, "-");
   }
   /* ============================================================
@@ -5909,9 +5943,8 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
   }
   /** Edit project via ProjectModal */
   async editProject(proj) {
-    var _a2, _b, _c;
     const { ProjectModal: ProjectModal2 } = await Promise.resolve().then(() => (init_ProjectModal(), ProjectModal_exports));
-    const stages = (_a2 = proj.stages) != null ? _a2 : isLongTermProject(proj.type) ? LONG_TERM_STAGES : this.plugin.settings.npdpStages;
+    const stages = proj.stages ?? (isLongTermProject(proj.type) ? LONG_TERM_STAGES : this.plugin.settings.npdpStages);
     new ProjectModal2({
       app: this.app,
       stages,
@@ -5921,8 +5954,8 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
         startDate: proj.startDate || "",
         endDate: proj.endDate || "",
         description: proj.description,
-        stage: (_b = proj.stage) != null ? _b : 0,
-        type: (_c = proj.type) != null ? _c : "stage"
+        stage: proj.stage ?? 0,
+        type: proj.type ?? "stage"
       },
       onSave: (data) => {
         void this.updateProjectFile(proj, data);
@@ -5970,16 +6003,26 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
       void this.refreshRelevant();
     }
   }
-  /** Open TaskEditModal for a given task */
+  /** Open TaskEditModal for a given task. The project list is loaded at open
+   *  time so moving a task always uses the project's real vault path. */
   openTaskEditModal(task, presetTodayNode) {
-    new TaskEditModal({
-      app: this.app,
-      task,
-      presetTodayNode,
-      onSave: () => {
-        void this.refreshRelevant();
-      }
-    }).open();
+    void (async () => {
+      const [projects, allTasks] = await Promise.all([
+        this.taskStore.scanAllProjects(),
+        this.taskStore.scanAllTasks()
+      ]);
+      new TaskEditModal({
+        app: this.app,
+        task,
+        presetTodayNode,
+        projects,
+        allTasks,
+        taskDetailMode: this.plugin.settings.taskDetailMode,
+        onSave: () => {
+          void this.refreshRelevant();
+        }
+      }).open();
+    })();
   }
   /** Find the actual project folder by scanning vault */
   async findProjectFolder(projectName) {
@@ -6173,9 +6216,22 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
   }
   /** Refresh the todo list card in-place */
   async refreshTodoList() {
-    if (!this.boardEl) return;
+    if (this.currentPage !== "home" || !this.boardEl) return;
     const allTasks = await this.taskStore.scanAllTasks();
+    if (this.currentPage !== "home" || !this.boardEl) return;
     await this.renderTodo(this.boardEl, allTasks);
+  }
+  /** Refresh TODO after its display preference changes. */
+  refreshTodo() {
+    void this.refreshTodoList();
+  }
+  /** Refresh the weekly card after its display preference changes. */
+  refreshWeekly() {
+    if (this.currentPage !== "home" || !this.boardEl) return;
+    void (async () => {
+      const allTasks = await this.taskStore.scanAllTasks();
+      if (this.currentPage === "home" && this.boardEl) await this.renderWeekly(this.boardEl, allTasks);
+    })();
   }
   /**
    * 由多类名字符串构造合法的类选择器：'ad-card ad-b-todo' → '.ad-card.ad-b-todo'
@@ -6198,6 +6254,18 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     }
     return board.createDiv({ cls });
   }
+  countdownModuleId(id) {
+    return `countdown:${id}`;
+  }
+  countdownIdFromModuleId(modId) {
+    return modId.startsWith("countdown:") ? modId.slice("countdown:".length) : null;
+  }
+  /** 统一读取静态模块和动态倒计时实例的布局配置。 */
+  findCardConfig(modId) {
+    const countdownId = this.countdownIdFromModuleId(modId);
+    if (countdownId) return this.plugin.settings.countdownCards?.find((card) => card.id === countdownId);
+    return this.plugin.settings.homeModules?.find((card) => card.id === modId);
+  }
   /**
    * 按 settings.homeModules 的「启用 + 顺序」驱动首页渲染（注册表化核心）。
    * - 渲染前先移除「已禁用 / 已不存在」模块的残留卡片，保证显隐即时生效、无重复。
@@ -6205,25 +6273,28 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
    * - 一次 vault 扫描的 allTasks 在 todo/progress/weekly 间共享。
    */
   async renderEnabledModules(board, opts) {
-    var _a2, _b;
-    const configs = (_a2 = this.plugin.settings.homeModules) != null ? _a2 : [];
-    const enabled = configs.filter((m) => m.enabled && this.homeModules.some((x) => x.id === m.id)).sort((a, b) => a.order - b.order);
-    const enabledTokens = enabled.map((m) => {
-      const mod = this.homeModules.find((x) => x.id === m.id);
-      return mod ? mod.cardCls.split(" ")[1] : "";
-    }).filter((t) => t !== "");
+    const configs = this.plugin.settings.homeModules ?? [];
+    const enabled = configs.filter((m) => m.id !== "countdown" && m.enabled && this.homeModules.some((x) => x.id === m.id)).map((cfg) => ({ id: cfg.id, cfg, mod: this.homeModules.find((x) => x.id === cfg.id) }));
+    for (const card of this.plugin.settings.countdownCards ?? []) {
+      if (!card.enabled) continue;
+      enabled.push({
+        id: this.countdownModuleId(card.id),
+        cfg: card,
+        mod: { id: "countdown", title: "\u5012\u8BA1\u65F6", cardCls: "ad-card ad-b-countdown", live: false, render: () => void 0 }
+      });
+    }
+    enabled.sort((a, b) => a.cfg.order - b.cfg.order);
+    const enabledIds = new Set(enabled.map((entry) => entry.id));
     board.querySelectorAll(".ad-card").forEach((el) => {
-      const matched = enabledTokens.some((tok) => el.classList.contains(tok));
-      if (!matched) el.remove();
+      if (!enabledIds.has(el.getAttribute("data-mod") ?? "")) el.remove();
     });
     const shells = [];
-    for (const cfg of enabled) {
-      const mod = this.homeModules.find((x) => x.id === cfg.id);
-      if (!mod) continue;
-      const sel = _DashboardView.cardSel(mod.cardCls);
+    for (const entry of enabled) {
+      const { id, cfg, mod } = entry;
+      const sel = id.startsWith("countdown:") ? `[data-mod="${id}"]` : _DashboardView.cardSel(mod.cardCls);
       let el = board.querySelector(sel);
       if (!el) el = board.createDiv({ cls: mod.cardCls });
-      el.setAttribute("data-mod", mod.id);
+      el.setAttribute("data-mod", id);
       this.applyCardSpan(el, cfg.cols, cfg.rows);
       shells.push(el);
     }
@@ -6233,16 +6304,21 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
       if (expected !== el) board.insertBefore(el, expected);
       prev = el;
     }
-    const allTasks = (_b = opts == null ? void 0 : opts.allTasks) != null ? _b : await this.taskStore.scanAllTasks();
-    for (const cfg of enabled) {
-      const mod = this.homeModules.find((x) => x.id === cfg.id);
-      if (!mod) continue;
-      if ((opts == null ? void 0 : opts.onlyLive) && mod.live === false) continue;
+    const allTasks = opts?.allTasks ?? await this.taskStore.scanAllTasks();
+    for (const entry of enabled) {
+      const { id, cfg, mod } = entry;
+      if (opts?.onlyLive && mod.live === false) continue;
       if (this.currentPage !== "home" || !this.boardEl) return;
-      await mod.render(board, allTasks);
-      const cardEl = board.querySelector(_DashboardView.cardSel(mod.cardCls));
+      const countdownId = this.countdownIdFromModuleId(id);
+      if (countdownId) {
+        const card = this.plugin.settings.countdownCards?.find((item) => item.id === countdownId);
+        if (card) this.renderCountdownCard(board, id, card);
+      } else {
+        await mod.render(board, allTasks);
+      }
+      const cardEl = board.querySelector(`[data-mod="${id}"]`);
       if (cardEl) {
-        cardEl.setAttribute("data-mod", mod.id);
+        cardEl.setAttribute("data-mod", id);
         this.applyCardSpan(cardEl, cfg.cols, cfg.rows);
       }
     }
@@ -6254,8 +6330,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
    *  按模块最低宽度（MIN_COLS）与最低宽高比（MIN_RATIO）夹紧，保证项目情况/笔记统计
    *  等关键卡片既不被压得过窄、也不会被拉成「过窄过高的竖条」。 */
   applyCardSpan(el, cols, rows) {
-    var _a2;
-    const modId = (_a2 = el.getAttribute("data-mod")) != null ? _a2 : "";
+    const modId = el.getAttribute("data-mod") ?? "";
     const { cols: c, rows: r } = this.resolveSpan(modId, clampSpan(cols), clampSpan(rows));
     el.style.setProperty("--cols", String(c));
     el.style.setProperty("--rows", String(r));
@@ -6278,8 +6353,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
   }
   /** 把宽度按「模块最低宽度」与「当前实际列数」双重夹紧：响应式到更窄列数时只填充满，不强行跨列 */
   clampMinCols(modId, cols, colCount) {
-    var _a2;
-    const min = (_a2 = MIN_COLS[modId]) != null ? _a2 : 1;
+    const min = MIN_COLS[modId] ?? 1;
     const c = colCount >= min ? Math.max(min, cols) : cols;
     return Math.max(1, Math.min(colCount, c));
   }
@@ -6363,15 +6437,12 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
   }
   /** 按当前列数与各模块最低约束，用保存的 settings 比例重新夹紧所有卡片（响应式列数变化时调用） */
   reapplySpans() {
-    var _a2;
     const board = this.boardEl;
     if (!board) return;
-    const hm = (_a2 = this.plugin.settings.homeModules) != null ? _a2 : [];
     board.querySelectorAll(".ad-card").forEach((card) => {
-      var _a3;
       const el = card;
-      const modId = (_a3 = el.getAttribute("data-mod")) != null ? _a3 : "";
-      const m = hm.find((x) => x.id === modId);
+      const modId = el.getAttribute("data-mod") ?? "";
+      const m = this.findCardConfig(modId);
       if (!m) return;
       const { cols, rows } = this.resolveSpan(modId, clampSpan(m.cols), clampSpan(m.rows));
       el.style.setProperty("--cols", String(cols));
@@ -6425,34 +6496,38 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
   }
   /** 编辑态下右键卡片：倒计时卡片先弹出右键菜单选「编辑」，确认后再开编辑弹窗 */
   onBoardContextMenu(e) {
-    var _a2;
     if (this.currentPage !== "home") return;
     if (!this.adEditMode) return;
     const card = e.target.closest(".ad-card");
     if (!card) return;
-    if (((_a2 = card.getAttribute("data-mod")) != null ? _a2 : "") !== "countdown") return;
+    const modId = card.getAttribute("data-mod") ?? "";
+    if (!this.countdownIdFromModuleId(modId)) return;
     e.preventDefault();
     const menu = new import_obsidian16.Menu();
-    menu.addItem((item) => item.setTitle("\u7F16\u8F91").setIcon("pencil").onClick(() => this.openCountdownEdit()));
+    menu.addItem((item) => item.setTitle("\u7F16\u8F91").setIcon("pencil").onClick(() => this.openCountdownEdit(modId)));
     menu.showAtMouseEvent(e);
   }
   /** 打开倒计时事件编辑弹窗，保存后回写 settings 并刷新卡片 */
-  openCountdownEdit() {
+  openCountdownEdit(modId) {
     if (!this.boardEl) return;
+    const countdownId = this.countdownIdFromModuleId(modId);
+    if (!countdownId) return;
+    const cfg = this.plugin.settings.countdownCards?.find((card) => card.id === countdownId);
+    if (!cfg) return;
     const modal = new CountdownModal(
       this.app,
-      this.plugin.settings.countdown,
-      (cfg) => {
-        this.plugin.settings.countdown = cfg;
+      cfg,
+      (next) => {
+        cfg.eventName = next.eventName;
+        cfg.targetDate = next.targetDate;
         void this.plugin.saveSettings();
-        this.renderCountdown(this.boardEl);
+        this.renderCountdownCard(this.boardEl, modId, cfg);
       }
     );
     modal.open();
   }
   /** 开始拖拽某张卡片：用占位符保留其在网格中的位置，卡片本身提起跟随指针（手机图标式重排） */
   beginCardDrag(card, e) {
-    var _a2;
     if (this.adDrag) return;
     e.preventDefault();
     const rect = card.getBoundingClientRect();
@@ -6464,7 +6539,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     ph.style.setProperty("--rows", rows);
     ph.style.gridColumn = `span ${cols}`;
     ph.style.gridRow = `span ${rows}`;
-    (_a2 = card.parentNode) == null ? void 0 : _a2.insertBefore(ph, card);
+    card.parentNode?.insertBefore(ph, card);
     card.classList.add("ad-card--dragging");
     card.style.width = rect.width + "px";
     card.style.height = rect.height + "px";
@@ -6501,8 +6576,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
    * 是此前「拖到删除位置却删不掉」的直接原因。外扩 TRASH_PAD 让热区更好命中。
    */
   isOverTrash(x, y) {
-    var _a2;
-    const trash = (_a2 = this.adEditBar) == null ? void 0 : _a2.querySelector(".ad-editbar__trash");
+    const trash = this.adEditBar?.querySelector(".ad-editbar__trash");
     if (!trash) return false;
     const r = trash.getBoundingClientRect();
     if (r.width === 0 && r.height === 0) return false;
@@ -6510,7 +6584,6 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     return x >= r.left - PAD && x <= r.right + PAD && y >= r.top - PAD && y <= r.bottom + PAD;
   }
   onDragMove(ev) {
-    var _a2, _b;
     const ds = this.adDrag;
     if (!ds) return;
     ds.moved = true;
@@ -6520,7 +6593,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     ds.card.style.top = ev.clientY - ds.offsetY + "px";
     const overTrash = this.isOverTrash(ev.clientX, ev.clientY);
     ds.overTrash = overTrash;
-    (_b = (_a2 = this.adEditBar) == null ? void 0 : _a2.querySelector(".ad-editbar__trash")) == null ? void 0 : _b.classList.toggle("is-over", overTrash);
+    this.adEditBar?.querySelector(".ad-editbar__trash")?.classList.toggle("is-over", overTrash);
     ds.card.classList.toggle("is-doomed", overTrash);
     if (overTrash) return;
     if (ds.raf !== null) return;
@@ -6598,7 +6671,6 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     });
   }
   onDragEnd(_ev) {
-    var _a2, _b, _c;
     const ds = this.adDrag;
     if (!ds) return;
     this.adDrag = null;
@@ -6614,14 +6686,14 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     card.style.removeProperty("height");
     card.style.removeProperty("z-index");
     card.style.removeProperty("pointer-events");
-    (_b = (_a2 = this.adEditBar) == null ? void 0 : _a2.querySelector(".ad-editbar__trash")) == null ? void 0 : _b.classList.remove("is-over");
+    this.adEditBar?.querySelector(".ad-editbar__trash")?.classList.remove("is-over");
     const overTrash = ds.overTrash || this.isOverTrash(ds.lastX, ds.lastY);
     if (overTrash && id) {
       ds.placeholder.remove();
       this.removeModule(id);
       return;
     }
-    (_c = ds.placeholder.parentNode) == null ? void 0 : _c.insertBefore(card, ds.placeholder);
+    ds.placeholder.parentNode?.insertBefore(card, ds.placeholder);
     ds.placeholder.remove();
     this.syncOrderFromDom();
   }
@@ -6633,27 +6705,35 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
       const id = el.getAttribute("data-mod");
       if (id) order.push(id);
     });
-    const hm = this.plugin.settings.homeModules;
-    if (!hm || order.length === 0) return;
-    const map = new Map(hm.map((m) => [m.id, m]));
+    const hm = this.plugin.settings.homeModules ?? [];
+    if (order.length === 0) return;
+    const map = /* @__PURE__ */ new Map();
+    for (const m of hm) if (m.id !== "countdown") map.set(m.id, m);
+    for (const card of this.plugin.settings.countdownCards ?? []) map.set(this.countdownModuleId(card.id), card);
     order.forEach((id, i) => {
       const m = map.get(id);
       if (m) m.order = i;
     });
     let next = order.length;
     for (const m of hm) {
-      if (!order.includes(m.id)) m.order = next++;
+      if (m.id !== "countdown" && !order.includes(m.id)) m.order = next++;
+    }
+    for (const card of this.plugin.settings.countdownCards ?? []) {
+      if (!order.includes(this.countdownModuleId(card.id))) card.order = next++;
     }
     void this.plugin.saveSettings();
   }
-  /** 移除模块（仅隐藏，不删数据），随后从 DOM 移除卡片 */
+  /** 移除模块；普通模块仅隐藏，倒计时实例则仅删除该事件卡片。 */
   removeModule(id) {
-    var _a2, _b;
-    const hm = this.plugin.settings.homeModules;
-    const m = hm == null ? void 0 : hm.find((x) => x.id === id);
-    if (m) m.enabled = false;
+    const countdownId = this.countdownIdFromModuleId(id);
+    if (countdownId) {
+      this.plugin.settings.countdownCards = (this.plugin.settings.countdownCards ?? []).filter((card) => card.id !== countdownId);
+    } else {
+      const m = this.plugin.settings.homeModules?.find((x) => x.id === id);
+      if (m) m.enabled = false;
+    }
     void this.plugin.saveSettings();
-    (_b = (_a2 = this.boardEl) == null ? void 0 : _a2.querySelector(`[data-mod="${id}"]`)) == null ? void 0 : _b.remove();
+    this.boardEl?.querySelector(`[data-mod="${id}"]`)?.remove();
     if (this.boardEl && this.boardEl.querySelectorAll(".ad-card").length === 0) {
       this.renderBoardEmptyHint();
     }
@@ -6674,44 +6754,41 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
   }
   /** 重新启用被隐藏的模块并追加到末尾 */
   async addModule(id) {
-    var _a2, _b;
     const hm = this.plugin.settings.homeModules;
-    const m = hm == null ? void 0 : hm.find((x) => x.id === id);
+    const m = hm?.find((x) => x.id === id);
     if (!m) return;
     m.enabled = true;
     const maxOrder = hm && hm.length ? Math.max(...hm.map((x) => x.order)) : -1;
     m.order = maxOrder + 1;
     await this.plugin.saveSettings();
-    (_b = (_a2 = this.boardEl) == null ? void 0 : _a2.querySelector(".ad-empty")) == null ? void 0 : _b.remove();
+    this.boardEl?.querySelector(".ad-empty")?.remove();
     await this.showDashboardKeepEditMode();
   }
   enterEditMode() {
-    var _a2, _b;
     if (this.adEditMode) return;
     this.adEditMode = true;
-    (_a2 = this.dashboardEl) == null ? void 0 : _a2.classList.add("ad-edit");
+    this.dashboardEl?.classList.add("ad-edit");
     this.showEditBar();
     this.injectCardResizeButtons();
-    (_b = this.boardEl) == null ? void 0 : _b.addEventListener("click", this.adClickGuard, true);
+    this.boardEl?.addEventListener("click", this.adClickGuard, true);
     if (this.boardEl && this.boardEl.querySelectorAll(".ad-card").length === 0) {
       this.openAddMenu();
     }
   }
   /** 退出编辑态；同时清理可能残留的比例/添加弹层与编辑条（切页或点「完成」时调用） */
   exitEditMode() {
-    var _a2, _b, _c, _d, _e;
     if (!this.adEditMode) return;
     this.adEditMode = false;
-    (_a2 = this.dashboardEl) == null ? void 0 : _a2.classList.remove("ad-edit");
-    (_b = this.boardEl) == null ? void 0 : _b.querySelectorAll(".ad-card__resize, .ad-card__ratio, .ad-ph").forEach((b) => b.remove());
-    (_c = this.boardEl) == null ? void 0 : _c.querySelectorAll(".ad-card").forEach((c) => {
+    this.dashboardEl?.classList.remove("ad-edit");
+    this.boardEl?.querySelectorAll(".ad-card__resize, .ad-card__ratio, .ad-ph").forEach((b) => b.remove());
+    this.boardEl?.querySelectorAll(".ad-card").forEach((c) => {
       c.classList.remove("ad-card--dragging", "ad-card--resizing", "is-doomed");
       c.style.removeProperty("transform");
       c.style.removeProperty("transition");
     });
-    (_d = this.dashboardEl) == null ? void 0 : _d.querySelectorAll(".ad-addmenu-backdrop, .ad-propmenu-backdrop").forEach((b) => b.remove());
+    this.dashboardEl?.querySelectorAll(".ad-addmenu-backdrop, .ad-propmenu-backdrop").forEach((b) => b.remove());
     this.hideEditBar();
-    (_e = this.boardEl) == null ? void 0 : _e.removeEventListener("click", this.adClickGuard, true);
+    this.boardEl?.removeEventListener("click", this.adClickGuard, true);
   }
   showEditBar() {
     if (this.adEditBar || !this.dashboardEl) return;
@@ -6727,8 +6804,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     this.adEditBar = bar;
   }
   hideEditBar() {
-    var _a2;
-    (_a2 = this.adEditBar) == null ? void 0 : _a2.remove();
+    this.adEditBar?.remove();
     this.adEditBar = null;
   }
   /** 编辑态：给每张卡片追加「⤢ 比例」手柄（重复调用安全：先清后加，重渲染后补回）。
@@ -6737,12 +6813,8 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     if (!this.boardEl) return;
     this.boardEl.querySelectorAll(".ad-card__resize").forEach((b) => b.remove());
     this.boardEl.querySelectorAll(".ad-card").forEach((card) => {
-      var _a2, _b;
       const c = card;
-      const modId = (_b = c.getAttribute("data-mod")) != null ? _b : (_a2 = this.homeModules.find((m) => {
-        var _a3;
-        return c.classList.contains((_a3 = m.cardCls.split(" ")[1]) != null ? _a3 : "");
-      })) == null ? void 0 : _a2.id;
+      const modId = c.getAttribute("data-mod") ?? this.homeModules.find((m) => c.classList.contains(m.cardCls.split(" ")[1] ?? ""))?.id;
       if (!modId) return;
       if (!c.getAttribute("data-mod")) c.setAttribute("data-mod", modId);
       const btn = c.createDiv({ cls: "ad-card__resize", text: "\u2922" });
@@ -6782,12 +6854,11 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
    * 指针拖到哪，卡片右下角就吸附到哪一格，所见即所得。
    */
   beginResizeDrag(card, modId, e) {
-    var _a2;
     e.preventDefault();
     e.stopPropagation();
-    const m = (_a2 = this.plugin.settings.homeModules) == null ? void 0 : _a2.find((x) => x.id === modId);
-    const startCols = clampSpan(m == null ? void 0 : m.cols);
-    const startRows = clampSpan(m == null ? void 0 : m.rows);
+    const m = this.findCardConfig(modId);
+    const startCols = clampSpan(m?.cols);
+    const startRows = clampSpan(m?.rows);
     this.adResize = { card, modId, startCols, startRows, x0: e.clientX, y0: e.clientY, moved: false };
     card.classList.add("ad-card--resizing");
     const move = (ev) => this.onResizeMove(ev);
@@ -6825,20 +6896,19 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     card.classList.toggle("is-limit", limited);
   }
   onResizeEnd(_ev) {
-    var _a2, _b;
     const st = this.adResize;
     if (!st) return;
     this.adResize = null;
     st.card.classList.remove("ad-card--resizing");
     st.card.classList.remove("is-limit");
-    (_a2 = st.card.querySelector(".ad-card__ratio")) == null ? void 0 : _a2.remove();
+    st.card.querySelector(".ad-card__ratio")?.remove();
     if (!st.moved) {
       this.openProportionMenu(st.card, st.modId);
       return;
     }
     const cols = clampSpan(st.card.style.getPropertyValue("--cols"));
     const rows = clampSpan(st.card.style.getPropertyValue("--rows"));
-    const m = (_b = this.plugin.settings.homeModules) == null ? void 0 : _b.find((x) => x.id === st.modId);
+    const m = this.findCardConfig(st.modId);
     if (m) {
       m.cols = cols;
       m.rows = rows;
@@ -6858,9 +6928,8 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
    * 同时把 data-theme 复制过来，令牌（--ad-*）在 body 层依然按当前主题解析。
    */
   createPopover(cls, opts) {
-    var _a2;
-    const backdrop = document.body.createDiv({ cls: `ad-popover ${cls}` + ((opts == null ? void 0 : opts.anchored) ? " is-anchored" : "") });
-    const theme = (_a2 = this.dashboardEl) == null ? void 0 : _a2.getAttribute("data-theme");
+    const backdrop = document.body.createDiv({ cls: `ad-popover ${cls}` + (opts?.anchored ? " is-anchored" : "") });
+    const theme = this.dashboardEl?.getAttribute("data-theme");
     if (theme) backdrop.setAttribute("data-theme", theme);
     const close = () => {
       window.removeEventListener("keydown", onKey, true);
@@ -6884,7 +6953,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const mr = menu.getBoundingClientRect();
-    const ar = anchor == null ? void 0 : anchor.getBoundingClientRect();
+    const ar = anchor?.getBoundingClientRect();
     let left;
     let top;
     if (ar) {
@@ -6900,12 +6969,10 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
   }
   /** 编辑态：弹出 4×4 比例选择器；宽度/高度各 1-4 格（宽度 4 = 页面最宽），高度可大于宽度（如 1:2 竖卡） */
   openProportionMenu(cardEl, modId) {
-    var _a2, _b;
-    const hm = this.plugin.settings.homeModules;
-    const m = hm == null ? void 0 : hm.find((x) => x.id === modId);
+    const m = this.findCardConfig(modId);
     if (!m) return;
-    const curCols = (_a2 = m.cols) != null ? _a2 : 1;
-    const curRows = (_b = m.rows) != null ? _b : 1;
+    const curCols = m.cols ?? 1;
+    const curRows = m.rows ?? 1;
     const { backdrop, close } = this.createPopover("ad-propmenu-backdrop", { anchored: true });
     const menu = backdrop.createDiv({ cls: "ad-propmenu" });
     const ratioHint = MIN_RATIO[modId] ? `\uFF08\u672C\u5361\u6700\u4F4E\u5BBD\u9AD8\u6BD4 ${MIN_RATIO[modId]}:1\uFF09` : "";
@@ -6944,26 +7011,54 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
   }
   /** 弹出被隐藏模块的列表，点击即加回首页 */
   openAddMenu() {
-    var _a2, _b;
-    const hm = (_a2 = this.plugin.settings.homeModules) != null ? _a2 : [];
-    const hidden = hm.filter((m) => !m.enabled);
+    const hm = this.plugin.settings.homeModules ?? [];
+    const hidden = hm.filter((m) => m.id !== "countdown" && !m.enabled);
     const titleMap = new Map(this.homeModules.map((m) => [m.id, m.title]));
+    const countdownCards = this.plugin.settings.countdownCards ?? [];
     const { backdrop, close } = this.createPopover("ad-addmenu-backdrop");
     const menu = backdrop.createDiv({ cls: "ad-addmenu" });
     menu.createDiv({ cls: "ad-addmenu__title", text: "\u6DFB\u52A0\u5361\u7247\u5230\u9996\u9875" });
-    if (hidden.length === 0) {
-      menu.createDiv({ cls: "ad-addmenu__empty", text: "\u6240\u6709\u6A21\u5757\u5747\u5DF2\u663E\u793A\u5728\u9996\u9875" });
-    } else {
-      for (const m of hidden) {
-        const item = menu.createDiv({ cls: "ad-addmenu__item" });
-        item.createSpan({ text: (_b = titleMap.get(m.id)) != null ? _b : m.id });
-        item.createSpan({ text: "\uFF0B" });
-        item.addEventListener("click", () => {
-          close();
-          void this.addModule(m.id);
-        });
-      }
+    if (countdownCards.length < 5) {
+      const item = menu.createDiv({ cls: "ad-addmenu__item" });
+      item.createSpan({ text: "\u5012\u8BA1\u65F6\u5361\u7247" });
+      item.createSpan({ text: "\uFF0B" });
+      item.addEventListener("click", () => {
+        close();
+        void this.addCountdownCard();
+      });
     }
+    if (hidden.length === 0 && countdownCards.length >= 5) {
+      menu.createDiv({ cls: "ad-addmenu__empty", text: "\u6240\u6709\u6A21\u5757\u5747\u5DF2\u663E\u793A\u5728\u9996\u9875" });
+    }
+    for (const m of hidden) {
+      const item = menu.createDiv({ cls: "ad-addmenu__item" });
+      item.createSpan({ text: titleMap.get(m.id) ?? m.id });
+      item.createSpan({ text: "\uFF0B" });
+      item.addEventListener("click", () => {
+        close();
+        void this.addModule(m.id);
+      });
+    }
+  }
+  /** 在底部编辑条中追加一张独立倒计时卡片，行为与 Xove 的多倒计时一致。 */
+  async addCountdownCard() {
+    const cards = this.plugin.settings.countdownCards ?? [];
+    if (cards.length >= 5) {
+      this.showToast("\u5012\u8BA1\u65F6\u5361\u7247\u6700\u591A\u6DFB\u52A0 5 \u5F20");
+      return;
+    }
+    const ids = new Set(cards.map((card) => card.id));
+    let sequence = cards.length + 1;
+    let id = `countdown-${sequence}`;
+    while (ids.has(id)) id = `countdown-${++sequence}`;
+    const staticOrders = (this.plugin.settings.homeModules ?? []).filter((module2) => module2.id !== "countdown").map((module2) => module2.order);
+    const dynamicOrders = cards.map((card) => card.order);
+    const order = Math.max(-1, ...staticOrders, ...dynamicOrders) + 1;
+    cards.push({ id, eventName: "\u65B0\u5E74", targetDate: "2027-01-01", enabled: true, order, cols: 1, rows: 1 });
+    this.plugin.settings.countdownCards = cards;
+    await this.plugin.saveSettings();
+    this.boardEl?.querySelector(".ad-empty")?.remove();
+    await this.showDashboardKeepEditMode();
   }
   /** 全部卡片被移除后的空状态提示 */
   renderBoardEmptyHint() {
@@ -6978,10 +7073,9 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
    *  A single vault scan feeds all three cards; each card reuses its own shell
    *  (no remove/re-create), so the layout never flashes. */
   async refreshHomeCards() {
-    var _a2, _b;
     if (this.currentPage !== "home" || !this.boardEl) return;
-    (_a2 = this.boardEl.querySelector(".ad-card--guide")) == null ? void 0 : _a2.remove();
-    const allTasks = (_b = this.dashboardStore.getTasks()) != null ? _b : await this.taskStore.scanAllTasks();
+    this.boardEl.querySelector(".ad-card--guide")?.remove();
+    const allTasks = this.dashboardStore.getTasks() ?? await this.taskStore.scanAllTasks();
     if (this.currentPage !== "home" || !this.boardEl) return;
     await this.renderEnabledModules(this.boardEl, { onlyLive: true, allTasks });
     this.refreshParseIssues();
@@ -7022,20 +7116,23 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
      TODO — async, reads real tasks from vault
      ============================================================ */
   async renderTodo(board, allTasks) {
-    const tasks = allTasks != null ? allTasks : await this.taskStore.scanAllTasks();
+    const tasks = allTasks ?? await this.taskStore.scanAllTasks();
     const card = this.getOrCreateCard(board, "ad-card ad-b-todo");
     const summary = card.createSpan({ cls: "ad-card__hint" });
     this.cardHead(card, "\u25CE", "TODO", void 0, summary);
     const list = card.createDiv({ cls: "ad-todo" });
     try {
-      const todayTasks = getTodayTasks(tasks);
+      const today = todayStr3();
+      const todayTasks = getTodayTasks(tasks, today, this.plugin.settings.todoShowCompleted);
+      const isDoneRow = (task) => task.status === "\u5DF2\u5B8C\u6210" || !!task.completeTime?.startsWith(today) || task.dailyNodes?.[today]?.s === "done";
       const sorted = todayTasks.sort((a, b) => {
+        if (isDoneRow(a) !== isDoneRow(b)) return isDoneRow(a) ? 1 : -1;
         if (a.isOverdue && !b.isOverdue) return -1;
         if (!a.isOverdue && b.isOverdue) return 1;
         return priorityWeight(a.priority) - priorityWeight(b.priority);
       });
       sorted.forEach((task) => {
-        const isDone = task.status === "\u5DF2\u5B8C\u6210";
+        const isDone = isDoneRow(task);
         const row = list.createDiv({ cls: "ad-todo__item" + (isDone ? " is-done" : "") + (task.isOverdue ? " is-overdue" : "") });
         const check = row.createSpan({ cls: "ad-todo__check" });
         check.addEventListener("click", (e) => {
@@ -7078,14 +7175,14 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
       const skipCount = universe.filter((t) => isSkipToday(t)).length;
       const totalForSummary = universe.length - skipCount;
       summary.textContent = `${doneCount} / ${totalForSummary} done \xB7 \u6309\u4F18\u5148\u7EA7`;
-    } catch (e) {
+    } catch {
       summary.textContent = "0 / 0 done";
       list.createDiv({ cls: "ad-todo__empty", text: "\u6682\u65E0\u4ECA\u65E5\u4EFB\u52A1" });
     }
   }
   /* ---- Progress (dual ring, real task data) ---- */
   async renderProgress(board, allTasks) {
-    const tasks = allTasks != null ? allTasks : await this.taskStore.scanAllTasks();
+    const tasks = allTasks ?? await this.taskStore.scanAllTasks();
     const card = this.getOrCreateCard(board, "ad-card ad-b-progress");
     this.cardHead(card, "\u25D0", "\u5DE5\u4F5C\u8FDB\u5EA6", "today \xB7 ring");
     const dp = card.createDiv({ cls: "ad-dp" });
@@ -7098,7 +7195,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
       const nonCancelled = tasks.filter((t) => t.status !== "\u5DF2\u53D6\u6D88");
       allTotal = nonCancelled.length;
       allDone = nonCancelled.filter((t) => t.status === "\u5DF2\u5B8C\u6210").length;
-    } catch (e) {
+    } catch {
     }
     if (tasks.length === 0) {
       this.renderEmpty(card, {
@@ -7106,10 +7203,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
         title: "\u8FD8\u6CA1\u6709\u4EFB\u4F55\u4EFB\u52A1",
         hint: "\u5728\u4E0B\u65B9\u300C\u5FEB\u901F\u6355\u6349\u300D\u91CC\u968F\u624B\u8BB0\u4E00\u6761\uFF0C\u6216\u70B9\u5DE5\u5177\u680F\u300C\uFF0B \u65B0\u5EFA\u4EFB\u52A1\u300D\u5F00\u59CB\u3002",
         actionLabel: "\uFF0B \u65B0\u5EFA\u4EFB\u52A1",
-        onAction: () => {
-          var _a2;
-          return void this.openTaskModal((_a2 = this.selectedProject) != null ? _a2 : void 0);
-        }
+        onAction: () => void this.openTaskModal(this.selectedProject ?? void 0)
       });
       return;
     }
@@ -7121,7 +7215,6 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     dp.createDiv({ cls: "ad-dp__stat" }).createEl("strong", { text: `\u5DF2\u5B8C\u6210 ${allDone} / \u603B\u4EFB\u52A1 ${allTotal}` });
   }
   buildRing(parent, pct, pctCls, ringKey) {
-    var _a2, _b;
     const C = 263.9;
     const wrap = parent.createDiv({ cls: "ad-dp__ring" });
     const svg = wrap.createSvg("svg");
@@ -7137,7 +7230,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     fill.setAttribute("r", "42");
     fill.classList.add("ad-fill");
     fill.setAttribute("stroke-dasharray", C.toFixed(2));
-    const from = (_b = (_a2 = this.ringAnim[ringKey]) == null ? void 0 : _a2.value) != null ? _b : 0;
+    const from = this.ringAnim[ringKey]?.value ?? 0;
     const to = Math.max(0, Math.min(100, pct));
     fill.setAttribute("stroke-dashoffset", (C * (1 - from / 100)).toFixed(2));
     const center = wrap.createDiv({ cls: "ad-dp__center" });
@@ -7162,7 +7255,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     }
     const { duration, easing } = RING_ANIM;
     const state = this.ringAnim[ringKey];
-    if (state == null ? void 0 : state.raf) cancelAnimationFrame(state.raf);
+    if (state?.raf) cancelAnimationFrame(state.raf);
     const start = performance.now();
     const step = (now) => {
       const t = Math.min(1, (now - start) / duration);
@@ -7184,7 +7277,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
   /* ---- Weekly & Overdue ---- */
   /* ---- Weekly & Overdue (real task data) ---- */
   async renderWeekly(board, allTasks) {
-    const tasks = allTasks != null ? allTasks : await this.taskStore.scanAllTasks();
+    const tasks = allTasks ?? await this.taskStore.scanAllTasks();
     const card = this.getOrCreateCard(board, "ad-card ad-b-weekly");
     const head = card.createDiv({ cls: "ad-card__head" });
     const h3 = head.createEl("h3", { cls: "ad-card__title" });
@@ -7203,10 +7296,15 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
       const weekStartStr = fmtDate2(weekStart);
       const weekEndStr = fmtDate2(weekEnd);
       const isDone = (t) => t.status === "\u5DF2\u5B8C\u6210" || t.status === "\u5DF2\u53D6\u6D88";
+      const keepDone = this.plugin.settings.todoShowCompleted;
       const overdue = tasks.filter((t) => t.isOverdue);
       overdue.sort((a, b) => a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : 0);
       const thisWeek = tasks.filter((t) => {
-        if (isDone(t)) return false;
+        if (isDone(t)) {
+          if (!keepDone || !t.completeTime) return false;
+          const completedDate = t.completeTime.slice(0, 10);
+          return completedDate >= weekStartStr && completedDate < weekEndStr;
+        }
         if (t.type === "\u91CD\u590D" && t.remindDate) {
           return t.remindDate < weekEndStr && t.remindDate >= weekStartStr;
         }
@@ -7241,13 +7339,14 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
       }
       const foot = card.createDiv({ cls: "ad-wo__foot" });
       foot.textContent = `\u672C\u5468\u5171 ${thisWeek.length} \u4E2A\u4EFB\u52A1\uFF0C\u903E\u671F ${overdue.length} \u4E2A`;
-    } catch (e) {
+    } catch {
       list.createDiv({ cls: "ad-wo__empty", text: "\u52A0\u8F7D\u5931\u8D25" });
     }
   }
   /** Build a single weekly/overdue task row (li) with click + context menu */
   renderWeeklyRow(ul, task, isOverdue) {
     const li = ul.createEl("li");
+    if (task.status === "\u5DF2\u5B8C\u6210") li.addClass("is-done");
     const due = task.dueDate || task.remindDate || "";
     li.createSpan({ cls: "ad-wo__date", text: due ? due.slice(5) : "\u2014" });
     li.createSpan({ cls: "ad-wo__text", text: task.content });
@@ -7325,7 +7424,6 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
   }
   /* ---- Projects (real data) ---- */
   async renderProjects(board) {
-    var _a2;
     const card = this.getOrCreateCard(board, "ad-card ad-b-project");
     const head = card.createDiv({ cls: "ad-card__head ad-card__head--proj" });
     const h3 = head.createEl("h3", { cls: "ad-card__title" });
@@ -7333,17 +7431,14 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     h3.appendText("\u9879\u76EE\u60C5\u51B5");
     const hint = head.createSpan({ cls: "ad-card__hint ad-card__hint--inline" });
     const stages = this.plugin.settings.npdpStages;
-    const maxStageFilter = (_a2 = this.plugin.settings.npdpProgressFilter) != null ? _a2 : stages.length;
+    const maxStageFilter = this.plugin.settings.npdpProgressFilter ?? stages.length;
     let projects = [];
     try {
       projects = await this.taskStore.scanAllProjects();
-    } catch (e) {
+    } catch {
     }
     const filtered = projects.filter(
-      (p) => {
-        var _a3;
-        return isLongTermProject(p.type) || maxStageFilter >= stages.length || ((_a3 = p.stage) != null ? _a3 : 0) <= maxStageFilter;
-      }
+      (p) => isLongTermProject(p.type) || maxStageFilter >= stages.length || (p.stage ?? 0) <= maxStageFilter
     );
     hint.textContent = `${filtered.length} / ${projects.length} \u4E2A\u9879\u76EE`;
     if (maxStageFilter < stages.length) {
@@ -7363,9 +7458,8 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     const list = proj.createDiv({ cls: "ad-proj__list" });
     let activeCount = 0;
     filtered.forEach((p) => {
-      var _a3, _b, _c;
-      const projStage = (_a3 = p.stage) != null ? _a3 : 0;
-      if (projStage > 0 && projStage < ((_c = (_b = p.stages) == null ? void 0 : _b.length) != null ? _c : stages.length)) activeCount++;
+      const projStage = p.stage ?? 0;
+      if (projStage > 0 && projStage < (p.stages?.length ?? stages.length)) activeCount++;
       const pct = p.taskCount > 0 ? Math.round(p.activeCount / p.taskCount * 100) : 0;
       const row = list.createDiv({ cls: "ad-proj__row" });
       row.createSpan({ cls: "ad-proj__dot", attr: { style: `background:${p.color}` } });
@@ -7414,12 +7508,11 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
   }
   /* ---- Heatmap (year-based: Jan 1 -> Dec 31) ---- */
   renderHeatmap(board) {
-    var _a2, _b, _c;
     const card = this.getOrCreateCard(board, "ad-card ad-b-heatmap");
     this.heatmapCard = card;
     card.setAttribute("data-mod", "heatmap");
-    const hm = (_a2 = this.plugin.settings.homeModules) == null ? void 0 : _a2.find((x) => x.id === "heatmap");
-    this.applyCardSpan(card, hm == null ? void 0 : hm.cols, hm == null ? void 0 : hm.rows);
+    const hm = this.plugin.settings.homeModules?.find((x) => x.id === "heatmap");
+    this.applyCardSpan(card, hm?.cols, hm?.rows);
     const noteCounts = this.getVaultNoteCounts();
     const today = /* @__PURE__ */ new Date();
     const todayTime = today.getTime();
@@ -7473,7 +7566,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
           continue;
         }
         const dateStr = fmtDate2(cellDate);
-        const count = (_b = noteCounts.get(dateStr)) != null ? _b : 0;
+        const count = noteCounts.get(dateStr) ?? 0;
         const isFuture = cellTime > todayTime;
         if (!isFuture && count > 0) {
           if (count === 1) cell.addClass("l1");
@@ -7498,7 +7591,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     legend.createSpan({ cls: "ad-ns__lbl", text: "\u591A" });
     this.layoutHeatmap(card);
     if (this.adHmObsTarget !== heat) {
-      (_c = this.adHmObs) == null ? void 0 : _c.disconnect();
+      this.adHmObs?.disconnect();
       this.adHmObs = new ResizeObserver(() => {
         if (this.heatmapCard) this.layoutHeatmap(this.heatmapCard);
       });
@@ -7514,7 +7607,6 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
    * 4) 月份标签按可见周窗口 + 实际间距重建，保证与格子列严格对齐。
    */
   layoutHeatmap(card) {
-    var _a2, _b;
     const heat = card.querySelector(".ad-ns__heat");
     const cells = card.querySelector(".ad-ns__cells");
     const dow = card.querySelector(".ad-ns__dow");
@@ -7548,15 +7640,14 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     const visible = this.adHmWeekMonths.slice(total - weeks);
     monthsRow.empty();
     const unit = HM_CELL + cgap;
-    let curM = (_a2 = visible[0]) != null ? _a2 : 0;
+    let curM = visible[0] ?? 0;
     let curS = 1;
     const flush = (m, span) => {
-      var _a3;
-      const label = monthsRow.createSpan({ text: (_a3 = monthNames[m]) != null ? _a3 : "" });
+      const label = monthsRow.createSpan({ text: monthNames[m] ?? "" });
       label.style.minWidth = span * unit + "px";
     };
     for (let w = 1; w < visible.length; w++) {
-      const m = (_b = visible[w]) != null ? _b : curM;
+      const m = visible[w] ?? curM;
       if (m === curM) {
         curS++;
         continue;
@@ -7570,14 +7661,16 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
     if (win) win.setText(weeks >= total ? `${this.adHmYear} \u5168\u5E74` : `\u8FD1 ${weeks} \u5468`);
   }
   /* ---- Countdown ---- */
-  renderCountdown(board) {
-    const cfg = this.plugin.settings.countdown;
+  renderCountdownCard(board, modId, cfg) {
+    const card = board.querySelector(`[data-mod="${modId}"]`);
+    if (!card) return;
+    card.empty();
+    card.setAttribute("data-mod", modId);
     const target = this.parseCountdownDate(cfg.targetDate);
     const now = /* @__PURE__ */ new Date();
     const today = this.startOfDay(now);
     const targetDay = this.startOfDay(target);
     const diffDays = Math.round((targetDay.getTime() - today.getTime()) / 864e5);
-    const card = this.getOrCreateCard(board, "ad-card ad-b-countdown");
     this.cardHead(card, "\u25C7", "\u5012\u8BA1\u65F6", "Days Left");
     const cd = card.createDiv({ cls: "ad-cd" });
     cd.createDiv({ cls: "ad-cd__sub", text: `\u8DDD\u79BB ${cfg.eventName}` });
@@ -7613,7 +7706,7 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
   }
   /** 解析 ISO yyyy-mm-dd 为目标 Date（当地 0 点）；非法或留空回退到「下一年 1 月 1 日」 */
   parseCountdownDate(s) {
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((s != null ? s : "").trim());
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((s ?? "").trim());
     if (m) {
       const y = parseInt(m[1], 10);
       const mo = parseInt(m[2], 10) - 1;
@@ -7638,15 +7731,307 @@ var DashboardView = class _DashboardView extends import_obsidian16.ItemView {
   }
 };
 
+// src/views/KnowledgeWorkbenchView.ts
+var import_obsidian17 = require("obsidian");
+var KNOWLEDGE_WORKBENCH_VIEW_TYPE = "knowledge-workbench-view";
+var KnowledgeWorkbenchView = class extends import_obsidian17.ItemView {
+  constructor(leaf, plugin) {
+    super(leaf);
+    __publicField(this, "plugin", plugin);
+    __publicField(this, "frame", null);
+    __publicField(this, "pendingPage", "dashboard");
+  }
+  getViewType() {
+    return KNOWLEDGE_WORKBENCH_VIEW_TYPE;
+  }
+  getDisplayText() {
+    return "\u77E5\u8BC6\u5DE5\u4F5C\u53F0";
+  }
+  getIcon() {
+    return "library-big";
+  }
+  setPage(page) {
+    this.pendingPage = page || "dashboard";
+    if (this.frame) this.frame.src = this.plugin.knowledgeWorkbench.getUrl(this.pendingPage);
+  }
+  async onOpen() {
+    this.containerEl.empty();
+    this.containerEl.addClass("knowledge-workbench-view");
+    const shell = this.containerEl.createDiv({ cls: "knowledge-workbench-view__shell" });
+    const status = shell.createDiv({ cls: "knowledge-workbench-view__status", text: "\u6B63\u5728\u542F\u52A8\u77E5\u8BC6\u5DE5\u4F5C\u53F0\u670D\u52A1\u2026" });
+    const ok = await this.plugin.knowledgeWorkbench.ensureStarted();
+    if (!ok) {
+      status.empty();
+      status.createEl("strong", { text: "\u77E5\u8BC6\u5DE5\u4F5C\u53F0\u670D\u52A1\u542F\u52A8\u5931\u8D25" });
+      status.createEl("p", { text: this.plugin.knowledgeWorkbench.error || "\u8BF7\u68C0\u67E5 Node \u8DEF\u5F84\u3001\u670D\u52A1\u76EE\u5F55\u548C\u7AEF\u53E3\u914D\u7F6E\u3002" });
+      const retry = status.createEl("button", { cls: "mod-cta", text: "\u91CD\u8BD5\u542F\u52A8" });
+      retry.addEventListener("click", () => {
+        void this.onOpen();
+      });
+      return;
+    }
+    status.remove();
+    this.frame = shell.createEl("iframe", {
+      cls: "knowledge-workbench-view__frame",
+      attr: {
+        title: "\u77E5\u8BC6\u5DE5\u4F5C\u53F0",
+        loading: "eager",
+        allow: "clipboard-read; clipboard-write",
+        referrerpolicy: "no-referrer"
+      }
+    });
+    this.frame.src = this.plugin.knowledgeWorkbench.getUrl(this.pendingPage);
+  }
+  onClose() {
+    this.frame = null;
+    this.containerEl.empty();
+    return Promise.resolve();
+  }
+};
+
+// src/KnowledgeWorkbenchController.ts
+function getNodeRequire() {
+  try {
+    return Function('return typeof require === "function" ? require : null')();
+  } catch {
+    return null;
+  }
+}
+function getNodeProcessEnv() {
+  const nodeGlobal = globalThis;
+  return { ...nodeGlobal.process?.env ?? {} };
+}
+var KnowledgeWorkbenchController = class {
+  constructor(getSettings, onLog, onSettingsChanged) {
+    __publicField(this, "getSettings", getSettings);
+    __publicField(this, "onLog", onLog);
+    __publicField(this, "onSettingsChanged", onSettingsChanged);
+    __publicField(this, "child", null);
+    __publicField(this, "starting", null);
+    __publicField(this, "lastError", "");
+  }
+  get error() {
+    return this.lastError;
+  }
+  getUrl(page = "dashboard") {
+    const s = this.getSettings();
+    return `http://${s.host || "127.0.0.1"}:${s.port || 5173}/#/${encodeURIComponent(page)}`;
+  }
+  runtimePaths() {
+    const req = getNodeRequire();
+    if (!req) throw new Error("\u5F53\u524D Obsidian \u73AF\u5883\u65E0\u6CD5\u8BBF\u95EE Node.js \u6A21\u5757");
+    const path = req("path");
+    const root = this.getSettings().serverRoot.trim();
+    const runtimeDir = path.join(root, "runtime");
+    return {
+      serverPath: path.join(runtimeDir, "\u5DE5\u4F5C\u53F0", "server.js"),
+      configPath: path.join(runtimeDir, "knowledge-workbench.config.json"),
+      runtimeDir
+    };
+  }
+  writeRuntimeConfig() {
+    const req = getNodeRequire();
+    if (!req) throw new Error("\u5F53\u524D Obsidian \u73AF\u5883\u65E0\u6CD5\u5199\u5165 Knowledge Workbench \u914D\u7F6E");
+    const fs = req("fs");
+    const paths = this.runtimePaths();
+    const s = this.getSettings();
+    fs.mkdirSync(paths.runtimeDir, { recursive: true });
+    let existing = {};
+    try {
+      if (fs.existsSync(paths.configPath)) existing = JSON.parse(fs.readFileSync(paths.configPath, "utf-8"));
+    } catch {
+    }
+    fs.writeFileSync(paths.configPath, JSON.stringify({
+      ...existing,
+      vaultRoot: s.vaultRoot,
+      host: s.host || "127.0.0.1",
+      port: s.port || 5173,
+      rawRoots: ["\u539F\u59CB\u7D20\u6750/\u5916\u90E8", "\u539F\u59CB\u7D20\u6750/\u70ED\u70B9", "\u539F\u59CB\u7D20\u6750/\u6587\u7AE0"],
+      extraRawScanPaths: (s.extraRawScanPaths || []).filter((v) => v.trim()),
+      dailyRoot: "\u65E5\u5E38",
+      outputRoot: "\u8F93\u51FA",
+      knowledgeRoot: "\u77E5\u8BC6\u5C42",
+      bookshelfRoot: "\u4E66\u67B6",
+      aiServiceAutomationId: typeof existing.aiServiceAutomationId === "string" ? existing.aiServiceAutomationId : ""
+    }, null, 2) + "\n", "utf-8");
+  }
+  async isHealthy() {
+    const s = this.getSettings();
+    try {
+      const ctl = new AbortController();
+      const timer = window.setTimeout(() => ctl.abort(), 900);
+      const response = await fetch(`http://${s.host || "127.0.0.1"}:${s.port || 5173}/api/stats`, { signal: ctl.signal });
+      window.clearTimeout(timer);
+      if (!response.ok) return false;
+      return (response.headers.get("content-type") || "").includes("application/json");
+    } catch {
+      return false;
+    }
+  }
+  async isPortAvailable(port) {
+    const req = getNodeRequire();
+    if (!req) return false;
+    try {
+      const cp = req("child_process");
+      const output = cp.execFileSync("/usr/sbin/lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN"], { encoding: "utf8" });
+      if (String(output).trim()) return false;
+    } catch {
+    }
+    const net = req("net");
+    const host = this.getSettings().host || "127.0.0.1";
+    return new Promise((resolve) => {
+      const server = net.createServer();
+      let settled = false;
+      const finish = (available) => {
+        if (settled) return;
+        settled = true;
+        resolve(available);
+      };
+      server.once("error", () => finish(false));
+      server.listen(port, host, () => server.close(() => finish(true)));
+    });
+  }
+  async selectPort() {
+    const s = this.getSettings();
+    const preferred = Number(s.port) || 5173;
+    if (await this.isPortAvailable(preferred)) return preferred;
+    for (let port = 5174; port <= 5180; port += 1) {
+      if (await this.isPortAvailable(port)) {
+        this.onLog?.(`\u7AEF\u53E3 ${preferred} \u5DF2\u88AB\u5360\u7528\uFF0C\u5207\u6362\u5230 ${port}`);
+        s.port = port;
+        await this.onSettingsChanged?.();
+        return port;
+      }
+    }
+    throw new Error(`\u7AEF\u53E3 ${preferred} \u5DF2\u88AB\u5360\u7528\uFF0C\u4E14 5174\uFF5E5180 \u5747\u4E0D\u53EF\u7528`);
+  }
+  async waitForHealth(timeoutMs = 12e3, failed) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      if (await this.isHealthy()) return true;
+      if (failed?.()) return false;
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+    }
+    return false;
+  }
+  resolveNodeCommand() {
+    const req = getNodeRequire();
+    if (!req) throw new Error("\u65E0\u6CD5\u542F\u52A8\u672C\u5730\u670D\u52A1\uFF1ANode.js \u6A21\u5757\u4E0D\u53EF\u7528");
+    const fs = req("fs");
+    const path = req("path");
+    const requested = this.getSettings().nodePath.trim() || "node";
+    if (path.isAbsolute(requested)) {
+      if (fs.existsSync(requested)) return requested;
+      throw new Error(`Node \u8DEF\u5F84\u4E0D\u5B58\u5728\uFF1A${requested}`);
+    }
+    const env = getNodeProcessEnv();
+    const pathEntries = String(env.PATH || "").split(":").filter(Boolean);
+    for (const dir of pathEntries) {
+      const candidate = `${dir.replace(/\/$/, "")}/${requested}`;
+      if (fs.existsSync(candidate)) return candidate;
+    }
+    for (const candidate of ["/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/node"]) {
+      if (fs.existsSync(candidate)) return candidate;
+    }
+    throw new Error(`\u627E\u4E0D\u5230 Node \u547D\u4EE4\uFF1A${requested}\u3002\u8BF7\u5728\u8BBE\u7F6E\u4E2D\u586B\u5199 Node \u7684\u7EDD\u5BF9\u8DEF\u5F84\u3002`);
+  }
+  async ensureStarted() {
+    const s = this.getSettings();
+    if (!s.enabled) return false;
+    if (this.starting) return this.starting;
+    this.starting = (async () => {
+      this.lastError = "";
+      if (await this.isHealthy()) return true;
+      const req = getNodeRequire();
+      if (!req) throw new Error("\u65E0\u6CD5\u542F\u52A8\u672C\u5730\u670D\u52A1\uFF1ANode.js \u6A21\u5757\u4E0D\u53EF\u7528");
+      const fs = req("fs");
+      const paths = this.runtimePaths();
+      if (!fs.existsSync(paths.serverPath)) throw new Error(`\u627E\u4E0D\u5230\u670D\u52A1\u6587\u4EF6\uFF1A${paths.serverPath}`);
+      await this.selectPort();
+      this.writeRuntimeConfig();
+      const cp = req("child_process");
+      const nodeCommand = this.resolveNodeCommand();
+      this.onLog?.(`\u4F7F\u7528 Node\uFF1A${nodeCommand}`);
+      const env = getNodeProcessEnv();
+      env.WB_CONFIG_PATH = paths.configPath;
+      env.WB_KB_ROOT = s.vaultRoot;
+      env.WB_HOST = s.host || "127.0.0.1";
+      env.PORT = String(s.port || 5173);
+      let spawnError = null;
+      let processExit = null;
+      let stderrTail = "";
+      this.child = cp.spawn(nodeCommand, [paths.serverPath], {
+        cwd: paths.runtimeDir,
+        env,
+        stdio: ["ignore", "pipe", "pipe"]
+      });
+      this.child.stdout?.on("data", (chunk) => this.onLog?.(String(chunk).trim()));
+      this.child.stderr?.on("data", (chunk) => {
+        const message = String(chunk).trim();
+        if (message) stderrTail = `${stderrTail}
+${message}`.slice(-1200);
+        this.onLog?.(message);
+      });
+      this.child.on?.("error", (error) => {
+        spawnError = error instanceof Error ? error : new Error(String(error));
+        this.lastError = `Node \u670D\u52A1\u8FDB\u7A0B\u542F\u52A8\u5931\u8D25\uFF1A${spawnError.message}`;
+        this.onLog?.(this.lastError);
+      });
+      this.child.on?.("exit", (code, signal) => {
+        processExit = { code: typeof code === "number" ? code : null, signal: typeof signal === "string" ? signal : null };
+        this.child = null;
+      });
+      if (!await this.waitForHealth(3e4, () => spawnError !== null || processExit !== null)) {
+        if (await this.isHealthy()) return true;
+        if (spawnError) throw new Error(`\u670D\u52A1\u8FDB\u7A0B\u542F\u52A8\u5931\u8D25\uFF1A${spawnError.message}`);
+        if (processExit) {
+          if (stderrTail.includes("EADDRINUSE") && await this.isHealthy()) {
+            this.onLog?.(`\u7AEF\u53E3 ${s.port || 5173} \u5DF2\u6709\u53EF\u7528\u77E5\u8BC6\u5DE5\u4F5C\u53F0\u670D\u52A1\uFF0C\u590D\u7528\u73B0\u6709\u8FDB\u7A0B`);
+            return true;
+          }
+          const reason = processExit.signal ? `signal ${processExit.signal}` : `exit code ${processExit.code ?? "unknown"}`;
+          const detail = stderrTail.trim() ? `\uFF1A${stderrTail.trim().slice(-800)}` : "";
+          throw new Error(`\u670D\u52A1\u8FDB\u7A0B\u5DF2\u9000\u51FA\uFF08${reason}\uFF09${detail}`);
+        }
+        throw new Error(`\u670D\u52A1\u542F\u52A8\u8D85\u65F6\uFF0C\u8BF7\u68C0\u67E5\u7AEF\u53E3 ${s.port || 5173} \u6216 Node \u8DEF\u5F84`);
+      }
+      return true;
+    })().catch((error) => {
+      this.lastError = error instanceof Error ? error.message : String(error);
+      this.onLog?.(this.lastError);
+      return false;
+    }).finally(() => {
+      this.starting = null;
+    });
+    return this.starting;
+  }
+  async stopOwnedProcess() {
+    const child = this.child;
+    this.child = null;
+    if (!child) return;
+    try {
+      child.kill("SIGTERM");
+    } catch {
+    }
+  }
+};
+
 // src/main.ts
-var Dashboard = class extends import_obsidian17.Plugin {
+var Dashboard = class extends import_obsidian18.Plugin {
   constructor() {
     super(...arguments);
     __publicField(this, "settings");
+    __publicField(this, "knowledgeWorkbench");
   }
   async onload() {
     await this.loadSettings();
+    this.knowledgeWorkbench = new KnowledgeWorkbenchController(
+      () => this.settings.knowledgeWorkbench,
+      (message) => console.log("[Knowledge Workbench]", message),
+      () => this.saveSettings()
+    );
     this.registerView(VIEW_TYPE, (leaf) => new DashboardView(leaf, this));
+    this.registerView(KNOWLEDGE_WORKBENCH_VIEW_TYPE, (leaf) => new KnowledgeWorkbenchView(leaf, this));
     this.addRibbonIcon("layout-dashboard", "Dashboard", () => {
       void this.activateView();
     });
@@ -7657,16 +8042,29 @@ var Dashboard = class extends import_obsidian17.Plugin {
         void this.activateView();
       }
     });
+    this.addCommand({
+      id: "open-knowledge-workbench",
+      name: "Open Knowledge Workbench",
+      callback: () => {
+        void this.openKnowledgeWorkbench("dashboard");
+      }
+    });
     this.addSettingTab(new DashboardSettingTab(this.app, this));
+    if (this.settings.knowledgeWorkbench.enabled) void this.knowledgeWorkbench.ensureStarted();
   }
   onunload() {
+    void this.knowledgeWorkbench?.stopOwnedProcess();
   }
   async loadSettings() {
-    var _a2, _b;
-    const loaded = (_a2 = await this.loadData()) != null ? _a2 : {};
+    const loaded = await this.loadData() ?? {};
     const storedLayoutVersion = typeof loaded.homeLayoutVersion === "number" ? loaded.homeLayoutVersion : 0;
     this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded);
-    this.settings.banner = { ...DEFAULT_SETTINGS.banner, ...(_b = loaded.banner) != null ? _b : {} };
+    this.settings.banner = { ...DEFAULT_SETTINGS.banner, ...loaded.banner ?? {} };
+    this.settings.knowledgeWorkbench = {
+      ...DEFAULT_SETTINGS.knowledgeWorkbench,
+      ...loaded.knowledgeWorkbench ?? {},
+      extraRawScanPaths: Array.isArray(loaded.knowledgeWorkbench?.extraRawScanPaths) ? loaded.knowledgeWorkbench.extraRawScanPaths : [...DEFAULT_SETTINGS.knowledgeWorkbench.extraRawScanPaths]
+    };
     for (const key of ["quickCapture", "diary"]) {
       const grp = loaded[key];
       if (grp && grp.templateFolder && grp.templateFile && !grp.templateFile.includes("/") && !grp.templateFile.endsWith(".md")) {
@@ -7674,7 +8072,38 @@ var Dashboard = class extends import_obsidian17.Plugin {
       }
     }
     this.normalizeHomeModules(storedLayoutVersion);
+    this.normalizeCountdownCards(loaded.countdown);
     this.normalizeBoardStages();
+  }
+  /**
+   * 将旧版单个 countdown（以及 Xove 早期的 countdown 数组）迁移为带唯一 ID 的卡片列表。
+   * 唯一 ID 让每张倒计时可以复用首页既有的独立排序与缩放机制，而不会互相覆盖布局。
+   */
+  normalizeCountdownCards(rawCountdown) {
+    const existing = this.settings.countdownCards;
+    const rawList = Array.isArray(existing) ? existing : Array.isArray(rawCountdown) ? rawCountdown : [this.settings.countdown];
+    const legacyOrder = this.settings.homeModules?.find((module2) => module2.id === "countdown")?.order ?? 6;
+    const usedIds = /* @__PURE__ */ new Set();
+    const cards = [];
+    for (const [index, raw] of rawList.entries()) {
+      if (!raw || typeof raw !== "object" || cards.length >= 5) continue;
+      const item = raw;
+      let id = typeof item.id === "string" && item.id.trim() ? item.id.trim() : `countdown-${index + 1}`;
+      while (usedIds.has(id)) id = `${id}-${cards.length + 1}`;
+      usedIds.add(id);
+      cards.push({
+        id,
+        eventName: typeof item.eventName === "string" && item.eventName.trim() ? item.eventName.trim() : "\u65B0\u5E74",
+        targetDate: typeof item.targetDate === "string" && item.targetDate ? item.targetDate : "2027-01-01",
+        enabled: item.enabled !== false,
+        order: typeof item.order === "number" && Number.isFinite(item.order) ? item.order : legacyOrder + index,
+        cols: typeof item.cols === "number" && item.cols >= 1 && item.cols <= 4 ? Math.round(item.cols) : 1,
+        rows: typeof item.rows === "number" && item.rows >= 1 && item.rows <= 4 ? Math.round(item.rows) : 1
+      });
+    }
+    const changed = JSON.stringify(existing) !== JSON.stringify(cards);
+    this.settings.countdownCards = cards;
+    if (changed) void this.saveSettings();
   }
   /**
    * 归一化 + 迁移首页模块布局，保证 homeModules 始终是一份完整可用的数据：
@@ -7685,7 +8114,6 @@ var Dashboard = class extends import_obsidian17.Plugin {
    *    （保留用户的显隐与排序）。此前比例功能存在 bug 从未真正落盘，故一次性纠正是安全的。
    */
   normalizeHomeModules(storedVersion) {
-    var _a2, _b;
     const defaults = new Map(DEFAULT_HOME_MODULES.map((m) => [m.id, m]));
     let hm = this.settings.homeModules;
     let changed = false;
@@ -7703,8 +8131,8 @@ var Dashboard = class extends import_obsidian17.Plugin {
     const migrate = storedVersion < HOME_LAYOUT_VERSION;
     for (const m of hm) {
       const d = defaults.get(m.id);
-      const dc = (_a2 = d == null ? void 0 : d.cols) != null ? _a2 : 1;
-      const dr = (_b = d == null ? void 0 : d.rows) != null ? _b : 1;
+      const dc = d?.cols ?? 1;
+      const dr = d?.rows ?? 1;
       if (migrate && d) {
         if (m.cols !== dc || m.rows !== dr) {
           m.cols = dc;
@@ -7791,10 +8219,9 @@ var Dashboard = class extends import_obsidian17.Plugin {
    * internal call is missing or renamed in a future Obsidian release.
    */
   setObsidianTheme(mode) {
-    var _a2;
     try {
       const vault = this.app.vault;
-      (_a2 = vault.setConfig) == null ? void 0 : _a2.call(vault, "theme", mode === "light" ? "moonstone" : "obsidian");
+      vault.setConfig?.("theme", mode === "light" ? "moonstone" : "obsidian");
     } catch (err) {
       console.error("[Dashboard] failed to set Obsidian theme", err);
     }
@@ -7818,6 +8245,16 @@ var Dashboard = class extends import_obsidian17.Plugin {
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
       const view = leaf.view;
       if (view instanceof DashboardView) view.refreshTitle();
+    }
+  }
+  /** Refresh task cards after their display preference changes. */
+  refreshTodoHome() {
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+      const view = leaf.view;
+      if (view instanceof DashboardView) {
+        view.refreshTodo();
+        view.refreshWeekly();
+      }
     }
   }
   /** Push the persisted banner mode/image settings into open dashboard views. */
@@ -7851,5 +8288,22 @@ var Dashboard = class extends import_obsidian17.Plugin {
     if (!leaf) return;
     await leaf.setViewState({ type: VIEW_TYPE, active: true });
     void this.app.workspace.revealLeaf(leaf);
+  }
+  async openKnowledgeWorkbench(page = "dashboard") {
+    const existing = this.app.workspace.getLeavesOfType(KNOWLEDGE_WORKBENCH_VIEW_TYPE);
+    let leaf = existing[0];
+    if (!leaf) {
+      leaf = this.app.workspace.getLeaf("tab");
+      if (!leaf) return;
+      await leaf.setViewState({ type: KNOWLEDGE_WORKBENCH_VIEW_TYPE, active: true });
+    }
+    await this.app.workspace.revealLeaf(leaf);
+    const view = leaf.view;
+    if (view instanceof KnowledgeWorkbenchView) view.setPage(page);
+  }
+  /** 重新加载工作台服务配置；只停止本插件自己创建的子进程。 */
+  async restartKnowledgeWorkbench() {
+    await this.knowledgeWorkbench?.stopOwnedProcess();
+    if (this.settings.knowledgeWorkbench.enabled) await this.knowledgeWorkbench.ensureStarted();
   }
 };

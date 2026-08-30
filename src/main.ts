@@ -1,15 +1,24 @@
 import { Plugin } from 'obsidian';
-import { DEFAULT_SETTINGS, DEFAULT_HOME_MODULES, HOME_LAYOUT_VERSION, DashboardSettings, DashboardSettingTab } from './settings';
+import { DEFAULT_SETTINGS, DEFAULT_HOME_MODULES, HOME_LAYOUT_VERSION, DashboardSettings, DashboardSettingTab, type CountdownCardConfig } from './settings';
 import { DashboardView, VIEW_TYPE } from './views/DashboardView';
+import { KnowledgeWorkbenchView, KNOWLEDGE_WORKBENCH_VIEW_TYPE } from './views/KnowledgeWorkbenchView';
+import { KnowledgeWorkbenchController } from './KnowledgeWorkbenchController';
 import type { BoardStage } from './data/opportunityParser';
 
 export default class Dashboard extends Plugin {
 	settings!: DashboardSettings;
+	knowledgeWorkbench!: KnowledgeWorkbenchController;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
+		this.knowledgeWorkbench = new KnowledgeWorkbenchController(
+			() => this.settings.knowledgeWorkbench,
+			(message) => console.log('[Knowledge Workbench]', message),
+			() => this.saveSettings(),
+		);
 
 		this.registerView(VIEW_TYPE, (leaf) => new DashboardView(leaf, this));
+		this.registerView(KNOWLEDGE_WORKBENCH_VIEW_TYPE, (leaf) => new KnowledgeWorkbenchView(leaf, this));
 
 		this.addRibbonIcon('layout-dashboard', 'Dashboard', () => {
 			void this.activateView();
@@ -23,10 +32,18 @@ export default class Dashboard extends Plugin {
 			},
 		});
 
+		this.addCommand({
+			id: 'open-knowledge-workbench',
+			name: 'Open Knowledge Workbench',
+			callback: () => { void this.openKnowledgeWorkbench('dashboard'); },
+		});
+
 		this.addSettingTab(new DashboardSettingTab(this.app, this));
+		/* 服务由插件加载时自动启动；Workbench View 打开时仍会再次健康检查。 */
+		if (this.settings.knowledgeWorkbench.enabled) void this.knowledgeWorkbench.ensureStarted();
 	}
 
-	onunload(): void {}
+	onunload(): void { void this.knowledgeWorkbench?.stopOwnedProcess(); }
 
 	async loadSettings(): Promise<void> {
 		const loaded = ((await this.loadData()) ?? {}) as Partial<DashboardSettings> & {
@@ -38,6 +55,13 @@ export default class Dashboard extends Plugin {
 		const storedLayoutVersion = typeof loaded.homeLayoutVersion === 'number' ? loaded.homeLayoutVersion : 0;
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded);
 		this.settings.banner = { ...DEFAULT_SETTINGS.banner, ...(loaded.banner ?? {}) };
+		this.settings.knowledgeWorkbench = {
+			...DEFAULT_SETTINGS.knowledgeWorkbench,
+			...(loaded.knowledgeWorkbench ?? {}),
+			extraRawScanPaths: Array.isArray(loaded.knowledgeWorkbench?.extraRawScanPaths)
+				? loaded.knowledgeWorkbench!.extraRawScanPaths
+				: [...DEFAULT_SETTINGS.knowledgeWorkbench.extraRawScanPaths],
+		};
 		// 迁移：旧版「模板文件夹 + 模板文件名」合并为「模板文件（完整路径）」
 		for (const key of ['quickCapture', 'diary'] as const) {
 			const grp = loaded[key];
@@ -48,8 +72,44 @@ export default class Dashboard extends Plugin {
 		// 归一化首页模块布局：旧版数据可能缺失 cols/rows 字段，导致所有卡片回退为 1:1
 		// 且比例/顺序无法持久化。此处补全缺失字段、补齐新增模块，并按需执行版本迁移。
 		this.normalizeHomeModules(storedLayoutVersion);
+		this.normalizeCountdownCards(loaded.countdown);
 		// 迁移看板阶段结构：旧数据用 kind(终态)，新结构用 hasInput(是否启用输入框)。
 		this.normalizeBoardStages();
+	}
+
+	/**
+	 * 将旧版单个 countdown（以及 Xove 早期的 countdown 数组）迁移为带唯一 ID 的卡片列表。
+	 * 唯一 ID 让每张倒计时可以复用首页既有的独立排序与缩放机制，而不会互相覆盖布局。
+	 */
+	private normalizeCountdownCards(rawCountdown: unknown): void {
+		const existing = this.settings.countdownCards;
+		const rawList = Array.isArray(existing)
+			? existing
+			: Array.isArray(rawCountdown)
+				? rawCountdown
+				: [this.settings.countdown];
+		const legacyOrder = this.settings.homeModules?.find((module) => module.id === 'countdown')?.order ?? 6;
+		const usedIds = new Set<string>();
+		const cards: CountdownCardConfig[] = [];
+		for (const [index, raw] of rawList.entries()) {
+			if (!raw || typeof raw !== 'object' || cards.length >= 5) continue;
+			const item = raw as Partial<CountdownCardConfig>;
+			let id = typeof item.id === 'string' && item.id.trim() ? item.id.trim() : `countdown-${index + 1}`;
+			while (usedIds.has(id)) id = `${id}-${cards.length + 1}`;
+			usedIds.add(id);
+			cards.push({
+				id,
+				eventName: typeof item.eventName === 'string' && item.eventName.trim() ? item.eventName.trim() : '新年',
+				targetDate: typeof item.targetDate === 'string' && item.targetDate ? item.targetDate : '2027-01-01',
+				enabled: item.enabled !== false,
+				order: typeof item.order === 'number' && Number.isFinite(item.order) ? item.order : legacyOrder + index,
+				cols: typeof item.cols === 'number' && item.cols >= 1 && item.cols <= 4 ? Math.round(item.cols) : 1,
+				rows: typeof item.rows === 'number' && item.rows >= 1 && item.rows <= 4 ? Math.round(item.rows) : 1,
+			});
+		}
+		const changed = JSON.stringify(existing) !== JSON.stringify(cards);
+		this.settings.countdownCards = cards;
+		if (changed) void this.saveSettings();
 	}
 
 	/**
@@ -197,6 +257,17 @@ export default class Dashboard extends Plugin {
 		}
 	}
 
+	/** Refresh task cards after their display preference changes. */
+	refreshTodoHome(): void {
+		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+			const view = leaf.view;
+			if (view instanceof DashboardView) {
+				view.refreshTodo();
+				view.refreshWeekly();
+			}
+		}
+	}
+
 	/** Push the persisted banner mode/image settings into open dashboard views. */
 	refreshBanner(): void {
 		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
@@ -231,5 +302,24 @@ export default class Dashboard extends Plugin {
 		if (!leaf) return;
 		await leaf.setViewState({ type: VIEW_TYPE, active: true });
 		void this.app.workspace.revealLeaf(leaf);
+	}
+
+	async openKnowledgeWorkbench(page = 'dashboard'): Promise<void> {
+		const existing = this.app.workspace.getLeavesOfType(KNOWLEDGE_WORKBENCH_VIEW_TYPE);
+		let leaf = existing[0];
+		if (!leaf) {
+			leaf = this.app.workspace.getLeaf('tab');
+			if (!leaf) return;
+			await leaf.setViewState({ type: KNOWLEDGE_WORKBENCH_VIEW_TYPE, active: true });
+		}
+		await this.app.workspace.revealLeaf(leaf);
+		const view = leaf.view;
+		if (view instanceof KnowledgeWorkbenchView) view.setPage(page);
+	}
+
+	/** 重新加载工作台服务配置；只停止本插件自己创建的子进程。 */
+	async restartKnowledgeWorkbench(): Promise<void> {
+		await this.knowledgeWorkbench?.stopOwnedProcess();
+		if (this.settings.knowledgeWorkbench.enabled) await this.knowledgeWorkbench.ensureStarted();
 	}
 }

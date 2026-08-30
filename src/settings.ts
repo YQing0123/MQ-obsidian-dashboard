@@ -38,12 +38,31 @@ export interface DiarySettings {
 	templateFile: string;
 }
 
+export interface KnowledgeWorkbenchSettings {
+	enabled: boolean;
+	serverRoot: string;
+	nodePath: string;
+	host: string;
+	port: number;
+	vaultRoot: string;
+	extraRawScanPaths: string[];
+}
+
 /** 倒计时卡片自定义事件：事件名称与目标日期 */
 export interface CountdownSettings {
 	/** 事件名称，如「高考」「新年」；文案显示「距离 {eventName} 还有」 */
 	eventName: string;
 	/** 目标日期，ISO yyyy-mm-dd；非法或留空时回退到「下一年 1 月 1 日」 */
 	targetDate: string;
+}
+
+/** 首页中一张可独立移动、缩放和编辑的倒计时卡片。 */
+export interface CountdownCardConfig extends CountdownSettings {
+	id: string;
+	enabled: boolean;
+	order: number;
+	cols?: number;
+	rows?: number;
 }
 
 /** 通用看板的一个阶段（看板列）— 结构定义见 src/data/opportunityParser.ts 的 BoardStage */
@@ -53,7 +72,12 @@ export interface DashboardSettings {
 	banner: BannerSettings;
 	quickCapture: QuickCaptureSettings;
 	diary: DiarySettings;
+	knowledgeWorkbench: KnowledgeWorkbenchSettings;
 	todoSourceFolder: string;
+	/** 在首页任务卡片中保留当天/本周完成的任务，便于回顾。 */
+	todoShowCompleted: boolean;
+	/** 任务编辑弹窗是否显示项目归属、类型与父任务。 */
+	taskDetailMode: 'detail' | 'compact';
 	projectsFolder: string;
 	currentPoView: string;
 	poProjectOrder: string[];
@@ -76,6 +100,8 @@ export interface DashboardSettings {
 	homeLayoutVersion?: number;
 	/** 倒计时卡片自定义事件（事件名称 + 目标日期） */
 	countdown: CountdownSettings;
+	/** 多张独立倒计时卡片；缺失时由旧版 countdown 自动迁移。 */
+	countdownCards?: CountdownCardConfig[];
 }
 
 /**
@@ -109,7 +135,18 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
 		namingPattern: 'YYYY-MM-DD',
 		templateFile: '',
 	},
+	knowledgeWorkbench: {
+		enabled: true,
+		serverRoot: '/Users/yqing/Documents/Project/work-space/Knowledge-workbench-server',
+		nodePath: 'node',
+		host: '127.0.0.1',
+		port: 5173,
+		vaultRoot: '/Users/yqing/Documents/Project/work-space/鸣谦知识库',
+		extraRawScanPaths: [],
+	},
 	todoSourceFolder: '',
+	todoShowCompleted: false,
+	taskDetailMode: 'detail',
 	projectsFolder: 'Projects',
 	currentPoView: 'gantt',
 	poProjectOrder: [],
@@ -391,6 +428,98 @@ export class DashboardSettingTab extends PluginSettingTab {
 					this.plugin.settings.diary.templateFile = v.trim();
 					await this.plugin.saveSettings();
 				}),
+			);
+
+		/* ---- 任务展示 ---- */
+		new Setting(containerEl).setName('任务展示').setHeading();
+
+		new Setting(containerEl)
+			.setName('完成后保留在首页')
+			.setDesc('在 TODO 与本周待办卡片中保留今天或本周完成的任务，并以灰色删除线显示')
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.todoShowCompleted)
+				.onChange(async (value) => {
+					this.plugin.settings.todoShowCompleted = value;
+					await this.plugin.saveSettings();
+					this.plugin.refreshTodoHome();
+				}),
+			);
+
+		new Setting(containerEl)
+			.setName('任务详情显示')
+			.setDesc('简洁模式隐藏项目归属、任务类型和父任务；保存时仍保留原有值')
+			.addDropdown((dropdown) => dropdown
+				.addOption('detail', '完整')
+				.addOption('compact', '简洁')
+				.setValue(this.plugin.settings.taskDetailMode)
+				.onChange(async (value) => {
+					this.plugin.settings.taskDetailMode = value as 'detail' | 'compact';
+					await this.plugin.saveSettings();
+				}),
+			);
+
+		/* ---- 知识工作台 ---- */
+		new Setting(containerEl).setName('知识工作台').setHeading();
+
+		new Setting(containerEl)
+			.setName('启用知识工作台')
+			.setDesc('插件加载时自动启动独立 Knowledge Workbench HTTP 服务；关闭后不启动服务')
+			.addToggle((t) => t
+				.setValue(this.plugin.settings.knowledgeWorkbench.enabled)
+				.onChange(async (v) => {
+					this.plugin.settings.knowledgeWorkbench.enabled = v;
+					await this.plugin.saveSettings();
+					if (v) void this.plugin.restartKnowledgeWorkbench();
+					else await this.plugin.knowledgeWorkbench.stopOwnedProcess();
+				}),
+			);
+
+		new Setting(containerEl)
+			.setName('服务代码根目录')
+			.setDesc('包含 runtime/工作台/server.js 的目录。默认位于当前工作空间的 Knowledge-workbench-server')
+			.addText((t) => t
+				.setPlaceholder('/Users/yqing/Documents/Project/work-space/Knowledge-workbench-server')
+				.setValue(this.plugin.settings.knowledgeWorkbench.serverRoot)
+				.onChange(async (v) => { this.plugin.settings.knowledgeWorkbench.serverRoot = v.trim(); await this.plugin.saveSettings(); }),
+			);
+
+		new Setting(containerEl)
+			.setName('Node 命令')
+			.setDesc('用于启动 server.js 的命令或绝对路径；默认自动查找 node、/opt/homebrew/bin/node 和 /usr/local/bin/node')
+			.addText((t) => t
+				.setPlaceholder('node')
+				.setValue(this.plugin.settings.knowledgeWorkbench.nodePath)
+				.onChange(async (v) => { this.plugin.settings.knowledgeWorkbench.nodePath = v.trim() || 'node'; await this.plugin.saveSettings(); }),
+			);
+
+		new Setting(containerEl)
+			.setName('服务端口')
+			.setDesc('优先使用 5173；若被占用则自动从 5174～5180 选择可用端口。服务只监听本机 127.0.0.1')
+			.addText((t) => t
+				.setPlaceholder('5173')
+				.setValue(String(this.plugin.settings.knowledgeWorkbench.port || 5173))
+				.onChange(async (v) => {
+					const n = Number(v);
+					if (Number.isInteger(n) && n >= 1024 && n <= 65535) { this.plugin.settings.knowledgeWorkbench.port = n; await this.plugin.saveSettings(); }
+				}),
+			);
+
+		new Setting(containerEl)
+			.setName('Vault 根目录')
+			.setDesc('Knowledge Workbench 读取和写入的当前知识库路径；原始文件只读扫描')
+			.addText((t) => t
+				.setPlaceholder('/Users/yqing/Documents/Project/work-space/鸣谦知识库')
+				.setValue(this.plugin.settings.knowledgeWorkbench.vaultRoot)
+				.onChange(async (v) => { this.plugin.settings.knowledgeWorkbench.vaultRoot = v.trim(); await this.plugin.saveSettings(); }),
+			);
+
+		new Setting(containerEl)
+			.setName('额外外部扫描路径')
+			.setDesc('每行一个绝对路径或当前 Vault 内相对路径，仅扫描列表和 Markdown 内容，不移动、复制、修改或删除原文件')
+			.addTextArea((t) => t
+				.setPlaceholder('/Users/yqing/Documents/外部素材')
+				.setValue((this.plugin.settings.knowledgeWorkbench.extraRawScanPaths || []).join('\n'))
+				.onChange(async (v) => { this.plugin.settings.knowledgeWorkbench.extraRawScanPaths = v.split(/\r?\n/).map((x) => x.trim()).filter(Boolean); await this.plugin.saveSettings(); }),
 			);
 
 		/* ---- 外观 ---- */

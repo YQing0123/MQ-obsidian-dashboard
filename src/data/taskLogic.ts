@@ -101,14 +101,20 @@ export function getTodayUniverse(tasks: TaskItem[], today: string = todayStr()):
 	});
 }
 
-/** Today's *pending* tasks — what the TODO list actually shows.
- *  Hides already-completed tasks and today's checked-in daily nodes. */
-export function getTodayTasks(tasks: TaskItem[], today: string = todayStr()): TaskItem[] {
+/** Today's tasks for the TODO card.
+ *  By default it shows pending tasks only. When keepDone is on, it also retains
+ *  tasks resolved today, while still hiding "今日不做" entries. */
+export function getTodayTasks(tasks: TaskItem[], today: string = todayStr(), keepDone = false): TaskItem[] {
 	return getTodayUniverse(tasks, today).filter((t) => {
+		const node = t.dailyNodes?.[today];
+		if (node?.s === 'skip') return false;
+		if (keepDone) {
+			if (t.status === '已完成') return !!t.completeTime?.startsWith(today);
+			if (t.completeTime?.startsWith(today) || node?.s === 'done') return true;
+		}
 		if (t.status === '已完成') return false;
-		if (t.completeTime && t.completeTime.startsWith(today)) return false; // recurring occurrence done today
-		// Multi-day task: hide today if today's node already done/skipped
-		if (t.dailyNodes && t.dailyNodes[today] && (t.dailyNodes[today].s === 'done' || t.dailyNodes[today].s === 'skip')) return false;
+		if (t.completeTime?.startsWith(today)) return false; // recurring occurrence done today
+		if (node?.s === 'done') return false;
 		return true;
 	});
 }

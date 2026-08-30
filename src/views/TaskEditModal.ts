@@ -1,11 +1,14 @@
 import { App, Modal, TFile } from 'obsidian';
-import { TaskItem, TaskStatus, TaskPriority, STATUS_LIST, PRIORITY_LIST, NodeState, DailyNode, serializeDailyNodesBlock } from '../data/taskParser';
-import { yamlScalar } from '../data/frontmatterWriter';
+import { TaskItem, ProjectInfo, TaskStatus, TaskPriority, STATUS_LIST, PRIORITY_LIST, NodeState, DailyNode, serializeDailyNodesBlock } from '../data/taskParser';
+import { applyFrontmatterUpdates, yamlScalar } from '../data/frontmatterWriter';
 import { UI_TEXT } from '../constants';
 
 interface TaskEditModalOptions {
 	app: App;
 	task: TaskItem;
+	projects: ProjectInfo[];
+	allTasks: TaskItem[];
+	taskDetailMode: 'detail' | 'compact';
 	onSave: () => void;
 	presetTodayNode?: NodeState;
 }
@@ -31,6 +34,50 @@ export class TaskEditModal extends Modal {
 		this.field('任务名称 *', (wrap) => {
 			wrap.createEl('input', { cls: 'ad-modal-input ad-edit-title', attr: { type: 'text', value: task.content } });
 		});
+
+		// Project assignment is stored in both the task frontmatter and its folder.
+		// Option values use the actual folder path, so nested project folders work.
+		const assignment = contentEl.createDiv({ cls: 'ad-modal-row' });
+		const projectCol = assignment.createDiv({ cls: 'ad-modal-col' });
+		projectCol.createEl('label', { cls: 'ad-modal-label', text: '所属项目' });
+		const projectSel = projectCol.createEl('select', { cls: 'ad-modal-input' });
+		const currentProject = this.opts.projects.find((project) => project.name === task.projectId);
+		if (!currentProject && task.projectId) {
+			projectSel.createEl('option', { value: '', text: task.projectId });
+		}
+		for (const project of this.opts.projects) {
+			projectSel.createEl('option', { value: project.path, text: project.name });
+		}
+		projectSel.value = currentProject?.path ?? '';
+
+		const typeCol = assignment.createDiv({ cls: 'ad-modal-col' });
+		typeCol.createEl('label', { cls: 'ad-modal-label', text: '任务类型' });
+		const typeSel = typeCol.createEl('select', { cls: 'ad-modal-input' });
+		typeSel.createEl('option', { value: '普通', text: '普通' });
+		typeSel.createEl('option', { value: '重复', text: '重复' });
+		typeSel.value = task.type === '重复' ? '重复' : '普通';
+
+		const parentField = contentEl.createDiv({ cls: 'ad-modal-field' });
+		parentField.createEl('label', { cls: 'ad-modal-label', text: '父任务' });
+		const parentSel = parentField.createEl('select', { cls: 'ad-modal-input' });
+		const populateParents = (projectPath: string): void => {
+			parentSel.empty();
+			parentSel.createEl('option', { value: '', text: '无父任务' });
+			const projectName = this.opts.projects.find((project) => project.path === projectPath)?.name ?? task.projectId;
+			for (const candidate of this.opts.allTasks) {
+				if (candidate.projectId === projectName && candidate.id !== task.id) {
+					parentSel.createEl('option', { value: candidate.content, text: candidate.content });
+				}
+			}
+			parentSel.value = task.parent || '';
+		};
+		populateParents(projectSel.value);
+		projectSel.addEventListener('change', () => populateParents(projectSel.value));
+
+		if (this.opts.taskDetailMode === 'compact') {
+			assignment.hide();
+			parentField.hide();
+		}
 
 		// ---- Status ----
 		contentEl.createEl('label', { cls: 'ad-modal-label', text: '状态' });
@@ -79,14 +126,15 @@ export class TaskEditModal extends Modal {
 			.addEventListener('click', () => {
 				const titleEl = contentEl.querySelector('.ad-edit-title') as HTMLInputElement;
 				const nodeNoteEl = contentEl.querySelector('.ad-node-note') as HTMLTextAreaElement;
-				void this.saveTask(titleEl?.value?.trim() || task.content, statusSel.value, prioSel.value, startInput.value, endInput.value, notesArea.value, nodeNoteEl?.value ?? '');
+				void this.saveTask(titleEl?.value?.trim() || task.content, statusSel.value, prioSel.value, startInput.value, endInput.value, notesArea.value, projectSel.value, parentSel.value, typeSel.value, nodeNoteEl?.value ?? '');
 			});
 	}
 
-	private async saveTask(title: string, status: string, priority: string, startDate: string, endDate: string, notes: string, nodeNote: string): Promise<void> {
+	private async saveTask(title: string, status: string, priority: string, startDate: string, endDate: string, notes: string, projectPath: string, parent: string, type: string, nodeNote: string): Promise<void> {
 		const task = this.opts.task;
 		const file = this.app.vault.getAbstractFileByPath(task.sourceFile);
 		if (!(file instanceof TFile)) return;
+		const selectedProject = this.opts.projects.find((project) => project.path === projectPath);
 
 		// ---- Rename file if title changed ----
 		const newTitle = title.trim();
@@ -98,6 +146,25 @@ export class TaskEditModal extends Modal {
 				task.content = newTitle;
 				task.id = newPath;
 				task.sourceFile = newPath;
+			}
+		}
+
+		if (selectedProject && file.parent?.path !== selectedProject.path) {
+			const targetPath = `${selectedProject.path}/${file.name}`;
+			if (this.app.vault.getAbstractFileByPath(targetPath)) return;
+			await this.app.fileManager.renameFile(file, targetPath);
+			task.id = targetPath;
+			task.sourceFile = targetPath;
+		}
+
+		if (parent) {
+			let cursor = parent;
+			let guard = 0;
+			while (cursor) {
+				if (cursor === task.content) return;
+				const ancestor = this.opts.allTasks.find((candidate) => candidate.content === cursor && candidate.projectId === (selectedProject?.name ?? task.projectId));
+				cursor = ancestor?.parent ?? '';
+				if (++guard > 100) return;
 			}
 		}
 
@@ -137,6 +204,11 @@ export class TaskEditModal extends Modal {
 		if (priority && !hasPriority && statusLineIdx >= 0) {
 			lines.splice(statusLineIdx + 1, 0, `优先级: ${yamlScalar(priority)}`);
 		}
+		applyFrontmatterUpdates(lines, {
+			'项目': selectedProject?.name ?? task.projectId,
+			'类型': type,
+			'父任务': parent || null,
+		});
 
 		// ---- Daily nodes (multi-day check-in) ----
 		const today = todayStr();
@@ -218,6 +290,9 @@ export class TaskEditModal extends Modal {
 		task.startDate = startDate || null;
 		task.dueDate = endDate || null;
 		task.notes = notes;
+		task.projectId = selectedProject?.name ?? task.projectId;
+		task.parent = parent;
+		task.type = type === '重复' ? '重复' : '普通';
 		task.dailyNodes = nodes;
 		if (willDone && !wasDone) {
 			task.completeTime = nowFmt();

@@ -1,0 +1,5 @@
+# Local Obsidian plugin settings. These can contain vault-specific paths and UI state.
+data.json
+
+# macOS Finder metadata.
+.DS_Store
