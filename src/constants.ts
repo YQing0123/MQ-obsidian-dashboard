@@ -24,6 +24,9 @@ export const UI_TEXT = {
 	poDue: '截止',
 	poStatus: '状态',
 	poProject: '项目',
+	today: '今天',
+	calWeekdays: ['一', '二', '三', '四', '五', '六', '日'],
+	statusLabel: (status: string): string => status,
 
 	// 看板（第三页）
 	opAll: '全部',

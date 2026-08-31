@@ -1,4 +1,4 @@
-import { Menu, TFile, TFolder } from 'obsidian';
+import { Menu, Modal, TFile, TFolder } from 'obsidian';
 import type { App } from 'obsidian';
 import {
 	TaskItem, ProjectInfo, TaskStatus, NodeState, priorityWeight,
@@ -8,6 +8,7 @@ import type { TaskStore } from '../data/taskStore';
 import { fmtDate } from '../data/taskLogic';
 import { computeWindow, filterWithOrig } from '../data/virtualList';
 import { UI_TEXT } from '../constants';
+import { t, tArr } from '../i18n';
 import { ICON_gantt, ICON_list, ICON_calendar, ICON_kanban, injectSvg } from '../icons';
 
 /** 宿主接口：ProjectBoard 渲染器所需的宿主依赖。 */
@@ -16,12 +17,15 @@ export interface ProjectHost {
 	plugin: {
 		settings: {
 			projectsFolder: string;
+			theme?: 'auto' | 'dark' | 'light';
 			currentPoView: string;
 			poProjectOrder: string[];
 			poTaskOrder: string[];
 			npdpStages: string[];
 			poGanttStatusFilter?: string[];
 			poGanttScale?: 'day' | 'week' | 'month' | 'quarter';
+			poKanbanColumnWidth?: number;
+			poGanttLabelWidth?: number;
 		};
 		saveSettings(): Promise<void>;
 	};
@@ -38,6 +42,7 @@ export interface ProjectHost {
 	createProjectFile(): Promise<void>;
 	openTaskModalWithParent(parentName: string, projectName: string): Promise<void>;
 	toggleTask(task: TaskItem, row: HTMLElement): Promise<void>;
+	setDailyNode(task: TaskItem, date: string, state: 'done' | 'todo' | 'skip'): Promise<void>;
 }
 
 /** 项目总览（第二页）渲染器 — 从 DashboardView 抽出。 */
@@ -51,6 +56,8 @@ export class ProjectBoard {
 	private poMainEl: HTMLElement | null = null;
 	private calYear: number = new Date().getFullYear();
 	private calMonth: number = new Date().getMonth();
+	private calView: 'month' | 'week' = 'month';
+	private calSel = '';
 	private sortCol: string = '';
 	private sortDir: 'asc' | 'desc' = 'asc';
 	private taskListFilter: string = 'all';
@@ -77,6 +84,7 @@ export class ProjectBoard {
 	private get createProjectFile() { return this.host.createProjectFile.bind(this.host); }
 	private get openTaskModalWithParent() { return this.host.openTaskModalWithParent.bind(this.host); }
 	private get toggleTask() { return this.host.toggleTask.bind(this.host); }
+	private get setDailyNode() { return this.host.setDailyNode.bind(this.host); }
 
 	constructor(host: ProjectHost) {
 		this.host = host;
@@ -87,6 +95,28 @@ export class ProjectBoard {
 		this.host.selectedProject = proj.name;
 		this.currentView = 'gantt';
 		await this.show(true);
+	}
+
+	/** Open the same project-management calendar in a centered popup. */
+	async openCalendarModal(): Promise<void> {
+		const [projects, tasks] = await Promise.all([this.taskStore.scanAllProjects(), this.taskStore.scanAllTasks()]);
+		this.currentProjects = projects;
+		this.currentTasks = tasks;
+		const configuredTheme = this.plugin.settings.theme ?? 'auto';
+		const effectiveTheme = configuredTheme === 'auto'
+			? (document.body.classList.contains('theme-light') ? 'light' : 'dark')
+			: configuredTheme;
+		const modal = new (class extends Modal {
+			onOpen = (): void => {
+				this.contentEl.addClass('mq-ad-project-calendar-modal');
+				this.contentEl.setAttribute('data-theme', effectiveTheme);
+				const panel = this.contentEl.createDiv({ cls: 'mq-po-panel is-active' });
+				this.renderer(panel);
+			};
+			onClose = (): void => { this.contentEl.empty(); };
+			constructor(app: App, private renderer: (el: HTMLElement) => void) { super(app); }
+		})(this.app, (panel) => this.renderCalendarPanel(panel, tasks, projects));
+		modal.open();
 	}
 
 
@@ -108,9 +138,9 @@ export class ProjectBoard {
 		const allTasks = await this.taskStore.scanAllTasks();
 
 		this.boardEl.empty();
-		this.boardEl.addClass('po-board');
-		this.boardEl.removeClass('ad-board');
-		this.boardEl.removeClass('op-board');
+		this.boardEl.addClass('mq-po-board');
+		this.boardEl.removeClass('mq-ad-board');
+		this.boardEl.removeClass('mq-op-board');
 		this.currentPage = 'project';
 
 		this.currentProjects = projects;
@@ -125,14 +155,14 @@ export class ProjectBoard {
 		}
 
 		// Container with sidebar + main
-		const container = this.boardEl.createDiv({ cls: 'po-container' });
+		const container = this.boardEl.createDiv({ cls: 'mq-po-container' });
 
 		// Sidebar
-		const sidebar = container.createDiv({ cls: 'po-sidebar' });
+		const sidebar = container.createDiv({ cls: 'mq-po-sidebar' });
 		this.renderSidebar(sidebar);
 
 		// Main content area
-		this.poMainEl = container.createDiv({ cls: 'po-main' });
+		this.poMainEl = container.createDiv({ cls: 'mq-po-main' });
 		this.renderPanels();
 	}
 
@@ -148,22 +178,22 @@ export class ProjectBoard {
 			: this.currentTasks;
 
 		// Tabs
-		const tabs = this.poMainEl.createDiv({ cls: 'po-tabs' });
+		const tabs = this.poMainEl.createDiv({ cls: 'mq-po-tabs' });
 		const tabDefs = [
 			{ key: 'gantt', label: UI_TEXT.poGantt, icon: ICON_gantt },
 			{ key: 'list', label: UI_TEXT.poList, icon: ICON_list },
 			{ key: 'calendar', label: UI_TEXT.poCalendar, icon: ICON_calendar },
 			{ key: 'kanban', label: UI_TEXT.poKanban, icon: ICON_kanban },
 		];
-		const content = this.poMainEl.createDiv({ cls: 'po-content' });
+		const content = this.poMainEl.createDiv({ cls: 'mq-po-content' });
 		const panels: Record<string, HTMLElement> = {};
 		for (const td of tabDefs) {
-			const btn = tabs.createEl('button', { cls: 'po-tab' + (td.key === this.currentView ? ' is-active' : '') });
-			const tabGlyph = btn.createSpan({ cls: 'ad-glyph' });
+			const btn = tabs.createEl('button', { cls: 'mq-po-tab' + (td.key === this.currentView ? ' is-active' : '') });
+			const tabGlyph = btn.createSpan({ cls: 'mq-ad-glyph' });
 			injectSvg(tabGlyph, td.icon);
 			btn.createSpan({ text: td.label });
 			btn.dataset.view = td.key;
-			panels[td.key] = content.createDiv({ cls: 'po-panel' + (td.key === this.currentView ? ' is-active' : ''), attr: { 'data-view': td.key } });
+			panels[td.key] = content.createDiv({ cls: 'mq-po-panel' + (td.key === this.currentView ? ' is-active' : ''), attr: { 'data-view': td.key } });
 		}
 
 		// Stage pipeline (compact dots) at the tab row's right side.
@@ -181,11 +211,11 @@ export class ProjectBoard {
 
 		// Tab switch (lazy-render target panel)
 		tabs.addEventListener('click', (e) => {
-			const btn = (e.target as HTMLElement).closest('.po-tab') as HTMLElement;
+			const btn = (e.target as HTMLElement).closest('.mq-po-tab') as HTMLElement;
 			if (!btn) return;
 			const view = btn.dataset.view;
 			if (!view) return;
-			tabs.querySelectorAll('.po-tab').forEach((t) => t.removeClass('is-active'));
+			tabs.querySelectorAll('.mq-po-tab').forEach((t) => t.removeClass('is-active'));
 			btn.addClass('is-active');
 			Object.values(panels).forEach((p) => p.classList.remove('is-active'));
 			if (panels[view]) panels[view].addClass('is-active');
@@ -202,7 +232,7 @@ export class ProjectBoard {
 	private renderPanel(key: string, panel: HTMLElement, tasks: TaskItem[]): void {
 		panel.empty();
 		if (key === 'gantt') this.renderGanttPanel(panel, tasks, this.currentProjects);
-		else if (key === 'list') this.renderTaskTable(panel, 'po-tb2', tasks, this.currentProjects);
+		else if (key === 'list') this.renderTaskTable(panel, 'mq-po-tb2', tasks, this.currentProjects);
 		else if (key === 'calendar') this.renderCalendarPanel(panel, tasks, this.currentProjects);
 		else if (key === 'kanban') this.renderKanbanPanel(panel, tasks, this.currentProjects);
 	}
@@ -216,7 +246,7 @@ export class ProjectBoard {
 		const stages = proj.stages ?? (isLongTermProject(proj.type) ? LONG_TERM_STAGES : this.plugin.settings.npdpStages);
 		const currentStage = proj.stage ?? 0;
 
-		const bar = container.createDiv({ cls: 'ad-proj__stages po-stage-compact' });
+		const bar = container.createDiv({ cls: 'mq-ad-proj__stages mq-po-stage-compact' });
 		// Auto-size by stage count
 		const stageMinW = Math.max(20, Math.min(36, Math.floor(160 / stages.length)));
 		bar.style.gap = `${Math.max(1, Math.floor(4 / (stages.length / 4)))}px`;
@@ -224,9 +254,9 @@ export class ProjectBoard {
 		stages.forEach((label, i) => {
 			const isDone = i < currentStage;
 			const isCurrent = i === currentStage;
-			const s = bar.createDiv({ cls: 'ad-proj__stage' + (isDone ? ' is-done' : '') + (isCurrent ? ' is-current' : '') });
+			const s = bar.createDiv({ cls: 'mq-ad-proj__stage' + (isDone ? ' is-done' : '') + (isCurrent ? ' is-current' : '') });
 			s.style.minWidth = stageMinW + 'px';
-			s.createSpan({ cls: 'ad-pip' });
+			s.createSpan({ cls: 'mq-ad-pip' });
 			s.appendText(label);
 
 			s.addEventListener('click', () => void this.setProjectStage(proj, i));
@@ -246,7 +276,7 @@ export class ProjectBoard {
 			await this.writeFrontmatter(file, { '\u9636\u6BB5': String(stage) });
 		}
 		this.renderPanels();
-		const sidebar = this.boardEl?.querySelector('.po-sidebar') as HTMLElement | undefined;
+		const sidebar = this.boardEl?.querySelector('.mq-po-sidebar') as HTMLElement | undefined;
 		if (sidebar) this.renderSidebar(sidebar);
 		const stages = proj.stages ?? (isLongTermProject(proj.type) ? LONG_TERM_STAGES : this.plugin.settings.npdpStages);
 		this.showToast(`\u2728 ${proj.name} \u9636\u6BB5\u5DF2\u66F4\u65B0\u4E3A "${stages[stage] ?? stages[0]}"`);
@@ -257,16 +287,16 @@ export class ProjectBoard {
 	/** Render the project sidebar with filtering */
 	private renderSidebar(sidebar: HTMLElement): void {
 		sidebar.empty();
-		const list = sidebar.createDiv({ cls: 'po-sidebar__list' });
+		const list = sidebar.createDiv({ cls: 'mq-po-sidebar__list' });
 
 		// "全部项目" item
 		const totalTasks = this.currentProjects.reduce((s, p) => s + p.taskCount, 0);
 		const totalActive = this.currentProjects.reduce((s, p) => s + p.activeCount, 0);
 
-		const allItem = list.createDiv({ cls: 'po-sidebar__item' + (this.selectedProject === null ? ' is-active' : '') });
-		allItem.createSpan({ cls: 'po-dot', attr: { style: 'background:#7BA7FF;color:#7BA7FF' } });
+		const allItem = list.createDiv({ cls: 'mq-po-sidebar__item' + (this.selectedProject === null ? ' is-active' : '') });
+		allItem.createSpan({ cls: 'mq-po-dot', attr: { style: 'background:#7BA7FF;color:#7BA7FF' } });
 		allItem.createSpan({ text: '\u5168\u90E8\u9879\u76EE' });
-		allItem.createSpan({ cls: 'po-count', text: totalActive + '/' + totalTasks });
+		allItem.createSpan({ cls: 'mq-po-count', text: totalActive + '/' + totalTasks });
 		allItem.addEventListener('click', () => {
 			this.selectedProject = null;
 			this.renderSidebar(sidebar);
@@ -275,10 +305,10 @@ export class ProjectBoard {
 
 		// Individual projects with right-click menu
 		this.currentProjects.forEach((p) => {
-			const item = list.createDiv({ cls: 'po-sidebar__item' + (this.selectedProject === p.name ? ' is-active' : '') });
-			item.createSpan({ cls: 'po-dot', attr: { style: 'background:' + p.color + ';color:' + p.color } });
+			const item = list.createDiv({ cls: 'mq-po-sidebar__item' + (this.selectedProject === p.name ? ' is-active' : '') });
+			item.createSpan({ cls: 'mq-po-dot', attr: { style: 'background:' + p.color + ';color:' + p.color } });
 			item.createSpan({ text: p.name });
-			item.createSpan({ cls: 'po-count', text: p.activeCount + '/' + p.taskCount });
+			item.createSpan({ cls: 'mq-po-count', text: p.activeCount + '/' + p.taskCount });
 			item.addEventListener('click', () => {
 				this.selectedProject = p.name;
 				this.renderSidebar(sidebar);
@@ -305,14 +335,14 @@ export class ProjectBoard {
 			item.dataset.projIdx = String(this.currentProjects.indexOf(p));
 			item.addEventListener('dragstart', (e) => {
 				e.dataTransfer?.setData('text/proj-idx', String(this.currentProjects.indexOf(p)));
-				item.addClass('po-sidebar__item--dragging');
+				item.addClass('mq-po-sidebar__item--dragging');
 			});
-			item.addEventListener('dragend', () => item.removeClass('po-sidebar__item--dragging'));
-			item.addEventListener('dragover', (e) => { e.preventDefault(); item.addClass('po-sidebar__item--drag-over'); });
-			item.addEventListener('dragleave', () => item.removeClass('po-sidebar__item--drag-over'));
+			item.addEventListener('dragend', () => item.removeClass('mq-po-sidebar__item--dragging'));
+			item.addEventListener('dragover', (e) => { e.preventDefault(); item.addClass('mq-po-sidebar__item--drag-over'); });
+			item.addEventListener('dragleave', () => item.removeClass('mq-po-sidebar__item--drag-over'));
 		item.addEventListener('drop', (e) => {
 			e.preventDefault();
-			item.removeClass('po-sidebar__item--drag-over');
+			item.removeClass('mq-po-sidebar__item--drag-over');
 			// 跨项目移动：从甘特图「任务名称」行拖来的任务
 			const taskId = e.dataTransfer?.getData('text/task-id');
 			if (taskId) {
@@ -339,7 +369,7 @@ export class ProjectBoard {
 		});
 
 		// New project button
-		const addBtn = sidebar.createEl('button', { cls: 'po-add-btn', text: '+ \u65B0\u5EFA\u9879\u76EE' });
+		const addBtn = sidebar.createEl('button', { cls: 'mq-po-add-btn', text: '+ \u65B0\u5EFA\u9879\u76EE' });
 		addBtn.addEventListener('click', () => {
 			void this.createProjectFile();
 		});
@@ -430,7 +460,7 @@ export class ProjectBoard {
 		this.applyProjectOrder();
 
 		// Re-render sidebar and panels
-		const sidebar = this.boardEl?.querySelector('.po-sidebar') as HTMLElement;
+		const sidebar = this.boardEl?.querySelector('.mq-po-sidebar') as HTMLElement;
 		if (sidebar) this.renderSidebar(sidebar);
 		this.renderPanels();
 	}
@@ -448,7 +478,7 @@ export class ProjectBoard {
 		const tasksWithDates = tasks.filter((t) => t.startDate || t.dueDate);
 
 		if (tasks.length === 0) {
-			panel.createDiv({ cls: 'po-empty', text: UI_TEXT.noTasks });
+			panel.createDiv({ cls: 'mq-po-empty', text: UI_TEXT.noTasks });
 			return;
 		}
 
@@ -526,15 +556,18 @@ export class ProjectBoard {
 		// within their parent. This makes the Gantt follow the left sidebar project order
 		// (and re-order when the project order changes).
 		const orderedTasks: TaskItem[] = [];
-		const taskLevels = new Map<string, number>();
-		const flattenWithLevel = (taskList: TaskItem[], level: number): void => {
+		const taskTree = new Map<string, { level: number; ancestorHasNext: boolean[]; isLast: boolean }>();
+		const flattenWithLevel = (taskList: TaskItem[], level: number, ancestorHasNext: boolean[] = []): void => {
 			const list = level === 0 ? taskList : [...taskList].sort(timeSort);
-			for (const t of list) {
+			for (const [index, t] of list.entries()) {
+				const isLast = index === list.length - 1;
 				orderedTasks.push(t);
-				taskLevels.set(t.id, Math.min(level, 3));
+				taskTree.set(t.id, { level, ancestorHasNext, isLast });
 				const kids = childrenOf.get(t.content) || [];
 				// Skip children of collapsed parents (collapse/expand via arrow)
-				if (kids.length && !this.collapsedParents.has(t.content)) flattenWithLevel(kids, level + 1);
+				if (kids.length && !this.collapsedParents.has(t.content)) {
+					flattenWithLevel(kids, level + 1, [...ancestorHasNext, !isLast]);
+				}
 			}
 		};
 		flattenWithLevel(rootTasks, 0);
@@ -624,7 +657,7 @@ export class ProjectBoard {
 		};
 
 		// ---------- DOM scaffold ----------
-		const zoomBar = panel.createDiv({ cls: 'po-gantt__zoom' });
+		const zoomBar = panel.createDiv({ cls: 'mq-po-gantt__zoom' });
 		const zoomLevels: Array<{ key: string; label: string }> = [
 			{ key: 'day', label: '日' },
 			{ key: 'week', label: '周' },
@@ -632,7 +665,7 @@ export class ProjectBoard {
 			{ key: 'quarter', label: '季度' },
 		];
 		zoomLevels.forEach((z) => {
-			const btn = zoomBar.createEl('button', { cls: 'po-gantt__zoom-btn' + (z.key === granularity ? ' is-active' : ''), text: z.label });
+			const btn = zoomBar.createEl('button', { cls: 'mq-po-gantt__zoom-btn' + (z.key === granularity ? ' is-active' : ''), text: z.label });
 			btn.addEventListener('click', () => {
 				this.ganttZoom = z.key as typeof this.ganttZoom;
 				// 持久化用户选择的时间粒度，重启插件后保持
@@ -644,8 +677,8 @@ export class ProjectBoard {
 		});
 
 		// Status filter (multi-select) — modeled on reference obsidian-pm FilterDropdown
-		zoomBar.createSpan({ cls: 'po-gantt__sep' });
-		const filterBtn = zoomBar.createEl('button', { cls: 'po-gantt__zoom-btn' + (this.ganttStatusFilter.length ? ' is-active' : '') });
+		zoomBar.createSpan({ cls: 'mq-po-gantt__sep' });
+		const filterBtn = zoomBar.createEl('button', { cls: 'mq-po-gantt__zoom-btn' + (this.ganttStatusFilter.length ? ' is-active' : '') });
 		const updateFilterLabel = (): void => {
 			filterBtn.textContent = this.ganttStatusFilter.length ? `状态: ${this.ganttStatusFilter.length}` : '状态筛选';
 			filterBtn.toggleClass('is-active', this.ganttStatusFilter.length > 0);
@@ -680,37 +713,40 @@ export class ProjectBoard {
 			menu.showAtMouseEvent(e);
 		});
 
-		const gantt = panel.createDiv({ cls: 'po-gantt' });
-		const wrapper = gantt.createDiv({ cls: 'po-gantt__wrap' });
+		const gantt = panel.createDiv({ cls: 'mq-po-gantt' });
+		const wrapper = gantt.createDiv({ cls: 'mq-po-gantt__wrap' });
 
 		// Left panel: task labels
-		const left = wrapper.createDiv({ cls: 'po-gantt__left' });
-		const leftHeader = left.createDiv({ cls: 'po-gantt__left-hd' });
+		const left = wrapper.createDiv({ cls: 'mq-po-gantt__left' });
+		left.style.width = this.ganttLabelWidth() + 'px';
+		const leftHeader = left.createDiv({ cls: 'mq-po-gantt__left-hd' });
 		leftHeader.style.height = HEADER_HEIGHT + 'px';
-		leftHeader.createSpan({ text: UI_TEXT.poTaskName, cls: 'po-gantt__left-hd-label' });
-		const leftBody = left.createDiv({ cls: 'po-gantt__left-body' });
+		leftHeader.createSpan({ text: UI_TEXT.poTaskName, cls: 'mq-po-gantt__left-hd-label' });
+		const leftBody = left.createDiv({ cls: 'mq-po-gantt__left-body' });
+		const leftResize = left.createDiv({ cls: 'mq-po-gantt__left-resize', attr: { 'aria-label': '调整任务列表宽度' } });
+		this.setupGanttLabelResize(left, leftResize);
 
 		// Right panel: scrollable SVG timeline
-		const right = wrapper.createDiv({ cls: 'po-gantt__right' });
+		const right = wrapper.createDiv({ cls: 'mq-po-gantt__right' });
 
 		// Sticky header (SVG) — pinned to top on vertical scroll, scrolls horizontally with body
-		const headerSticky = right.createDiv({ cls: 'po-gantt__hdr-sticky' });
+		const headerSticky = right.createDiv({ cls: 'mq-po-gantt__hdr-sticky' });
 		headerSticky.style.width = totalWidth + 'px';
 		headerSticky.style.height = HEADER_HEIGHT + 'px';
-		const headerSvg = svgEl('svg', { width: totalWidth, height: HEADER_HEIGHT, class: 'po-gantt__hdr-svg' }) as SVGSVGElement;
+		const headerSvg = svgEl('svg', { width: totalWidth, height: HEADER_HEIGHT, class: 'mq-po-gantt__hdr-svg' }) as SVGSVGElement;
 		headerSticky.appendChild(headerSvg);
 
 		// Timeline SVG — tucked under the sticky header via negative margin-top
-		const svgWrap = right.createDiv({ cls: 'po-gantt__svgwrap' });
+		const svgWrap = right.createDiv({ cls: 'mq-po-gantt__svgwrap' });
 		svgWrap.style.width = totalWidth + 'px';
 		svgWrap.style.marginTop = `-${HEADER_HEIGHT}px`;
 		const totalRows = orderedTasks.length;
 		const svgHeight = HEADER_HEIGHT + (totalRows + 1) * ROW_HEIGHT;
-		const svg = svgEl('svg', { width: totalWidth, height: svgHeight, class: 'po-gantt__svg' }) as SVGSVGElement;
+		const svg = svgEl('svg', { width: totalWidth, height: svgHeight, class: 'mq-po-gantt__svg' }) as SVGSVGElement;
 		svgWrap.appendChild(svg);
 
 		// ---------- Header rendering ----------
-		headerSvg.appendChild(svgEl('rect', { x: 0, y: 0, width: totalWidth, height: HEADER_HEIGHT, class: 'po-gantt__hdr-bg' }));
+		headerSvg.appendChild(svgEl('rect', { x: 0, y: 0, width: totalWidth, height: HEADER_HEIGHT, class: 'mq-po-gantt__hdr-bg' }));
 
 		const renderMonthBands = (y: number, h: number): void => {
 			let m = new Date(minD.getFullYear(), minD.getMonth(), 1);
@@ -720,9 +756,9 @@ export class ProjectBoard {
 				const x2 = Math.min(totalWidth, dateToX(nm));
 				headerSvg.appendChild(svgEl('rect', {
 					x: x1, y, width: Math.max(0, x2 - x1), height: h,
-					class: (m.getMonth() % 2 === 0) ? 'po-gantt__band-even' : 'po-gantt__band-odd',
+					class: (m.getMonth() % 2 === 0) ? 'mq-po-gantt__band-even' : 'mq-po-gantt__band-odd',
 				}));
-				headerSvg.appendChild(svgText(x1 + 6, y + h - 7, (m.getMonth() + 1) + '月', 'po-gantt__hdr-month-top'));
+				headerSvg.appendChild(svgText(x1 + 6, y + h - 7, (m.getMonth() + 1) + '月', 'mq-po-gantt__hdr-month-top'));
 				m = nm;
 			}
 		};
@@ -734,9 +770,9 @@ export class ProjectBoard {
 				const x2 = Math.min(totalWidth, dateToX(ny));
 				headerSvg.appendChild(svgEl('rect', {
 					x: x1, y, width: Math.max(0, x2 - x1), height: h,
-					class: (yd.getFullYear() % 2 === 0) ? 'po-gantt__band-even' : 'po-gantt__band-odd',
+					class: (yd.getFullYear() % 2 === 0) ? 'mq-po-gantt__band-even' : 'mq-po-gantt__band-odd',
 				}));
-				headerSvg.appendChild(svgText(x1 + 6, y + h - 7, String(yd.getFullYear()), 'po-gantt__hdr-year'));
+				headerSvg.appendChild(svgText(x1 + 6, y + h - 7, String(yd.getFullYear()), 'mq-po-gantt__hdr-year'));
 				yd = ny;
 			}
 		};
@@ -748,10 +784,10 @@ export class ProjectBoard {
 				const x = i * dayWidth;
 				const isWeekend = d.getDay() === 0 || d.getDay() === 6;
 				if (isWeekend) {
-					headerSvg.appendChild(svgEl('rect', { x, y: 24, width: dayWidth, height: HEADER_HEIGHT - 24, class: 'po-gantt__hdr-weekend' }));
+					headerSvg.appendChild(svgEl('rect', { x, y: 24, width: dayWidth, height: HEADER_HEIGHT - 24, class: 'mq-po-gantt__hdr-weekend' }));
 				}
 				if (dayWidth >= 20) {
-					headerSvg.appendChild(svgText(x + dayWidth / 2, 42, String(d.getDate()), 'po-gantt__hdr-day'));
+					headerSvg.appendChild(svgText(x + dayWidth / 2, 42, String(d.getDate()), 'mq-po-gantt__hdr-day'));
 				}
 			}
 		} else if (granularity === 'week') {
@@ -760,7 +796,7 @@ export class ProjectBoard {
 			const isoDow = nativeDow === 0 ? 7 : nativeDow;
 			const offsetToMonday = isoDow === 1 ? 0 : 8 - isoDow;
 			if (offsetToMonday > 0) {
-				headerSvg.appendChild(svgText((offsetToMonday * dayWidth) / 2, 44, 'W' + isoWeek(minD), 'po-gantt__hdr-week'));
+				headerSvg.appendChild(svgText((offsetToMonday * dayWidth) / 2, 44, 'W' + isoWeek(minD), 'mq-po-gantt__hdr-week'));
 			}
 			let i = offsetToMonday;
 			while (i < totalDays) {
@@ -768,8 +804,8 @@ export class ProjectBoard {
 				const x = i * dayWidth;
 				const daysInWeek = Math.min(7, totalDays - i);
 				const w = daysInWeek * dayWidth;
-				headerSvg.appendChild(svgText(x + w / 2, 44, 'W' + isoWeek(d), 'po-gantt__hdr-week'));
-				headerSvg.appendChild(svgEl('line', { x1: x, y1: 24, x2: x, y2: HEADER_HEIGHT, class: 'po-gantt__hdr-tick' }));
+				headerSvg.appendChild(svgText(x + w / 2, 44, 'W' + isoWeek(d), 'mq-po-gantt__hdr-week'));
+				headerSvg.appendChild(svgEl('line', { x1: x, y1: 24, x2: x, y2: HEADER_HEIGHT, class: 'mq-po-gantt__hdr-tick' }));
 				i += 7;
 			}
 		} else if (granularity === 'month') {
@@ -779,8 +815,8 @@ export class ProjectBoard {
 				const nm = new Date(m.getFullYear(), m.getMonth() + 1, 1);
 				const x1 = Math.max(0, dateToX(m));
 				const x2 = Math.min(totalWidth, dateToX(nm));
-				headerSvg.appendChild(svgText(x1 + (x2 - x1) / 2, 44, (m.getMonth() + 1) + '月', 'po-gantt__hdr-month'));
-				headerSvg.appendChild(svgEl('line', { x1, y1: 24, x2: x1, y2: HEADER_HEIGHT, class: 'po-gantt__hdr-tick' }));
+				headerSvg.appendChild(svgText(x1 + (x2 - x1) / 2, 44, (m.getMonth() + 1) + '月', 'mq-po-gantt__hdr-month'));
+				headerSvg.appendChild(svgEl('line', { x1, y1: 24, x2: x1, y2: HEADER_HEIGHT, class: 'mq-po-gantt__hdr-tick' }));
 				m = nm;
 			}
 		} else {
@@ -791,8 +827,8 @@ export class ProjectBoard {
 				const x1 = Math.max(0, dateToX(q));
 				const x2 = Math.min(totalWidth, dateToX(nq));
 				const qq = Math.floor(q.getMonth() / 3) + 1;
-				headerSvg.appendChild(svgText(x1 + (x2 - x1) / 2, 44, 'Q' + qq + ' ' + q.getFullYear(), 'po-gantt__hdr-quarter'));
-				headerSvg.appendChild(svgEl('line', { x1, y1: 24, x2: x1, y2: HEADER_HEIGHT, class: 'po-gantt__hdr-tick' }));
+				headerSvg.appendChild(svgText(x1 + (x2 - x1) / 2, 44, 'Q' + qq + ' ' + q.getFullYear(), 'mq-po-gantt__hdr-quarter'));
+				headerSvg.appendChild(svgEl('line', { x1, y1: 24, x2: x1, y2: HEADER_HEIGHT, class: 'mq-po-gantt__hdr-tick' }));
 				q = nq;
 			}
 		}
@@ -806,50 +842,62 @@ export class ProjectBoard {
 			const isQuarterStart = isFirst && d.getMonth() % 3 === 0;
 
 			if (isWeekend && granularity === 'day') {
-				svg.appendChild(svgEl('rect', { x, y: HEADER_HEIGHT, width: dayWidth, height: svgHeight - HEADER_HEIGHT, class: 'po-gantt__weekend' }));
+				svg.appendChild(svgEl('rect', { x, y: HEADER_HEIGHT, width: dayWidth, height: svgHeight - HEADER_HEIGHT, class: 'mq-po-gantt__weekend' }));
 			}
 			const drawV = (granularity === 'day' && (d.getDay() === 1)) ||
 				(granularity === 'week' && (d.getDay() === 1)) ||
 				(granularity === 'month' && isFirst) ||
 				(granularity === 'quarter' && isQuarterStart);
 			if (drawV) {
-				svg.appendChild(svgEl('line', { x1: x, y1: HEADER_HEIGHT, x2: x, y2: svgHeight, class: 'po-gantt__gridline-v' }));
+				svg.appendChild(svgEl('line', { x1: x, y1: HEADER_HEIGHT, x2: x, y2: svgHeight, class: 'mq-po-gantt__gridline-v' }));
 			}
 		}
 		for (let r = 0; r <= totalRows; r++) {
 			const y = HEADER_HEIGHT + r * ROW_HEIGHT;
-			svg.appendChild(svgEl('line', { x1: 0, y1: y, x2: totalWidth, y2: y, class: 'po-gantt__gridline-h' }));
+			svg.appendChild(svgEl('line', { x1: 0, y1: y, x2: totalWidth, y2: y, class: 'mq-po-gantt__gridline-h' }));
 		}
 
 		// ---------- Today line ----------
 		const todayX = dateToX(today);
 		if (todayX >= 0 && todayX <= totalWidth) {
-			svg.appendChild(svgEl('line', { x1: todayX, y1: HEADER_HEIGHT - 8, x2: todayX, y2: svgHeight, class: 'po-gantt__today' }));
+			svg.appendChild(svgEl('line', { x1: todayX, y1: HEADER_HEIGHT - 8, x2: todayX, y2: svgHeight, class: 'mq-po-gantt__today' }));
 			headerSvg.appendChild(svgEl('polygon', {
 				points: `${todayX},${HEADER_HEIGHT - 16} ${todayX + 6},${HEADER_HEIGHT - 8} ${todayX},${HEADER_HEIGHT} ${todayX - 6},${HEADER_HEIGHT - 8}`,
-				class: 'po-gantt__today-diamond',
+				class: 'mq-po-gantt__today-diamond',
 			}));
 		}
 
 		// ---------- Tooltip ----------
-		const tooltip = panel.createDiv({ cls: 'po-gantt__tooltip' });
+		const tooltip = panel.createDiv({ cls: 'mq-po-gantt__tooltip' });
 
 		// ---------- Task bars (SVG rects) + left labels ----------
 		const bars: SVGElement[] = [];
 		const labelRows: HTMLElement[] = [];
 		orderedTasks.forEach((t, idx) => {
-			const level = taskLevels.get(t.id) || 0;
+			const tree = taskTree.get(t.id) ?? { level: 0, ancestorHasNext: [], isLast: true };
+			const level = tree.level;
 			const isParent = childrenOf.has(t.content);
 			const color = colorMap[t.projectId] || '#3b82f6';
 
 			// Left label row (indentation by depth)
-			const lr = leftBody.createDiv({ cls: 'po-gantt__label-row' + (level > 0 ? ' po-gantt__label-row--child' : '') });
+			const lr = leftBody.createDiv({ cls: 'mq-po-gantt__label-row' + (level > 0 ? ' mq-po-gantt__label-row--child' : '') });
 			lr.style.height = ROW_HEIGHT + 'px';
-			lr.style.paddingLeft = (level * 18 + 8) + 'px';
+			lr.style.paddingLeft = '8px';
 			lr.dataset.taskId = t.id;
+			if (level > 0) {
+				const treeEl = lr.createDiv({ cls: 'mq-po-gantt__tree' });
+				for (let depth = 0; depth < level; depth++) {
+					const segment = treeEl.createSpan({ cls: 'mq-po-gantt__tree-segment' });
+					if (depth === level - 1) {
+						segment.addClass(tree.isLast ? 'is-last' : 'is-middle');
+					} else if (tree.ancestorHasNext[depth]) {
+						segment.addClass('has-vertical');
+					}
+				}
+			}
 			if (isParent) {
 				const collapsed = this.collapsedParents.has(t.content);
-				const dot = lr.createSpan({ cls: 'po-gantt__label-dot', text: collapsed ? '▸' : '▾' });
+				const dot = lr.createSpan({ cls: 'mq-po-gantt__label-dot', text: collapsed ? '▸' : '▾' });
 				dot.addEventListener('click', (e) => {
 					e.stopPropagation();
 					if (collapsed) this.collapsedParents.delete(t.content);
@@ -858,8 +906,17 @@ export class ProjectBoard {
 					this.renderGanttPanel(panel, tasks, projects);
 				});
 			}
-			lr.createSpan({ cls: 'po-gantt__label-title', text: t.content });
-			const addBtn = lr.createSpan({ cls: 'po-gantt__label-add', text: '+' });
+			const labelTitle = lr.createSpan({ cls: 'mq-po-gantt__label-title', text: t.content });
+			const showLabelTooltip = (e: MouseEvent): void => {
+				tooltip.empty();
+				tooltip.createEl('strong', { text: t.content });
+				tooltip.addClass('is-visible');
+				this.positionTooltip(tooltip, e);
+			};
+			labelTitle.addEventListener('mouseenter', showLabelTooltip);
+			labelTitle.addEventListener('mousemove', (e: MouseEvent) => this.positionTooltip(tooltip, e));
+			labelTitle.addEventListener('mouseleave', () => tooltip.removeClass('is-visible'));
+			const addBtn = lr.createSpan({ cls: 'mq-po-gantt__label-add', text: '+' });
 			addBtn.addEventListener('click', (e) => {
 				e.stopPropagation();
 				void this.openTaskModalWithParent(t.content, t.projectId);
@@ -882,17 +939,17 @@ export class ProjectBoard {
 			lr.draggable = true;
 			lr.addEventListener('dragstart', (e) => {
 				e.dataTransfer?.setData('text/task-id', t.id);
-				lr.addClass('po-row--dragging');
+				lr.addClass('mq-po-row--dragging');
 			});
-			lr.addEventListener('dragend', () => lr.removeClass('po-row--dragging'));
-			lr.addEventListener('dragover', (e) => { e.preventDefault(); lr.addClass('po-row--drag-over'); });
-			lr.addEventListener('dragleave', () => lr.removeClass('po-row--drag-over'));
+			lr.addEventListener('dragend', () => lr.removeClass('mq-po-row--dragging'));
+			lr.addEventListener('dragover', (e) => { e.preventDefault(); lr.addClass('mq-po-row--drag-over'); });
+			lr.addEventListener('dragleave', () => lr.removeClass('mq-po-row--drag-over'));
 			lr.addEventListener('drop', (e) => {
 				e.preventDefault();
-				lr.removeClass('po-row--drag-over');
+				lr.removeClass('mq-po-row--drag-over');
 				const draggedId = e.dataTransfer?.getData('text/task-id');
 				if (!draggedId || draggedId === t.id) return;
-				const rows = Array.from(leftBody.querySelectorAll<HTMLElement>('.po-gantt__label-row'));
+				const rows = Array.from(leftBody.querySelectorAll<HTMLElement>('.mq-po-gantt__label-row'));
 				const ids = rows.map((r) => r.dataset.taskId).filter((id): id is string => !!id);
 				const from = ids.indexOf(draggedId);
 				const to = ids.indexOf(t.id);
@@ -916,19 +973,19 @@ export class ProjectBoard {
 		const width = Math.max(2, xEnd - x);
 		const barY = HEADER_HEIGHT + idx * ROW_HEIGHT + 8;
 		const barH = ROW_HEIGHT - 16;
-		const barCls = 'po-gantt__bar' + (t.status === '已完成' ? ' is-completed' : '') +
-			(isParent ? ' po-gantt__bar--parent' : '') + (level > 0 ? ' po-gantt__bar--child' : '');
+		const barCls = 'mq-po-gantt__bar' + (t.status === '已完成' ? ' is-completed' : '') +
+			(isParent ? ' mq-po-gantt__bar--parent' : '') + (level > 0 ? ' mq-po-gantt__bar--child' : '');
 		const bar = svgEl('rect', {
 			x, y: barY, width, height: barH, rx: 4, class: barCls,
 		}) as SVGRectElement;
 		bar.setAttribute('fill', color);
 		bar.dataset.taskId = t.id;
 		(bar as SVGElement & { _dragged?: boolean })._dragged = false;
-		if (t.startDate && t.dueDate) bar.classList.add('po-gantt__bar--movable');
+		if (t.startDate && t.dueDate) bar.classList.add('mq-po-gantt__bar--movable');
 		bars.push(bar);
 
 		// Group wraps bar + edge handles so the hover hint reveals them together
-		const group = svgEl('g', { class: 'po-gantt__bar-group' }) as SVGGElement;
+		const group = svgEl('g', { class: 'mq-po-gantt__bar-group' }) as SVGGElement;
 		group.appendChild(bar);
 
 		const HANDLE_W = 8;
@@ -945,7 +1002,7 @@ export class ProjectBoard {
 			const origX = parseFloat(b.getAttribute('x') || '0');
 			const origW = parseFloat(b.getAttribute('width') || '0');
 			let moved = false;
-			b.classList.add('po-gantt__bar--grabbing');
+			b.classList.add('mq-po-gantt__bar--grabbing');
 			const syncHandles = (): void => {
 				const cx = parseFloat(b.getAttribute('x') || '0');
 				const cw = parseFloat(b.getAttribute('width') || '0');
@@ -970,7 +1027,7 @@ export class ProjectBoard {
 			const onUp = () => {
 				document.removeEventListener('mousemove', onMove);
 				document.removeEventListener('mouseup', onUp);
-				b.classList.remove('po-gantt__bar--grabbing');
+				b.classList.remove('mq-po-gantt__bar--grabbing');
 				if (!moved) return;
 				(b as SVGElement & { _dragged?: boolean })._dragged = true;
 				tooltip.removeClass('is-visible');
@@ -990,7 +1047,7 @@ export class ProjectBoard {
 			for (const side of ['left', 'right'] as const) {
 				const hx = side === 'left' ? x : x + width - HANDLE_W;
 				const handle = svgEl('rect', {
-					x: hx, y: barY, width: HANDLE_W, height: barH, rx: 3, class: 'po-gantt__bar-handle',
+					x: hx, y: barY, width: HANDLE_W, height: barH, rx: 3, class: 'mq-po-gantt__bar-handle',
 				}) as SVGRectElement;
 				handle.addEventListener('mousedown', (e) => beginDrag(bar, side, e));
 				group.appendChild(handle);
@@ -1022,11 +1079,11 @@ export class ProjectBoard {
 			this.openTaskEditModal(t);
 			this.clearHighlights(bars, tableResult.rows);
 			if (tableResult.rows[idx]) {
-				tableResult.rows[idx].addClass('po-row--highlight');
+				tableResult.rows[idx].addClass('mq-po-row--highlight');
 				tableResult.rows[idx].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 				this.highlightedRow = tableResult.rows[idx];
 			}
-			bar.classList.add('po-bar--highlight');
+			bar.classList.add('mq-po-bar--highlight');
 			this.highlightedBar = bar;
 		});
 
@@ -1062,10 +1119,10 @@ export class ProjectBoard {
 		});
 
 		// ---------- Resize handle + task table (kept from original) ----------
-		const resizeHandle = panel.createDiv({ cls: 'po-resize' });
+		const resizeHandle = panel.createDiv({ cls: 'mq-po-resize' });
 		this.setupResizeHandle(resizeHandle, gantt);
 
-		const tableResult = this.renderTaskTable(panel, 'po-tb1', tasks, projects);
+		const tableResult = this.renderTaskTable(panel, 'mq-po-tb1', tasks, projects);
 
 		// 行点击 → 高亮对应甘特条（事件委托，兼容窗口化渲染）
 		tableResult.tbody.addEventListener('click', (e) => {
@@ -1075,10 +1132,10 @@ export class ProjectBoard {
 			const idx = Number(idxStr);
 			this.clearHighlights(bars, tableResult.rows);
 			if (bars[idx]) {
-				bars[idx].classList.add('po-bar--highlight');
+				bars[idx].classList.add('mq-po-bar--highlight');
 				this.highlightedBar = bars[idx];
 			}
-			tr.addClass('po-row--highlight');
+			tr.addClass('mq-po-row--highlight');
 			this.highlightedRow = tr;
 		});
 	}
@@ -1096,10 +1153,10 @@ export class ProjectBoard {
 
 
 	private clearHighlights(bars: Element[], rows: (HTMLElement | null)[]): void {
-		if (this.highlightedBar) { this.highlightedBar.classList.remove('po-bar--highlight'); this.highlightedBar = null; }
-		if (this.highlightedRow) { this.highlightedRow.removeClass('po-row--highlight'); this.highlightedRow = null; }
-		bars.forEach((b) => b.classList.remove('po-bar--highlight'));
-		rows.forEach((r) => r?.removeClass('po-row--highlight'));
+		if (this.highlightedBar) { this.highlightedBar.classList.remove('mq-po-bar--highlight'); this.highlightedBar = null; }
+		if (this.highlightedRow) { this.highlightedRow.removeClass('mq-po-row--highlight'); this.highlightedRow = null; }
+		bars.forEach((b) => b.classList.remove('mq-po-bar--highlight'));
+		rows.forEach((r) => r?.removeClass('mq-po-row--highlight'));
 	}
 
 
@@ -1113,12 +1170,64 @@ export class ProjectBoard {
 			startH = gantt.offsetHeight;
 			const onMove = (ev: MouseEvent) => {
 				const dh = ev.clientY - startY;
-				gantt.addClass('po-gantt--resized');
+				gantt.addClass('mq-po-gantt--resized');
 				gantt.style.height = Math.max(100, startH + dh) + 'px';
 			};
 			const onUp = () => {
 				document.removeEventListener('mousemove', onMove);
 				document.removeEventListener('mouseup', onUp);
+			};
+			document.addEventListener('mousemove', onMove);
+			document.addEventListener('mouseup', onUp);
+		});
+	}
+
+	private ganttLabelWidth(): number {
+		const width = this.plugin.settings.poGanttLabelWidth;
+		return typeof width === 'number' ? Math.max(220, Math.min(600, width)) : 300;
+	}
+
+	private setupGanttLabelResize(left: HTMLElement, handle: HTMLElement): void {
+		handle.addEventListener('mousedown', (e) => {
+			e.preventDefault();
+			e.stopPropagation();
+			const startX = e.clientX;
+			const startWidth = left.getBoundingClientRect().width;
+			const onMove = (move: MouseEvent): void => {
+				const width = Math.max(220, Math.min(600, Math.round(startWidth + move.clientX - startX)));
+				left.style.width = width + 'px';
+			};
+			const onUp = (up: MouseEvent): void => {
+				document.removeEventListener('mousemove', onMove);
+				document.removeEventListener('mouseup', onUp);
+				this.plugin.settings.poGanttLabelWidth = Math.max(220, Math.min(600, Math.round(startWidth + up.clientX - startX)));
+				void this.plugin.saveSettings();
+			};
+			document.addEventListener('mousemove', onMove);
+			document.addEventListener('mouseup', onUp);
+		});
+	}
+
+	private projectKanbanColumnWidth(): number {
+		const width = this.plugin.settings.poKanbanColumnWidth;
+		return typeof width === 'number' ? Math.max(220, Math.min(640, width)) : 270;
+	}
+
+	private setupProjectKanbanResize(board: HTMLElement, handle: HTMLElement): void {
+		handle.addEventListener('mousedown', (e) => {
+			e.preventDefault();
+			e.stopPropagation();
+			const startX = e.clientX;
+			const startWidth = this.projectKanbanColumnWidth();
+			const onMove = (move: MouseEvent): void => {
+				const width = Math.max(220, Math.min(640, Math.round(startWidth + move.clientX - startX)));
+				board.style.setProperty('--mq-po-kanban-col-width', width + 'px');
+			};
+			const onUp = (up: MouseEvent): void => {
+				document.removeEventListener('mousemove', onMove);
+				document.removeEventListener('mouseup', onUp);
+				this.plugin.settings.poKanbanColumnWidth = Math.max(220, Math.min(640, Math.round(startWidth + up.clientX - startX)));
+				void this.plugin.saveSettings();
 			};
 			document.addEventListener('mousemove', onMove);
 			document.addEventListener('mouseup', onUp);
@@ -1140,17 +1249,17 @@ export class ProjectBoard {
 		task.startDate = newStart;
 		task.dueDate = newEnd;
 	}	private renderTaskTable(panel: HTMLElement, tbodyId: string, tasks: TaskItem[], projects: ProjectInfo[]): { tbody: HTMLElement; rows: (HTMLElement | null)[] } {
-		const section = panel.createDiv({ cls: 'po-tasklist' });
-		const toolbar = section.createDiv({ cls: 'po-toolbar' });
-		toolbar.createSpan({ cls: 'po-toolbar__label', text: UI_TEXT.filter });
+		const section = panel.createDiv({ cls: 'mq-po-tasklist' });
+		const toolbar = section.createDiv({ cls: 'mq-po-toolbar' });
+		toolbar.createSpan({ cls: 'mq-po-toolbar__label', text: UI_TEXT.filter });
 		[UI_TEXT.all, '待办', '进行中', '已阻塞', '已完成'].forEach((f, i) => {
 			const key = i === 0 ? 'all' : f;
-			const chip = toolbar.createEl('button', { cls: 'po-chip' + (key === this.taskListFilter ? ' is-active' : ''), text: f });
+			const chip = toolbar.createEl('button', { cls: 'mq-po-chip' + (key === this.taskListFilter ? ' is-active' : ''), text: f });
 			chip.dataset.filter = key;
 		});
 
-		const wrap = section.createDiv({ cls: 'po-table-wrap' });
-		const table = wrap.createEl('table', { cls: 'po-table' });
+		const wrap = section.createDiv({ cls: 'mq-po-table-wrap' });
+		const table = wrap.createEl('table', { cls: 'mq-po-table' });
 		const thead = table.createEl('thead');
 		const hr = thead.createEl('tr');
 		const colDefs = [
@@ -1169,8 +1278,8 @@ export class ProjectBoard {
 			th.dataset.sortKey = col.key;
 			thEls.push(th);
 			if (col.key) {
-				th.addClass('po-th--sortable');
-				th.createSpan({ cls: 'po-sort-arrow' });
+				th.addClass('mq-po-th--sortable');
+				th.createSpan({ cls: 'mq-po-sort-arrow' });
 			}
 		});
 
@@ -1229,7 +1338,7 @@ export class ProjectBoard {
 			if (win.end > win.start) {
 				const mkSpacer = (h: number): HTMLTableRowElement => {
 					const tr = tbody.createEl('tr');
-				const td = tr.createEl('td', { cls: 'po-spacer-cell' });
+				const td = tr.createEl('td', { cls: 'mq-po-spacer-cell' });
 				td.colSpan = colDefs.length;
 				td.style.height = h + 'px';
 				return tr;
@@ -1247,7 +1356,7 @@ export class ProjectBoard {
 				mkSpacer((visible.items.length - win.end) * rowHeight);
 			}
 			if (!rowHeightMeasured) {
-				const first = tbody.querySelector('tr.po-data-row');
+				const first = tbody.querySelector('tr.mq-po-data-row');
 				if (first) {
 					const h = (first as HTMLElement).offsetHeight;
 					if (h > 0) {
@@ -1284,10 +1393,10 @@ export class ProjectBoard {
 				this.sortDir = 'asc';
 			}
 			thEls.forEach((h) => {
-				const arrow = h.querySelector('.po-sort-arrow');
+				const arrow = h.querySelector('.mq-po-sort-arrow');
 				if (arrow) arrow.textContent = '';
 			});
-			const arrow = th.querySelector('.po-sort-arrow');
+			const arrow = th.querySelector('.mq-po-sort-arrow');
 			if (arrow) arrow.textContent = this.sortDir === 'asc' ? ' ↑' : ' ↓';
 
 			applySort();
@@ -1298,9 +1407,9 @@ export class ProjectBoard {
 
 		// Filter click
 		toolbar.addEventListener('click', (e) => {
-			const chip = (e.target as HTMLElement).closest('.po-chip') as HTMLElement;
+			const chip = (e.target as HTMLElement).closest('.mq-po-chip') as HTMLElement;
 			if (!chip) return;
-			toolbar.querySelectorAll('.po-chip').forEach((c) => c.removeClass('is-active'));
+			toolbar.querySelectorAll('.mq-po-chip').forEach((c) => c.removeClass('is-active'));
 			chip.addClass('is-active');
 			this.taskListFilter = chip.dataset.filter ?? 'all';
 			visible = filterWithOrig(sortedTasks, (t) => FILTER_KEYS[this.taskListFilter]?.(t.status) ?? true);
@@ -1313,51 +1422,51 @@ export class ProjectBoard {
 
 	/** 构建单行（窗口化渲染按需调用）。origIndex 为该行在完整任务列表中的下标（与甘特条联动）。 */
 	private buildPoRow(tbody: HTMLElement, t: TaskItem, projects: ProjectInfo[], origIndex: number): HTMLElement {
-		const statusMap: Record<string, string> = { '待办':'po-todo', '进行中':'po-progress', '已阻塞':'po-blocked', '已完成':'po-done', '已取消':'po-cancelled' };
-		const prioMap: Record<string, string> = { '重要且紧急':'po-p-high', '重要不紧急':'po-p-med', '紧急不重要':'po-p-med', '不重要不紧急':'po-p-low' };
+		const statusMap: Record<string, string> = { '待办':'mq-po-todo', '进行中':'mq-po-progress', '已阻塞':'mq-po-blocked', '已完成':'mq-po-done', '已取消':'mq-po-cancelled' };
+		const prioMap: Record<string, string> = { '重要且紧急':'mq-po-p-high', '重要不紧急':'mq-po-p-med', '紧急不重要':'mq-po-p-med', '不重要不紧急':'mq-po-p-low' };
 		const prioShort: Record<string, string> = { '重要且紧急':'高', '重要不紧急':'中', '紧急不重要':'中', '不重要不紧急':'低' };
 
 		const colorMap: Record<string, string> = {};
 		projects.forEach((p) => { colorMap[p.name] = p.color; });
 
 		const tr = tbody.createEl('tr');
-		tr.addClass('po-data-row');
+		tr.addClass('mq-po-data-row');
 		tr.dataset.taskId = t.id;
 		tr.dataset.status = t.status;
 		tr.dataset.origIndex = String(origIndex);
 
 		// Checkbox
 		const tdCb = tr.createEl('td');
-		const cb = tdCb.createSpan({ cls: 'po-check' + (t.status === '已完成' ? ' is-done' : '') });
+		const cb = tdCb.createSpan({ cls: 'mq-po-check' + (t.status === '已完成' ? ' is-done' : '') });
 		cb.addEventListener('click', (e) => {
 			e.stopPropagation();
 			void this.toggleTask(t, tr);
 		});
 
 		// Task name (clickable to edit)
-		const nameEl = tr.createEl('td', { text: t.content, cls: 'po-name-cell' });
+		const nameEl = tr.createEl('td', { text: t.content, cls: 'mq-po-name-cell' });
 		nameEl.addEventListener('click', () => {
 			this.openTaskEditModal(t);
 		});
 
 		// Priority
 		const tdPrio = tr.createEl('td');
-		if (t.priority) tdPrio.createSpan({ cls: 'po-prio ' + (prioMap[t.priority] || ''), text: prioShort[t.priority] || t.priority });
+		if (t.priority) tdPrio.createSpan({ cls: 'mq-po-prio ' + (prioMap[t.priority] || ''), text: prioShort[t.priority] || t.priority });
 
 		// Start date
-		tr.createEl('td', { cls: 'po-mono', text: t.startDate || '-' });
+		tr.createEl('td', { cls: 'mq-po-mono', text: t.startDate || '-' });
 
 		// Due date
-		tr.createEl('td', { cls: 'po-mono', text: t.dueDate || '-' });
+		tr.createEl('td', { cls: 'mq-po-mono', text: t.dueDate || '-' });
 
 		// Status
 		const tdSt = tr.createEl('td');
-		tdSt.createSpan({ cls: 'po-status ' + (statusMap[t.status] || ''), text: t.status });
+		tdSt.createSpan({ cls: 'mq-po-status ' + (statusMap[t.status] || ''), text: t.status });
 
 		// Project
 		const tdProj = tr.createEl('td');
 		const projColor = colorMap[t.projectId] || '#3b82f6';
-		tdProj.createSpan({ cls: 'po-mini-dot', attr: { style: 'background:' + projColor } });
+		tdProj.createSpan({ cls: 'mq-po-mini-dot', attr: { style: 'background:' + projColor } });
 		tdProj.appendText(t.projectId);
 
 		// Right-click context menu
@@ -1385,138 +1494,645 @@ export class ProjectBoard {
 
 	/* ---- Calendar Panel ---- */
 	private renderCalendarPanel(panel: HTMLElement, tasks: TaskItem[], projects: ProjectInfo[]): void {
-		const grid = panel.createDiv({ cls: 'po-cal' });
-
-		// Build project color lookup
+		const root = panel.createDiv({ cls: 'mq-po-cal' });
+		root.tabIndex = 0;
+		const i18nT = t;   // forEach 参数 t 会 shadow 模块级 t，存别名供 renderTaskRow 等闭包使用
 		const colorMap: Record<string, string> = {};
 		projects.forEach((p) => { colorMap[p.name] = p.color; });
 
 		const today = new Date();
 		const todayStr = fmtDate(today);
+		if (!this.calSel) this.calSel = todayStr;
+		/** 月视图横条重定位观察器：窗格调整/打开源文件返回后布局变化时自动纠正横条 top */
+		let calResizeObserver: ResizeObserver | null = null;
 
-		// Use calYear/calMonth state
-		const renderMonth = () => {
-			grid.empty();
-			const y = this.calYear, m = this.calMonth;
-			const dim = new Date(y, m + 1, 0).getDate();
-			const fd = new Date(y, m, 1).getDay();
-			const adj = fd === 0 ? 6 : fd - 1;
+		const effDate = (task: TaskItem): string => task.remindDate || task.dueDate || '';
+		/** 跨天任务：同时有开始/截止日期且不同天（如 8月1日 → 8月20日） */
+		const isRangeTask = (task: TaskItem): boolean =>
+			!!task.startDate && !!task.dueDate && task.startDate !== task.dueDate;
+		/** 重复任务的有效日期：提醒日期已过（错过）→ 归到今天，与 TODO 列表口径一致；未错过 → 提醒日期 */
+		const recEffDate = (task: TaskItem): string | null => {
+			if (task.type !== '重复' || !task.remindDate) return null;
+			return task.remindDate < todayStr ? todayStr : task.remindDate;
+		};
+		/** 按「锚定日」取任务：跨天任务只在开始日出现一次（避免首末双显），普通任务按有效日期 */
+		const tasksOn = (ds: string): TaskItem[] => tasks.filter((task) => {
+			if (isRangeTask(task)) return task.startDate === ds;
+			const rec = recEffDate(task);
+			if (rec) return rec === ds;
+			return effDate(task) === ds || task.startDate === ds;
+		});
+		/** 跨天任务按「活跃日期」取（任务覆盖 ds 的所有任务，含跨天中间日）——详情面板用 */
+		const tasksActiveOn = (ds: string): TaskItem[] => tasks.filter((task) => {
+			if (isRangeTask(task)) return !!task.startDate && !!task.dueDate && task.startDate <= ds && ds <= task.dueDate;
+			const rec = recEffDate(task);
+			if (rec) return rec === ds;
+			return effDate(task) === ds || task.startDate === ds;
+		});
+		const rangeLabel = (task: TaskItem): string => dayFmt(task.startDate!) + ' → ' + dayFmt(task.dueDate!);
+		/** 单日 hover 状态文案（横条按日分段 title 用）：8月17日 · 已完成 · 备注 */
+		const dayStateLabel = (task: TaskItem, ds: string): string => {
+			const node = task.dailyNodes && task.dailyNodes[ds];
+			const st = node && node.s === 'done' ? t('home.calNodeDone') : node && node.s === 'skip' ? t('home.calNodeSkip') : t('home.calNodeTodo');
+			const note = node && node.n ? node.n : '';
+			return dayFmt(ds) + ' · ' + st + (note ? ' · ' + note : '');
+		};
+		/** 指定日期相对某周一（mon）的列索引 0-6 */
+		const dayIndexOf = (mon: string, ds: string): number => {
+			const a = new Date(mon + 'T00:00:00');
+			const b = new Date(ds + 'T00:00:00');
+			return Math.round((b.getTime() - a.getTime()) / 86400000);
+		};
+		const isOverdue = (task: TaskItem): boolean =>
+			task.status !== '已完成' && task.status !== '已取消' && !!task.dueDate && new Date(task.dueDate) < today;
+		const projColor = (task: TaskItem): string => colorMap[task.projectId] || '#3b82f6';
+		const addDays = (ds: string, n: number): string => {
+			const d = new Date(ds + 'T00:00:00');
+			d.setDate(d.getDate() + n);
+			return fmtDate(d);
+		};
+		const mondayOf = (ds: string): string => {
+			const d = new Date(ds + 'T00:00:00');
+			const dow = d.getDay();
+			const diff = dow === 0 ? -6 : 1 - dow;
+			d.setDate(d.getDate() + diff);
+			return fmtDate(d);
+		};
+		const dayFmt = (ds: string): string => {
+			const d = new Date(ds + 'T00:00:00');
+			return t('ui.calDayFmt', { m: String(d.getMonth() + 1), d: String(d.getDate()) });
+		};
+		const rangeTitle = (mon: string): string => dayFmt(mon) + ' – ' + dayFmt(addDays(mon, 6));
+		const MAX_TRACK = 5;           // 单行/单周最多轨道数（月、周视图共用；与「格子最多 5 个任务」一致，超出轨道的跨天任务 → 胶囊 → +N 面板）
 
-			// Header with navigation
-			const header = grid.createDiv({ cls: 'po-cal__header' });
-			header.createSpan({ cls: 'po-cal__title', text: y + '\u5E74' + (m + 1) + '\u6708' });
-			const nav = header.createDiv({ cls: 'po-cal__nav' });
-			const prevBtn = nav.createEl('button', { cls: 'po-cal__btn', text: '\u2190' });
-			const todayBtn = nav.createEl('button', { cls: 'po-cal__btn', text: '\u4ECA\u5929' });
-			const nextBtn = nav.createEl('button', { cls: 'po-cal__btn', text: '\u2192' });
+		/** 渲染单条任务行（详情面板 / 议程共用）：项目色点 + 名称 + 状态 + 逾期标签；多日任务可展开每日记录 */
+		const renderTaskRow = (container: HTMLElement, task: TaskItem): void => {
+			const row = container.createDiv({ cls: 'mq-po-cal__task' });
+			row.draggable = true;
+			row.dataset.taskId = task.id;
+			row.createSpan({ cls: 'mq-po-mini-dot', attr: { style: 'background:' + projColor(task) } });
+			const nameSpan = row.createSpan({ cls: 'mq-po-cal__task-name mq-po-clickable', text: task.content });
+			nameSpan.addEventListener('click', (ev) => {
+				ev.stopPropagation();
+				this.openTaskEditModal(task);
+			});
+			row.createSpan({ cls: 'mq-po-status ' + (task.status === '已完成' ? 'mq-po-done' : 'mq-po-todo'), text: UI_TEXT.statusLabel(task.status) });
+			if (isRangeTask(task)) {
+				row.createSpan({ cls: 'mq-po-cal__range', text: rangeLabel(task) });
+			}
+			if (isOverdue(task)) {
+				const due = new Date(task.dueDate + 'T00:00:00');
+				const days = Math.max(1, Math.round((today.getTime() - due.getTime()) / 86400000));
+				row.createSpan({ cls: 'mq-po-cal__over', text: t('ui.calOverdueDays', { n: String(days) }) });
+			}
+			// 多日任务：点击展开每日执行记录（含总进度）
+			if (isRangeTask(task)) {
+				const toggle = row.createSpan({ cls: 'mq-po-cal__expand', text: '▸' });
+				toggle.addEventListener('click', (ev) => {
+					ev.stopPropagation();
+					const wrap = row.nextElementSibling as HTMLElement | null;
+					if (wrap && wrap.hasClass('mq-po-cal__daily')) {
+						wrap.remove();
+						toggle.setText('▸');
+						return;
+					}
+					const daily = container.createDiv({ cls: 'mq-po-cal__daily' });
+					let d = task.startDate!;
+					let done = 0, total = 0;
+					while (d <= task.dueDate!) {
+						total++;
+						const node = task.dailyNodes && task.dailyNodes[d];
+						const mark = node && node.s === 'done' ? '✓' : node && node.s === 'skip' ? '╌' : '○';
+						if (node && node.s === 'done') done++;
+						const line = daily.createDiv({ cls: 'mq-po-cal__daily-row' });
+						line.createSpan({ cls: 'mq-po-cal__daily-date', text: dayFmt(d) });
+						const st = line.createSpan({ cls: 'mq-po-cal__daily-state ' + (node && node.s === 'done' ? 'is-done' : node && node.s === 'skip' ? 'is-skip' : 'is-todo'), text: mark });
+						st.addEventListener('click', (ev2) => {
+							ev2.stopPropagation();
+							const next = node && node.s === 'done' ? 'todo' : 'done';
+							void this.setDailyNode(task, d, next as 'done' | 'todo');
+						});
+						line.createSpan({ cls: 'mq-po-cal__daily-note', text: node?.n || '' });
+						d = addDays(d, 1);
+					}
+					daily.createDiv({ cls: 'mq-po-cal__daily-sum', text: t('ui.calProgress', { done: String(done), total: String(total) }) });
+					toggle.setText('▾');
+				});
+			}
+			row.addEventListener('dragstart', (ev) => ev.dataTransfer?.setData('text/plain', task.id));
+		};
+
+		/** 任务芯片（月 / 周格子内）：项目色左边条 + 三态配色；跨天任务带延续标记；重复任务绿色 ↻ */
+		const buildChip = (holder: HTMLElement, task: TaskItem): void => {
+			const isRange = isRangeTask(task);
+			const isRecur = task.type === '重复';
+			const cls = isOverdue(task) ? 'is-overdue' : task.status === '已完成' ? 'is-done' : 'is-normal';
+			const chip = holder.createDiv({ cls: 'mq-po-cal__chip ' + cls + (isRange ? ' is-range' : '') + (isRecur ? ' is-recur' : ''), text: (isRecur ? '↻ ' : '') + task.content });
+			chip.setAttr('style', '--chip-color:' + projColor(task));
+			if (isRange) chip.setAttr('title', rangeLabel(task));
+			chip.addEventListener('click', (ev) => {
+				ev.stopPropagation();
+				this.openTaskEditModal(task);
+			});
+			// 右键：重复任务也可快捷标记当日
+			chip.addEventListener('contextmenu', (ev) => {
+				ev.preventDefault();
+				ev.stopPropagation();
+				const menu = new Menu();
+				menu.addItem((item) => item.setTitle(t('ui.calCtxDelete')).setIcon('trash').onClick(() => void this.deleteTask(task)));
+				menu.addItem((item) => item.setTitle(t('ui.calCtxOpenSource')).setIcon('file-text').onClick(() => { if (task.sourceFile) void this.app.workspace.openLinkText(task.sourceFile, '', true); }));
+				menu.showAtMouseEvent(ev);
+			});
+			chip.draggable = true;
+			chip.dataset.taskId = task.id;
+		};
+
+		/** 日期格拖放改期（月 / 周通用） */
+		const bindDrop = (el: HTMLElement): void => {
+			el.addEventListener('dragover', (e) => {
+				if (el.dataset.date) { e.preventDefault(); el.addClass('mq-po-cal__day--drag-over'); }
+			});
+			el.addEventListener('dragleave', () => el.removeClass('mq-po-cal__day--drag-over'));
+			el.addEventListener('drop', (e) => {
+				e.preventDefault();
+				el.removeClass('mq-po-cal__day--drag-over');
+				const taskId = e.dataTransfer?.getData('text/plain');
+				if (!taskId) return;
+				const task = tasks.find((tt) => tt.id === taskId);
+				if (!task) return;
+				this.calSel = el.dataset.date || this.calSel;
+				void this.updateTaskDate(task, this.calSel);
+			});
+		};
+
+		/** 工具栏：视图切换 + 月份标题 + 导航 */
+		const renderToolbar = (): void => {
+			const bar = root.createDiv({ cls: 'mq-po-cal__bar' });
+			const seg = bar.createDiv({ cls: 'mq-po-cal__seg' });
+			const views = [
+				{ key: 'month' as const, label: t('ui.calViewMonth') },
+				{ key: 'week' as const, label: t('ui.calViewWeek') },
+			];
+			views.forEach((v) => {
+				const b = seg.createEl('button', { cls: 'mq-po-cal__seg-btn' + (this.calView === v.key ? ' is-active' : ''), text: v.label });
+				b.addEventListener('click', () => { this.calView = v.key; render(); });
+			});
+			const ttl = bar.createSpan({ cls: 'mq-po-cal__ttl' });
+			ttl.style.marginLeft = 'auto';   // 月份/日期标题推到右上角，紧贴切换月份的 ‹ 今天 › 左边
+			if (this.calView === 'month') {
+				const months = tArr('status.months');
+				ttl.setText(t('ui.calMonthFmt', { y: String(this.calYear), m: months[this.calMonth] ?? String(this.calMonth + 1) }));
+			} else {
+				const mon = mondayOf(this.calSel);
+				ttl.setText(rangeTitle(mon));
+			}
+			const nav = bar.createDiv({ cls: 'mq-po-cal__nav' });
+			const prevBtn = nav.createEl('button', { cls: 'mq-po-cal__btn', text: '‹' });
+			const todayBtn = nav.createEl('button', { cls: 'mq-po-cal__btn', text: UI_TEXT.today });
+			const nextBtn = nav.createEl('button', { cls: 'mq-po-cal__btn', text: '›' });
 
 			prevBtn.addEventListener('click', () => {
-				this.calMonth--;
-				if (this.calMonth < 0) { this.calMonth = 11; this.calYear--; }
-				renderMonth();
+				if (this.calView === 'month') {
+					this.calMonth--;
+					if (this.calMonth < 0) { this.calMonth = 11; this.calYear--; }
+				} else {
+					this.calSel = addDays(this.calSel, -7);
+				}
+				render();
 			});
 			nextBtn.addEventListener('click', () => {
-				this.calMonth++;
-				if (this.calMonth > 11) { this.calMonth = 0; this.calYear++; }
-				renderMonth();
+				if (this.calView === 'month') {
+					this.calMonth++;
+					if (this.calMonth > 11) { this.calMonth = 0; this.calYear++; }
+				} else {
+					this.calSel = addDays(this.calSel, 7);
+				}
+				render();
 			});
 			todayBtn.addEventListener('click', () => {
 				this.calYear = today.getFullYear();
 				this.calMonth = today.getMonth();
-				renderMonth();
-			});
-
-			// Weekdays
-			const weekdays = grid.createDiv({ cls: 'po-cal__weekdays' });
-			['\u4E00', '\u4E8C', '\u4E09', '\u56DB', '\u4E94', '\u516D', '\u65E5'].forEach((d) => weekdays.createSpan({ text: d }));
-
-			// Days
-			const days = grid.createDiv({ cls: 'po-cal__days' });
-			for (let i = 0; i < adj; i++) days.createDiv({ cls: 'po-cal__day' });
-			for (let d = 1; d <= dim; d++) {
-				const ds = y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
-				const isToday = ds === todayStr;
-				const dayTasks = tasks.filter((t) => {
-					const effectiveDate = t.remindDate || t.dueDate;
-					return effectiveDate === ds || t.startDate === ds;
-				});
-				const hasOverdue = dayTasks.some((t) => t.status !== '\u5DF2\u5B8C\u6210' && t.status !== '\u5DF2\u53D6\u6D88' && t.dueDate && new Date(t.dueDate) < today);
-				const cls = 'po-cal__day' + (isToday ? ' is-today' : '') +
-					(dayTasks.length ? (hasOverdue ? ' has-overdue has-tasks' : ' has-tasks') : '');
-				const dayEl = days.createDiv({ cls, attr: { 'data-date': ds } });
-				dayEl.createSpan({ cls: 'po-cal__day-num', text: String(d) });
-				// Show up to 3 task names inside the cell
-				const shown = dayTasks.slice(0, 3);
-				shown.forEach((t) => {
-					const taskEl = dayEl.createDiv({ cls: 'po-cal__day-task', text: t.content });
-					taskEl.style.color = t.status === '\u5DF2\u5B8C\u6210' ? 'var(--ad-text-dim)' : '';
-				});
-				if (dayTasks.length > 3) {
-					dayEl.createDiv({ cls: 'po-cal__day-more', text: '+' + (dayTasks.length - 3) });
-				}
-			}
-
-			// Preview area
-			const preview = grid.createDiv({ cls: 'po-cal__preview', text: '\u70B9\u51FB\u65E5\u671F\u67E5\u770B\u5F53\u5929\u4EFB\u52A1' });
-
-			// Click date to show tasks
-			grid.addEventListener('click', (e) => {
-				const dayEl = (e.target as HTMLElement).closest('.po-cal__day') as HTMLElement;
-				if (!dayEl || !dayEl.dataset.date) return;
-				const dt = dayEl.dataset.date;
-				const dayTasks = tasks.filter((t) => {
-					const effectiveDate = t.remindDate || t.dueDate;
-					return effectiveDate === dt || t.startDate === dt;
-				});
-				preview.empty();
-				if (dayTasks.length) {
-					dayTasks.forEach((t) => {
-						const row = preview.createDiv({ cls: 'po-cal__task' });
-						row.draggable = true;
-						row.dataset.taskId = t.id;
-						const projColor = colorMap[t.projectId] || '#3b82f6';
-						row.createSpan({ cls: 'po-mini-dot', attr: { style: 'background:' + projColor } });
-						const nameSpan = row.createSpan({ cls: 'po-cal__task-name po-clickable', text: t.content });
-						nameSpan.addEventListener('click', (ev) => {
-							ev.stopPropagation();
-							this.openTaskEditModal(t);
-						});
-						row.createSpan({ cls: 'po-status ' + (t.status === '\u5DF2\u5B8C\u6210' ? 'po-done' : 'po-todo'), text: t.status });
-
-						// Drag to move task to another date
-						row.addEventListener('dragstart', (ev) => {
-							ev.dataTransfer?.setData('text/plain', t.id);
-						});
-					});
-				} else {
-					preview.createSpan({ text: '\u8BE5\u65E5\u671F\u6682\u65E0\u4EFB\u52A1' });
-				}
-			});
-
-			// Drop on calendar days to move task
-			grid.addEventListener('dragover', (e) => {
-				const dayEl = (e.target as HTMLElement).closest('.po-cal__day') as HTMLElement;
-				if (dayEl?.dataset.date) { e.preventDefault(); dayEl.addClass('po-cal__day--drag-over'); }
-			});
-			grid.addEventListener('dragleave', (e) => {
-				const dayEl = (e.target as HTMLElement).closest('.po-cal__day') as HTMLElement;
-				if (dayEl) dayEl.removeClass('po-cal__day--drag-over');
-			});
-			grid.addEventListener('drop', (e) => {
-				e.preventDefault();
-				const dayEl = (e.target as HTMLElement).closest('.po-cal__day') as HTMLElement;
-				if (!dayEl?.dataset.date) return;
-				dayEl.removeClass('po-cal__day--drag-over');
-				const taskId = e.dataTransfer?.getData('text/plain');
-				if (!taskId) return;
-				const task = tasks.find((t) => t.id === taskId);
-				if (!task) return;
-				const newDate = dayEl.dataset.date;
-				void this.updateTaskDate(task, newDate);
+				this.calSel = todayStr;
+				render();
 			});
 		};
 
-		renderMonth();
+		/** 月视图：7 列弹性网格 + 溢出日 + 周末底色 + 今日圆徽 + 芯片 + 跨天横条 */
+		const renderMonth = (): void => {
+			calResizeObserver?.disconnect();
+			calResizeObserver = null;
+			const y = this.calYear, m = this.calMonth;
+			const dim = new Date(y, m + 1, 0).getDate();
+			const fd = new Date(y, m, 1).getDay();
+			const adj = fd === 0 ? 6 : fd - 1;
+			const cells = Math.ceil((adj + dim) / 7) * 7;
+			const prevDim = new Date(y, m, 0).getDate();
+
+			const wd = root.createDiv({ cls: 'mq-po-cal__weekdays' });
+			UI_TEXT.calWeekdays.forEach((d, i) => {
+				const s = wd.createSpan({ text: d });
+				if (i >= 5) s.addClass('is-we');
+			});
+
+			const days = root.createDiv({ cls: 'mq-po-cal__days' });
+			const monthStart = fmtDate(new Date(y, m, 1));
+			const monthEnd = fmtDate(new Date(y, m + 1, 0));
+			const rows = cells / 7;
+			const colW = 100 / 7;          // 每列宽度（百分比）
+			const TRACK_H = 17;            // 轨道高（px）
+			const DATE_OFF = 20;           // 日期号区高度（px）
+			const rangeTasks = tasks.filter(isRangeTask);
+
+			// 第一步：跨天任务拆成「按周分段」，归入对应行
+			type RowSeg = { c1: number; c2: number; task: TaskItem };
+			const rowSegs: RowSeg[][] = Array.from({ length: rows }, () => []);
+			rangeTasks.forEach((task) => {
+				const s = task.startDate! < monthStart ? monthStart : task.startDate!;
+				const e = task.dueDate! > monthEnd ? monthEnd : task.dueDate!;
+				if (s > e) return;
+				const sIdx = adj + (new Date(s + 'T00:00:00').getDate()) - 1;
+				const eIdx = adj + (new Date(e + 'T00:00:00').getDate()) - 1;
+				if (sIdx < 0 || eIdx >= cells) return;
+				const sRow = Math.floor(sIdx / 7), eRow = Math.floor(eIdx / 7);
+				const sCol = sIdx % 7, eCol = eIdx % 7;
+				for (let r = sRow; r <= eRow; r++) {
+					rowSegs[r]?.push({
+						c1: r === sRow ? sCol : 0,
+						c2: r === eRow ? eCol : 6,
+						task,
+					});
+				}
+			});
+
+			// 第二步：全局轨道分配（跨行一致）——每个跨天任务整月只分配一次轨道号，各行的段都画在同一条轨道上，
+			// 保证「第一行排第二，第二行也排第二」；最多 MAX_TRACK 条，放不下的进全局溢出 → 以胶囊锚定显示。
+			const clampedRanges = rangeTasks
+				.map((task) => ({
+					task,
+					s: task.startDate! < monthStart ? monthStart : task.startDate!,
+					e: task.dueDate! > monthEnd ? monthEnd : task.dueDate!,
+				}))
+				.filter(({ s, e }) => s <= e);
+			clampedRanges.sort((a, b) => a.task.startDate!.localeCompare(b.task.startDate!) || a.task.id.localeCompare(b.task.id));
+			const gTracks: string[] = [];               // 每轨道最后占用结束日（YYYY-MM-DD 字典序可比）
+			const gTrackOf = new Map<string, number>();
+			clampedRanges.forEach(({ task, s, e }) => {
+				let ti = gTracks.findIndex((end) => s > end);
+				if (ti === -1) {
+					if (gTracks.length >= MAX_TRACK) return;
+					ti = gTracks.length;
+					gTracks.push('');
+				}
+				gTracks[ti] = e;
+				gTrackOf.set(task.id, ti);
+			});
+			const rowPlaced: { seg: RowSeg; track: number }[][] = Array.from({ length: rows }, () => []);
+			const rowOverflowTasks: TaskItem[][] = Array.from({ length: rows }, () => []);
+			rowSegs.forEach((segs, r) => {
+				segs.forEach((seg) => {
+					const t = gTrackOf.get(seg.task.id);
+					if (t === undefined) { rowOverflowTasks[r]?.push(seg.task); return; }
+					rowPlaced[r]?.push({ seg, track: t });
+				});
+			});
+
+			// 横条片段改为在单元格循环内按本格实际经过数渲染（见下方第三步），不再预统计。
+
+			// 第三步：渲染日期格 + 横条覆盖层。
+			// 横条：跨列连续（每行一个定位锚点，见第四步）→ 保持原横条样式、不浮动；
+			// 胶囊：填进横条未占用的轨道槽位，空槽再溢出到横条带下方；横条 + 胶囊合计最多 6 个。
+			const SLOT_MAX = 5;             // 每格最多显示任务数（横条 + 胶囊合计）
+			// 当日被隐藏的真实任务（当日口径）：key = 日期，value = 覆盖该日的溢出任务 + 该日超预算的重复/单日胶囊。
+			// 点 +N 面板只列出「这一天」的任务，数字与徽标完全一致。
+			const dayHidden = new Map<string, TaskItem[]>();
+			let overflowKey: string | null = null;    // 当前展开的「当日溢出面板」定位（r|ds），点同一处收起
+			for (let i = 0; i < cells; i++) {
+				let ds = '';
+				let isOut = false;
+				if (i < adj) {
+					ds = fmtDate(new Date(y, m - 1, prevDim - adj + 1 + i));
+					isOut = true;
+				} else if (i < adj + dim) {
+					ds = fmtDate(new Date(y, m, i - adj + 1));
+				} else {
+					ds = fmtDate(new Date(y, m + 1, i - adj - dim + 1));
+					isOut = true;
+				}
+				const dObj = new Date(ds + 'T00:00:00');
+				const isToday = ds === todayStr;
+				const isSel = ds === this.calSel;
+				const isWe = dObj.getDay() === 6 || dObj.getDay() === 0;
+				const dayTasks = tasksOn(ds);
+
+				let cls = 'mq-po-cal__day';
+				if (isOut) cls += ' is-out';
+				if (isWe) cls += ' is-weekend';
+				if (isToday) cls += ' is-today';
+				if (isSel) cls += ' is-sel';
+
+				const dayEl = days.createDiv({ cls, attr: { 'data-date': ds } });
+				dayEl.createSpan({ cls: 'mq-po-cal__day-num' + (isToday ? ' is-today' : ''), text: String(dObj.getDate()) });
+
+				const r = Math.floor(i / 7);
+				const c = i % 7;
+				// 本格被横条占用的轨道号（全局轨道，横条连续不浮动）
+				const occupied = new Set((rowPlaced[r] || []).filter(({ seg }) => c >= seg.c1 && c <= seg.c2).map(({ track }) => track));
+
+				// 胶囊列表（显示优先级：重复任务 > 单日任务）；预算 = 5 − 本格横条数。
+				// 溢出任务（没拿到全局轨道的跨天任务）不再锚定显示胶囊，统一收进 +N。
+				const singleHere = dayTasks.filter((task) => !isRangeTask(task));
+				const recurHere = singleHere.filter((task) => task.type === '重复');
+				const singleOnly = singleHere.filter((task) => task.type !== '重复');
+				const chipList = [...recurHere, ...singleOnly];
+				const chipBudget = Math.max(0, SLOT_MAX - occupied.size);
+				const chipsToShow = chipList.slice(0, chipBudget);
+				const chipHidden = Math.max(0, chipList.length - chipBudget);
+				// 被本行溢出任务覆盖但未显示的格子：计入 +N（点开可见真实任务）
+				const overflowCovered = (rowOverflowTasks[r] || []).filter((task) =>
+					!!task.startDate && !!task.dueDate && task.startDate <= ds && ds <= task.dueDate);
+				const hidden = chipHidden + overflowCovered.length;
+				// 当日口径：徽标数字 = 面板列出的任务数（溢出覆盖 + 超预算胶囊），点 +N 只显示这一天
+				if (hidden > 0) dayHidden.set(ds, [...overflowCovered, ...chipList.slice(chipBudget)]);
+
+				// 轨道交错（grid 与覆盖层横条严格对齐）：空轨道用胶囊填上（从 track 0 往上），
+				// 横条轨道留空槽（被覆盖层覆盖），剩余胶囊堆在 1fr 区域；这样重复/单日任务
+				// 会优先填进横条区上方的空槽，而不是全堆在横条下面。
+				const body = dayEl.createDiv({ cls: 'mq-po-cal__day-body' });
+				const maxBarTrack = occupied.size > 0 ? Math.max(...occupied) : -1;
+				const trackCount = maxBarTrack >= 0 ? maxBarTrack + 1 : 0;
+				body.style.gridTemplateRows = trackCount > 0
+					? `repeat(${trackCount}, 17px) auto`
+					: 'auto';
+				let ci = 0;
+				const placeNext = (): boolean => {
+					if (ci < chipsToShow.length) {
+						const t = chipsToShow[ci++];
+						if (t) { buildChip(body, t); return true; }
+					}
+					return false;
+				};
+				for (let t = 0; t < trackCount; t++) {
+					if (occupied.has(t)) {
+						body.createDiv({ cls: 'mq-po-cal__slot' });   // 横条覆盖此槽
+					} else if (!placeNext()) {
+						body.createDiv({ cls: 'mq-po-cal__slot' });
+					}
+				}
+				while (ci < chipsToShow.length) {
+					const t = chipsToShow[ci++];
+					if (t) buildChip(body, t);
+				}
+
+				if (hidden > 0) {
+					dayEl.style.paddingBottom = '18px';   // 给 +N (15px) + 底部 2px + 1px 间隙留出独立空间
+					const more = dayEl.createDiv({ cls: 'mq-po-cal__day-more', text: '+' + hidden });
+					more.addEventListener('click', (ev) => { ev.stopPropagation(); openRowOverflow(r, ds); });
+				}
+
+				// 仅预留日期号区；横条带由 slot 撑开，空轨道被胶囊/空槽填满 → 不再有中段空位
+				dayEl.style.paddingTop = DATE_OFF + 'px';
+
+				dayEl.addEventListener('click', () => {
+					if (isOut) {
+						const d = new Date(ds + 'T00:00:00');
+						this.calYear = d.getFullYear();
+						this.calMonth = d.getMonth();
+					}
+					this.calSel = ds;
+					render();
+				});
+				dayEl.addEventListener('dblclick', (ev) => {
+					ev.stopPropagation();
+					this.calSel = ds;
+					// 默认带当前侧栏项目，避免保存时找不到项目文件夹
+					void this.openTaskModalWithParent('', this.selectedProject ?? '');
+				});
+				bindDrop(dayEl);
+			}
+
+			// 第四步：读取每行真实顶部 offsetTop，再渲染横条覆盖层（绝对定位铺满，跨列连续）。
+			// 这样做既不占 grid 行（避免把日期格挤到下方产生「两个月视图」），又能在行高不均时与槽位严格对齐。
+			const rowTops: number[] = [];
+			for (let r = 0; r < rows; r++) {
+				const firstCell = days.children[r * 7] as HTMLElement | undefined;
+				rowTops.push(firstCell ? firstCell.offsetTop : 0);
+			}
+			/** 当日溢出面板：点 +N 从该行下方铺开全宽面板，只列出覆盖「这一天」的被隐藏任务（数字与徽标一致） */
+			function openRowOverflow(r: number, ds: string): void {
+				const key = r + '|' + ds;
+				const existing = days.querySelector('.mq-po-cal__rowover') as HTMLElement | null;
+				if (existing) {
+					existing.remove();
+					if (overflowKey === key) { overflowKey = null; return; }
+				}
+				overflowKey = key;
+				const list = dayHidden.get(ds) || [];
+				if (!list.length) { overflowKey = null; return; }
+				const panel = days.createDiv({ cls: 'mq-po-cal__rowover' });
+				panel.style.top = ((rowTops[r + 1] ?? days.offsetHeight) + 2) + 'px';
+				panel.createDiv({ cls: 'mq-po-cal__rowover-hd', text: t('ui.calOverflowRow') + '（' + String(list.length) + '）' });
+				list.forEach((task) => renderTaskRow(panel, task));
+				panel.addEventListener('click', () => { overflowKey = null; panel.remove(); });
+			}
+			const barLayer = days.createDiv({ cls: 'mq-po-cal__mbars' });
+			const barRefs: { el: HTMLElement; r: number; topPx: number }[] = [];
+			rowPlaced.forEach((placed, r) => {
+				if (!placed.length) return;
+				placed.forEach(({ seg, track }) => {
+					const topPx = DATE_OFF + track * TRACK_H;
+					const segCount = seg.c2 - seg.c1 + 1;
+					const bar = barLayer.createDiv({ cls: 'mq-po-cal__mbar' + (seg.task.status === '已完成' ? ' is-done' : ''), text: '' });
+					bar.setAttr('style', '--chip-color:' + projColor(seg.task) + '; top:' + ((rowTops[r] ?? 0) + topPx) + 'px; left:calc(' + (seg.c1 * colW).toFixed(4) + '% + 4px); width:calc(' + (segCount * colW).toFixed(4) + '% - 8px);');
+					// 按日分段：当天 done → 深色实心、skip → 灰色虚线、无 → 浅色（每段都贴左显示任务名）
+					// 每段 hover 显示该日状态 + 备注（不再整条显示所有日期）
+					for (let c = seg.c1; c <= seg.c2; c++) {
+						const gi = r * 7 + c;
+						const segDate = fmtDate(new Date(y, m, gi - adj + 1));
+						const node = seg.task.dailyNodes && seg.task.dailyNodes[segDate];
+						let st = 'is-empty';
+						if (node && node.s === 'done') st = 'is-done';
+						else if (node && node.s === 'skip') st = 'is-skip';
+						const piece = bar.createDiv({ cls: 'mq-po-cal__mbar-seg ' + st, text: c === seg.c1 ? seg.task.content : '' });
+						piece.setAttr('title', dayStateLabel(seg.task, segDate));
+						piece.style.width = 'calc(' + (100 / segCount).toFixed(4) + '% - 1px)';
+						// 右键：删除任务 / 打开源文件
+						piece.addEventListener('contextmenu', (ev) => {
+							ev.preventDefault();
+							ev.stopPropagation();
+							const menu = new Menu();
+							menu.addItem((item) => item.setTitle(t('ui.calCtxDelete')).setIcon('trash').onClick(() => void this.deleteTask(seg.task)));
+							menu.addItem((item) => item.setTitle(t('ui.calCtxOpenSource')).setIcon('file-text').onClick(() => { if (seg.task.sourceFile) void this.app.workspace.openLinkText(seg.task.sourceFile, '', true); }));
+							menu.showAtMouseEvent(ev);
+						});
+					}
+					bar.setAttr('title', rangeLabel(seg.task));
+					bar.addEventListener('click', (ev) => {
+						ev.stopPropagation();
+						this.openTaskEditModal(seg.task);
+					});
+					bar.draggable = false;
+					bar.dataset.taskId = seg.task.id;
+					barRefs.push({ el: bar, r, topPx });
+				});
+			});
+			// 布局变化后重测行顶：解决「打开源文件后返回日历、窗格调整」时横条错位
+			// （offsetTop 在布局未稳定时测出错误值且不会自动纠正，这里用 rAF 稳定后重测 + ResizeObserver 监听尺寸变化）
+			const repositionBars = (): void => {
+				const tops: number[] = [];
+				for (let rr = 0; rr < rows; rr++) {
+					const fc = days.children[rr * 7] as HTMLElement | undefined;
+					tops.push(fc ? fc.offsetTop : 0);
+				}
+				barRefs.forEach(({ el, r, topPx }) => {
+					el.style.top = ((tops[r] ?? 0) + topPx) + 'px';
+				});
+			};
+			requestAnimationFrame(() => repositionBars());
+			calResizeObserver = new ResizeObserver(() => repositionBars());
+			calResizeObserver.observe(days);
+		};
+
+		/** 周视图：7 列日柱，今日列高亮；跨天任务渲染为跨列横条 */
+		const renderWeek = (): void => {
+			const mon = mondayOf(this.calSel);
+			const weekEnd = addDays(mon, 6);
+			const wd = root.createDiv({ cls: 'mq-po-cal__weekdays' });
+			UI_TEXT.calWeekdays.forEach((d, i) => {
+				const s = wd.createSpan({ text: d });
+				if (i >= 5) s.addClass('is-we');
+			});
+			const cols = root.createDiv({ cls: 'mq-po-cal__week' });
+			cols.style.gridTemplateRows = 'repeat(' + MAX_TRACK + ', auto) 1fr';
+
+			// 跨天任务 → 跨列横条（只渲染与本周相交的部分；贪心分配轨道避免重叠，最多 MAX_TRACK 条）
+			type WSeg = { si: number; ei: number; task: TaskItem };
+			const wSegs: WSeg[] = [];
+			tasks.filter(isRangeTask).forEach((task) => {
+				const s = task.startDate! < mon ? mon : task.startDate!;
+				const e = task.dueDate! > weekEnd ? weekEnd : task.dueDate!;
+				if (s > e) return;
+				wSegs.push({ si: dayIndexOf(mon, s), ei: dayIndexOf(mon, e), task });
+			});
+			wSegs.sort((a, b) => (a.task.startDate || '').localeCompare(b.task.startDate || '') || a.task.id.localeCompare(b.task.id) || a.si - b.si);
+			const wTracks: number[] = [];
+			const wPlaced: { seg: WSeg; track: number }[] = [];
+			wSegs.forEach((seg) => {
+				let ti = wTracks.findIndex((end) => seg.si > end);
+				if (ti === -1) {
+					if (wTracks.length >= MAX_TRACK) return; // 罕见超限：跳过（详情面板仍可见）
+					ti = wTracks.length;
+					wTracks.push(-1);
+				}
+				wTracks[ti] = seg.ei;
+				wPlaced.push({ seg, track: ti });
+			});
+			wPlaced.forEach(({ seg, track }) => {
+				const { si, ei, task } = seg;
+				const segCount = ei - si + 1;
+				const bar = cols.createDiv({ cls: 'mq-po-cal__wbar' + (task.status === '已完成' ? ' is-done' : '') , text: '' });
+				bar.setAttr('style', '--chip-color:' + projColor(task));
+				bar.style.gridRow = (track + 1) + ' / ' + (track + 2);
+				bar.style.gridColumn = (si + 1) + ' / ' + (ei + 2);
+				// 按日分段：当天 done → 深色实心、skip → 灰色虚线、无 → 浅色（仅首段显示任务名）
+				// 每段 hover 显示该日状态 + 备注（不再整条显示所有日期）
+				for (let c = si; c <= ei; c++) {
+					const ds = addDays(mon, c);
+					const node = task.dailyNodes && task.dailyNodes[ds];
+					let st = 'is-empty';
+					if (node && node.s === 'done') st = 'is-done';
+					else if (node && node.s === 'skip') st = 'is-skip';
+					const piece = bar.createDiv({ cls: 'mq-po-cal__mbar-seg ' + st, text: c === si ? task.content : '' });
+					piece.setAttr('title', dayStateLabel(task, ds));
+					piece.style.width = 'calc(' + (100 / segCount).toFixed(4) + '% - 1px)';
+					// 右键：删除任务 / 打开源文件
+					piece.addEventListener('contextmenu', (ev) => {
+						ev.preventDefault();
+						ev.stopPropagation();
+						const menu = new Menu();
+						menu.addItem((item) => item.setTitle(t('ui.calCtxDelete')).setIcon('trash').onClick(() => void this.deleteTask(task)));
+						menu.addItem((item) => item.setTitle(t('ui.calCtxOpenSource')).setIcon('file-text').onClick(() => { if (task.sourceFile) void this.app.workspace.openLinkText(task.sourceFile, '', true); }));
+						menu.showAtMouseEvent(ev);
+					});
+				}
+				bar.setAttr('title', rangeLabel(task));
+				bar.addEventListener('click', (ev) => {
+					ev.stopPropagation();
+					this.openTaskEditModal(task);
+				});
+				bar.draggable = false;
+				bar.dataset.taskId = task.id;
+			});
+
+			for (let i = 0; i < 7; i++) {
+				const ds = addDays(mon, i);
+				const dObj = new Date(ds + 'T00:00:00');
+				const isToday = ds === todayStr;
+				const isSel = ds === this.calSel;
+				const dayTasks = tasksOn(ds);
+				const col = cols.createDiv({ cls: 'mq-po-cal__wcol' + (isToday ? ' is-today' : '') + (isSel ? ' is-sel' : ''), attr: { 'data-date': ds } });
+				col.style.gridRow = String(MAX_TRACK + 1);
+				const hd = col.createDiv({ cls: 'mq-po-cal__wcol-hd' });
+				hd.createSpan({ cls: 'mq-po-cal__wcol-day', text: String(dObj.getDate()) });
+				hd.createSpan({ cls: 'mq-po-cal__wcol-name', text: UI_TEXT.calWeekdays[i] });
+				// 日柱内只放锚定在当天的普通任务（跨天任务已在横条中，不再重复）
+				dayTasks.filter((task) => !isRangeTask(task)).forEach((task) => buildChip(col, task));
+				col.addEventListener('click', () => { this.calSel = ds; render(); });
+				col.addEventListener('dblclick', (ev) => {
+					ev.stopPropagation();
+					this.calSel = ds;
+					void this.openTaskModalWithParent('', this.selectedProject ?? '');
+				});
+				bindDrop(col);
+			}
+		};
+
+		/** 常驻详情面板：默认选中今天，点击日期刷新 */
+		const renderDetail = (): void => {
+			const dt = this.calSel;
+			// 详情面板用「活跃日期」：跨天任务的中间日也能看到对应任务
+			const dayTasks = tasksActiveOn(dt);
+			const dObj = new Date(dt + 'T00:00:00');
+			const det = root.createDiv({ cls: 'mq-po-cal__det' });
+			const hd = det.createDiv({ cls: 'mq-po-cal__det-hd' });
+			hd.createSpan({ cls: 'mq-po-cal__det-ttl', text: dayFmt(dt) + ' · ' + (dt === todayStr ? t('ui.calAgendaToday') : UI_TEXT.calWeekdays[(dObj.getDay() + 6) % 7]) + ' · ' + t('ui.calTaskCount', { n: String(dayTasks.length) }) });
+			if (!dayTasks.length) det.createSpan({ cls: 'mq-po-cal__det-empty', text: t('ui.noTaskOnDay') });
+			dayTasks.forEach((task) => renderTaskRow(det, task));
+			const newBtn = det.createDiv({ cls: 'mq-po-cal__new', text: t('ui.calNewTask') });
+			newBtn.addEventListener('click', () => { void this.openTaskModalWithParent('', this.selectedProject ?? ''); });
+		};
+
+		/** 组装 + 键盘导航（← / → 切月或周，T 回今天） */
+		const render = (): void => {
+			root.empty();
+			renderToolbar();
+			if (this.calView === 'month') renderMonth();
+			else renderWeek();
+			renderDetail();
+		};
+
+		root.addEventListener('keydown', (e) => {
+			if (e.key === 'ArrowLeft') {
+				e.preventDefault();
+				if (this.calView === 'month') {
+					this.calMonth--; if (this.calMonth < 0) { this.calMonth = 11; this.calYear--; }
+				} else { this.calSel = addDays(this.calSel, -7); }
+				render();
+			} else if (e.key === 'ArrowRight') {
+				e.preventDefault();
+				if (this.calView === 'month') {
+					this.calMonth++; if (this.calMonth > 11) { this.calMonth = 0; this.calYear++; }
+				} else { this.calSel = addDays(this.calSel, 7); }
+				render();
+			} else if (e.key === 't' || e.key === 'T') {
+				e.preventDefault();
+				this.calYear = today.getFullYear();
+				this.calMonth = today.getMonth();
+				this.calSel = todayStr;
+				render();
+			}
+		});
+
+		render();
 	}
 
 
@@ -1545,7 +2161,8 @@ export class ProjectBoard {
 
 	/* ---- Kanban Panel ---- */
 	private renderKanbanPanel(panel: HTMLElement, tasks: TaskItem[], projects: ProjectInfo[]): void {
-		const board = panel.createDiv({ cls: 'po-kanban' });
+		const board = panel.createDiv({ cls: 'mq-po-kanban' });
+		board.style.setProperty('--mq-po-kanban-col-width', this.projectKanbanColumnWidth() + 'px');
 		const cols = [
 			{ key: '\u5F85\u529E', label: '\u5F85\u529E' },
 			{ key: '\u8FDB\u884C\u4E2D', label: '\u8FDB\u884C\u4E2D' },
@@ -1559,24 +2176,25 @@ export class ProjectBoard {
 		projects.forEach((p) => { colorMap[p.name] = p.color; });
 
 		cols.forEach((col) => {
-			const colEl = board.createDiv({ cls: 'po-kanban__col' });
+			const colEl = board.createDiv({ cls: 'mq-po-kanban__col' });
 			colEl.dataset.status = col.key;
-			const hd = colEl.createDiv({ cls: 'po-kanban__hd' });
+			this.setupProjectKanbanResize(board, colEl.createDiv({ cls: 'mq-po-kanban__resize', attr: { 'aria-label': '调整看板列宽度' } }));
+			const hd = colEl.createDiv({ cls: 'mq-po-kanban__hd' });
 			hd.createSpan({ text: col.label });
 			const ct = tasks.filter((t) => t.status === col.key);
-			hd.createSpan({ cls: 'po-kanban__count', text: String(ct.length) });
+			hd.createSpan({ cls: 'mq-po-kanban__count', text: String(ct.length) });
 
 			ct.forEach((t) => {
-				const card = colEl.createDiv({ cls: 'po-kanban__card' });
+				const card = colEl.createDiv({ cls: 'mq-po-kanban__card' });
 				card.draggable = true;
 				card.dataset.taskId = t.id;
 				card.createDiv({ text: t.content });
-				const meta = card.createDiv({ cls: 'po-kanban__meta' });
+				const meta = card.createDiv({ cls: 'mq-po-kanban__meta' });
 				const dateRange = [t.startDate, t.dueDate].filter(Boolean).join(' \u2192 ');
 				if (dateRange) meta.createSpan({ text: dateRange });
 				const proj = meta.createSpan();
 				const projColor = colorMap[t.projectId] || '#3b82f6';
-				proj.createSpan({ cls: 'po-mini-dot', attr: { style: 'background:' + projColor } });
+				proj.createSpan({ cls: 'mq-po-mini-dot', attr: { style: 'background:' + projColor } });
 				proj.appendText(t.projectId);
 
 				// Click to edit
@@ -1613,24 +2231,24 @@ export class ProjectBoard {
 				// Drag start
 				card.addEventListener('dragstart', (e) => {
 					e.dataTransfer?.setData('text/plain', t.id);
-					card.addClass('po-kanban__card--dragging');
+					card.addClass('mq-po-kanban__card--dragging');
 				});
 				card.addEventListener('dragend', () => {
-					card.removeClass('po-kanban__card--dragging');
+					card.removeClass('mq-po-kanban__card--dragging');
 				});
 			});
 
 			// Drop zone
 			colEl.addEventListener('dragover', (e) => {
 				e.preventDefault();
-				colEl.addClass('po-kanban__col--drag-over');
+				colEl.addClass('mq-po-kanban__col--drag-over');
 			});
 			colEl.addEventListener('dragleave', () => {
-				colEl.removeClass('po-kanban__col--drag-over');
+				colEl.removeClass('mq-po-kanban__col--drag-over');
 			});
 			colEl.addEventListener('drop', (e) => {
 				e.preventDefault();
-				colEl.removeClass('po-kanban__col--drag-over');
+				colEl.removeClass('mq-po-kanban__col--drag-over');
 				const taskId = e.dataTransfer?.getData('text/plain');
 				if (!taskId) return;
 				const task = tasks.find((t) => t.id === taskId);

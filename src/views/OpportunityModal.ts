@@ -36,7 +36,7 @@ class FileSuggest extends AbstractInputSuggest<TFile> {
 
 	renderSuggestion(file: TFile, el: HTMLElement): void {
 		el.createSpan({ text: file.basename });
-		el.createDiv({ cls: 'ad-suggest-note', text: file.path });
+		el.createDiv({ cls: 'mq-ad-suggest-note', text: file.path });
 	}
 
 	selectSuggestion(file: TFile, _evt: MouseEvent | KeyboardEvent): void {
@@ -53,6 +53,8 @@ interface OpportunityModalOptions {
 	boardFile?: string;
 	onSave: (data: BoardFormData) => void;
 	editData?: BoardItem;
+	/** 编辑现有灵感时，可直接打开带默认标题的任务新建弹窗。 */
+	onConvertToTask?: () => void;
 }
 
 export class OpportunityModal extends Modal {
@@ -79,20 +81,20 @@ export class OpportunityModal extends Modal {
 		const { contentEl } = this;
 		const ed = this.opts.editData;
 		const title = this.opts.title;
-		contentEl.addClass('ad-task-modal');
-		contentEl.createEl('h3', { cls: 'ad-modal-title', text: this.isEdit ? ('编辑' + title) : ('新建' + title) });
+		contentEl.addClass('mq-ad-task-modal');
+		contentEl.createEl('h3', { cls: 'mq-ad-modal-title', text: this.isEdit ? ('编辑' + title) : ('新建' + title) });
 
 		// 名称
-		contentEl.createEl('label', { cls: 'ad-modal-label', text: title + '名称 *' });
+		contentEl.createEl('label', { cls: 'mq-ad-modal-label', text: title + '名称 *' });
 		const nameInput = contentEl.createEl('input', {
-			cls: 'ad-modal-input', attr: { type: 'text', placeholder: '输入' + title + '名称' },
+			cls: 'mq-ad-modal-input', attr: { type: 'text', placeholder: '输入' + title + '名称' },
 		});
 		if (ed) nameInput.value = ed.title;
 		nameInput.focus?.();
 
 		// 状态
-		contentEl.createEl('label', { cls: 'ad-modal-label', text: '状态' });
-		const statusSelect = contentEl.createEl('select', { cls: 'ad-modal-input' });
+		contentEl.createEl('label', { cls: 'mq-ad-modal-label', text: '状态' });
+		const statusSelect = contentEl.createEl('select', { cls: 'mq-ad-modal-input' });
 		for (const s of this.opts.stages) statusSelect.createEl('option', { value: s.label, text: s.label });
 		statusSelect.value = this.selectedStatus;
 		statusSelect.addEventListener('change', () => {
@@ -100,16 +102,16 @@ export class OpportunityModal extends Modal {
 		});
 
 		// 标签
-		contentEl.createEl('label', { cls: 'ad-modal-label', text: '标签（逗号分隔）' });
+		contentEl.createEl('label', { cls: 'mq-ad-modal-label', text: '标签（逗号分隔）' });
 		const tagInput = contentEl.createEl('input', {
-			cls: 'ad-modal-input', attr: { type: 'text', placeholder: '如：增长, 渠道' },
+			cls: 'mq-ad-modal-input', attr: { type: 'text', placeholder: '如：增长, 渠道' },
 		});
 		if (ed) tagInput.value = (ed.tags || []).join(', ');
 
 		// 背景 / 备注（机会级，始终显示）
-		contentEl.createEl('label', { cls: 'ad-modal-label', text: '背景 / 备注' });
+		contentEl.createEl('label', { cls: 'mq-ad-modal-label', text: '背景 / 备注' });
 		const notesArea = contentEl.createEl('textarea', {
-			cls: 'ad-modal-input', attr: { rows: '3', placeholder: '这个想法是怎么来的、要解决什么…' },
+			cls: 'mq-ad-modal-input', attr: { rows: '3', placeholder: '这个想法是怎么来的、要解决什么…' },
 		});
 		if (ed) notesArea.value = ed.notes;
 
@@ -117,25 +119,25 @@ export class OpportunityModal extends Modal {
 		const stageInputs: Array<{ label: string; area: HTMLTextAreaElement }> = [];
 		for (const s of this.opts.stages) {
 			if (!s.hasInput) continue;
-			contentEl.createEl('label', { cls: 'ad-modal-label', text: s.label });
+			contentEl.createEl('label', { cls: 'mq-ad-modal-label', text: s.label });
 			const area = contentEl.createEl('textarea', {
-				cls: 'ad-modal-input', attr: { rows: '2', placeholder: '填写该阶段相关记录…' },
+				cls: 'mq-ad-modal-input', attr: { rows: '2', placeholder: '填写该阶段相关记录…' },
 			});
 			area.value = this.stageNotes[s.label] || '';
 			stageInputs.push({ label: s.label, area });
 		}
 
 		// 链接
-		contentEl.createEl('label', { cls: 'ad-modal-label', text: '链接（展开内容用）' });
+		contentEl.createEl('label', { cls: 'mq-ad-modal-label', text: '链接（展开内容用）' });
 		const linkInput = contentEl.createEl('input', {
-			cls: 'ad-modal-input', attr: { type: 'text', placeholder: '[[xxx-详情]] 或留空（输入 [ 自动搜索笔记）' },
+			cls: 'mq-ad-modal-input', attr: { type: 'text', placeholder: '[[xxx-详情]] 或留空（输入 [ 自动搜索笔记）' },
 		});
 		if (ed) linkInput.value = ed.link;
 		// 绑定 Obsidian 原生文件补全：输入 `[` 时弹库内笔记列表
 		this.linkSuggest?.close();
 		this.linkSuggest = new FileSuggest(this.app, linkInput);
 		const linkBtn = contentEl.createEl('button', {
-			cls: 'ad-modal-btn ad-modal-btn--ghost', text: '生成并打开链接笔记',
+			cls: 'mq-ad-modal-btn mq-ad-modal-btn--ghost', text: '生成并打开链接笔记',
 		});
 		linkBtn.addEventListener('click', () => {
 			void (async () => {
@@ -150,17 +152,24 @@ export class OpportunityModal extends Modal {
 		});
 
 		// 星标（重要 / 待跟进）：独立标记，与阶段终态解耦，任何时候都可勾选
-		const starRow = contentEl.createDiv({ cls: 'ad-modal-check' });
-		const starCheck = starRow.createEl('input', { cls: 'ad-modal-checkbox', attr: { type: 'checkbox' } });
-		starRow.createEl('label', { cls: 'ad-modal-check-label', text: '星标（重要 / 待跟进）' });
+		const starRow = contentEl.createDiv({ cls: 'mq-ad-modal-check' });
+		const starCheck = starRow.createEl('input', { cls: 'mq-ad-modal-checkbox', attr: { type: 'checkbox' } });
+		starRow.createEl('label', { cls: 'mq-ad-modal-check-label', text: '星标（重要 / 待跟进）' });
 		starCheck.checked = this.starred;
 		starCheck.addEventListener('change', () => { this.starred = starCheck.checked; });
 
 		// 按钮
-		const btns = contentEl.createDiv({ cls: 'ad-modal-btns' });
-		btns.createEl('button', { cls: 'ad-modal-btn', text: UI_TEXT.cancel })
+		const btns = contentEl.createDiv({ cls: 'mq-ad-modal-btns' });
+		if (ed && this.opts.onConvertToTask) {
+			btns.createEl('button', { cls: 'mq-ad-modal-btn mq-ad-modal-btn--ghost mq-op-modal__convert', text: '转为任务' })
+				.addEventListener('click', () => {
+					this.close();
+					this.opts.onConvertToTask?.();
+				});
+		}
+		btns.createEl('button', { cls: 'mq-ad-modal-btn', text: UI_TEXT.cancel })
 			.addEventListener('click', () => this.close());
-		btns.createEl('button', { cls: 'ad-modal-btn ad-modal-btn--primary', text: this.isEdit ? UI_TEXT.save : ('创建' + title) })
+		btns.createEl('button', { cls: 'mq-ad-modal-btn mq-ad-modal-btn--primary', text: this.isEdit ? UI_TEXT.save : ('创建' + title) })
 			.addEventListener('click', () => {
 				const t = String(nameInput.value || '').trim();
 				if (!t) { nameInput.focus(); return; }

@@ -65,6 +65,21 @@ export interface CountdownCardConfig extends CountdownSettings {
 	rows?: number;
 }
 
+/** 首页番茄计时配置；计时记录由当前插件单独保存。 */
+export interface PomodoroSettings {
+	pomodoroWorkMinutes: number;
+	pomodoroShortBreakMinutes: number;
+	pomodoroLongBreakMinutes: number;
+	pomodoroLongBreakInterval: number;
+	pomodoroDailyGoal: number;
+	pomodoroAutoStartBreak: boolean;
+	pomodoroSoundEnabled: boolean;
+}
+
+export interface PomodoroRecord { timestamp: string; activity: string; duration: number; interruptions?: number; breakMinutes?: number; breakCompleted?: boolean; }
+export interface PomodoroSession { date: string; completed: number; records: PomodoroRecord[]; }
+export interface PomodoroTag { name: string; pinned: boolean; }
+
 /** 通用看板的一个阶段（看板列）— 结构定义见 src/data/opportunityParser.ts 的 BoardStage */
 export type { BoardStage } from './data/opportunityParser';
 
@@ -74,7 +89,7 @@ export interface DashboardSettings {
 	diary: DiarySettings;
 	knowledgeWorkbench: KnowledgeWorkbenchSettings;
 	todoSourceFolder: string;
-	/** 在首页任务卡片中保留当天/本周完成的任务，便于回顾。 */
+	/** 在 TODO 卡片中保留当天完成的任务，便于回顾。 */
 	todoShowCompleted: boolean;
 	/** 任务编辑弹窗是否显示项目归属、类型与父任务。 */
 	taskDetailMode: 'detail' | 'compact';
@@ -89,11 +104,19 @@ export interface DashboardSettings {
 	npdpProgressFilter?: number;
 	poGanttStatusFilter?: string[];
 	poGanttScale?: 'day' | 'week' | 'month' | 'quarter';
+	/** 项目看板所有状态列共享宽度（像素）。 */
+	poKanbanColumnWidth?: number;
+	/** 甘特图左侧任务树宽度（像素）。 */
+	poGanttLabelWidth?: number;
 	boardEnabled: boolean;
 	boardTitle: string;
 	boardStages: BoardStage[];
 	opportunityFile: string;
 	currentOppView: string;
+	/** 灵感看板所有状态列共享宽度（像素）。 */
+	oppKanbanColumnWidth?: number;
+	/** 灵感列表各列宽度（像素，按列 key 存储）。 */
+	oppListColumnWidths?: Record<string, number>;
 	/** 首页模块显隐与排序：每个模块一个开关 + 顺序权重 + 比例；重置见「恢复默认布局」 */
 	homeModules?: HomeModuleConfig[];
 	/** 首页布局数据版本；低于 HOME_LAYOUT_VERSION 时由 main.ts 迁移并重置默认比例 */
@@ -102,6 +125,14 @@ export interface DashboardSettings {
 	countdown: CountdownSettings;
 	/** 多张独立倒计时卡片；缺失时由旧版 countdown 自动迁移。 */
 	countdownCards?: CountdownCardConfig[];
+	pomodoro?: PomodoroSettings;
+	pomodoroSessions?: PomodoroSession[];
+	pomodoroActivity?: string;
+	pomodoroTags?: PomodoroTag[];
+	/** 仅用于一次性迁移旧 dashboard-view，避免后续触碰 Xove 的视图。 */
+	legacyDashboardViewMigrated?: boolean;
+	/** 首页背景颗粒。默认关闭，避免为装饰效果持续占用渲染线程。 */
+	showNoiseOverlay: boolean;
 }
 
 /**
@@ -158,6 +189,8 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
 	npdpProgressFilter: 5,
 	poGanttStatusFilter: [],
 	poGanttScale: 'week',
+	poKanbanColumnWidth: 270,
+	poGanttLabelWidth: 300,
 	boardEnabled: true,
 	boardTitle: '灵感收集',
 	boardStages: [
@@ -169,16 +202,31 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
 	],
 	opportunityFile: '看板.md',
 	currentOppView: 'kanban',
+	oppKanbanColumnWidth: 230,
+	oppListColumnWidths: {},
+	showNoiseOverlay: false,
 	homeLayoutVersion: HOME_LAYOUT_VERSION,
 	countdown: { eventName: '2027', targetDate: '2027-01-01' },
+	pomodoro: {
+		pomodoroWorkMinutes: 25,
+		pomodoroShortBreakMinutes: 5,
+		pomodoroLongBreakMinutes: 15,
+		pomodoroLongBreakInterval: 4,
+		pomodoroDailyGoal: 8,
+		pomodoroAutoStartBreak: true,
+		pomodoroSoundEnabled: true,
+	},
 	homeModules: [
 		{ id: 'quick-capture', enabled: true, order: 0, cols: 1, rows: 1 },
 		{ id: 'todo', enabled: true, order: 1, cols: 1, rows: 1 },
 		{ id: 'progress', enabled: true, order: 2, cols: 1, rows: 1 },
 		{ id: 'weekly', enabled: true, order: 3, cols: 1, rows: 2 },
-		{ id: 'projects', enabled: true, order: 4, cols: 3, rows: 1 },
-		{ id: 'heatmap', enabled: true, order: 5, cols: 3, rows: 1 },
-		{ id: 'countdown', enabled: true, order: 6, cols: 1, rows: 1 },
+		{ id: 'completed-history', enabled: true, order: 4, cols: 1, rows: 2 },
+		{ id: 'projects', enabled: true, order: 5, cols: 3, rows: 1 },
+		{ id: 'heatmap', enabled: true, order: 6, cols: 3, rows: 1 },
+		{ id: 'countdown', enabled: true, order: 7, cols: 1, rows: 1 },
+		{ id: 'calendar', enabled: false, order: 8, cols: 2, rows: 2 },
+		{ id: 'pomodoro', enabled: false, order: 9, cols: 1, rows: 1 },
 	],
 };
 
@@ -188,9 +236,12 @@ export const DEFAULT_HOME_MODULES: HomeModuleConfig[] = [
 	{ id: 'todo', enabled: true, order: 1, cols: 1, rows: 1 },
 	{ id: 'progress', enabled: true, order: 2, cols: 1, rows: 1 },
 	{ id: 'weekly', enabled: true, order: 3, cols: 1, rows: 2 },
-	{ id: 'projects', enabled: true, order: 4, cols: 3, rows: 1 },
-	{ id: 'heatmap', enabled: true, order: 5, cols: 3, rows: 1 },
-	{ id: 'countdown', enabled: true, order: 6, cols: 1, rows: 1 },
+	{ id: 'completed-history', enabled: true, order: 4, cols: 1, rows: 2 },
+	{ id: 'projects', enabled: true, order: 5, cols: 3, rows: 1 },
+	{ id: 'heatmap', enabled: true, order: 6, cols: 3, rows: 1 },
+	{ id: 'countdown', enabled: true, order: 7, cols: 1, rows: 1 },
+	{ id: 'calendar', enabled: false, order: 8, cols: 2, rows: 2 },
+	{ id: 'pomodoro', enabled: false, order: 9, cols: 1, rows: 1 },
 ];
 
 /* ---- helpers ---- */
@@ -238,6 +289,20 @@ export class DashboardSettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
+
+		/* ---- 性能 ---- */
+		new Setting(containerEl).setName('性能').setHeading();
+		new Setting(containerEl)
+			.setName('显示静态颗粒背景')
+			.setDesc('默认关闭。开启时仅生成一次 128 × 128 背景纹理，不使用逐帧动画。')
+			.addToggle((t) => t
+				.setValue(this.plugin.settings.showNoiseOverlay)
+				.onChange(async (v) => {
+					this.plugin.settings.showNoiseOverlay = v;
+					await this.plugin.saveSettings();
+					this.plugin.refreshNoiseOverlays();
+				}),
+			);
 
 		/* ---- 快速捕捉 ---- */
 		new Setting(containerEl).setName('快速捕捉').setHeading();
@@ -435,7 +500,7 @@ export class DashboardSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('完成后保留在首页')
-			.setDesc('在 TODO 与本周待办卡片中保留今天或本周完成的任务，并以灰色删除线显示')
+			.setDesc('在 TODO 卡片中保留今天完成的任务，并以灰色删除线显示')
 			.addToggle((toggle) => toggle
 				.setValue(this.plugin.settings.todoShowCompleted)
 				.onChange(async (value) => {
@@ -457,6 +522,22 @@ export class DashboardSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				}),
 			);
+
+		/* ---- 首页卡片 ---- */
+		new Setting(containerEl).setName('番茄计时').setHeading();
+		const pomo = this.plugin.settings.pomodoro!;
+		const numberSetting = (name: string, key: 'pomodoroWorkMinutes' | 'pomodoroShortBreakMinutes' | 'pomodoroLongBreakMinutes' | 'pomodoroLongBreakInterval' | 'pomodoroDailyGoal'): void => {
+			new Setting(containerEl).setName(name).addText((input) => input.setValue(String(pomo[key])).setPlaceholder('25').onChange(async (value) => {
+				const n = Math.max(1, Math.min(120, Number(value) || pomo[key])); pomo[key] = n; await this.plugin.saveSettings();
+			}));
+		};
+		numberSetting('专注时长（分钟）', 'pomodoroWorkMinutes');
+		numberSetting('短休息时长（分钟）', 'pomodoroShortBreakMinutes');
+		numberSetting('长休息时长（分钟）', 'pomodoroLongBreakMinutes');
+		numberSetting('长休息间隔（完成数）', 'pomodoroLongBreakInterval');
+		numberSetting('每日番茄目标（完成数）', 'pomodoroDailyGoal');
+		new Setting(containerEl).setName('自动开始休息').addToggle((toggle) => toggle.setValue(pomo.pomodoroAutoStartBreak).onChange(async (value) => { pomo.pomodoroAutoStartBreak = value; await this.plugin.saveSettings(); }));
+		new Setting(containerEl).setName('完成时播放提示音').addToggle((toggle) => toggle.setValue(pomo.pomodoroSoundEnabled).onChange(async (value) => { pomo.pomodoroSoundEnabled = value; await this.plugin.saveSettings(); }));
 
 		/* ---- 知识工作台 ---- */
 		new Setting(containerEl).setName('知识工作台').setHeading();
@@ -623,11 +704,11 @@ export class DashboardSettingTab extends PluginSettingTab {
 			: t;
 		// Refresh every open dashboard view (not just the foreground one), so a
 		// theme switch in Settings applies immediately to all of them.
-		this.app.workspace.getLeavesOfType('dashboard-view').forEach((leaf) => {
-			leaf.view?.containerEl?.querySelector('.dashboard-plugin')?.setAttribute('data-theme', effective);
+		this.app.workspace.getLeavesOfType('mq-dashboard-view').forEach((leaf) => {
+			leaf.view?.containerEl?.querySelector('.mq-dashboard-plugin')?.setAttribute('data-theme', effective);
 		});
 		// Fallback for any stray element still in the DOM.
-		document.querySelectorAll('.dashboard-plugin').forEach((el) => el.setAttribute('data-theme', effective));
+		document.querySelectorAll('.mq-dashboard-plugin').forEach((el) => el.setAttribute('data-theme', effective));
 		this.plugin.refreshThemeButtons();
 	}
 }

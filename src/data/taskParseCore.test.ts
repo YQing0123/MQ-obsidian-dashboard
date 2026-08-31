@@ -25,6 +25,7 @@ test('taskFromFm yields safe defaults on empty frontmatter', () => {
 	assert.equal(t.dueDate, null);
 	assert.equal(t.remindDate, null);
 	assert.equal(t.parent, '');
+	assert.deepEqual(t.opportunityIds, []);
 	assert.equal(t.completeTime, null);
 	assert.equal(t.isOverdue, false);
 	assert.equal(t.projectId, 'proj');
@@ -68,6 +69,10 @@ test('taskFromFm reads start/due/remind dates', () => {
 	assert.equal(t.startDate, '2026-08-01');
 	assert.equal(t.dueDate, '2026-08-20');
 	assert.equal(t.remindDate, '2026-08-08');
+});
+
+test('taskFromFm reads associated opportunity IDs', () => {
+	assert.deepEqual(taskFromFm({ 关联灵感: ['board-1', 'board-2'] }, '', 'a.md', 'p').opportunityIds, ['board-1', 'board-2']);
 });
 
 test('taskFromFm flags overdue only for open tasks with a past due date', () => {

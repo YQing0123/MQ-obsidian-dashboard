@@ -38,6 +38,8 @@ export interface TaskItem {
 	isOverdue: boolean;
 	remindDate: string | null; // next remind date YYYY-MM-DD
 	parent: string;          // parent task name (父任务)
+	/** 关联的灵感条目 ID；用于稳定统计，任务重命名后仍可追溯。 */
+	opportunityIds: string[];
 }
 
 /** 项目类型。nostage 仅用于兼容历史 frontmatter，新项目统一使用 longterm。 */
@@ -229,6 +231,7 @@ export function taskFromFm(
 		isOverdue,
 		remindDate: getString(fm, '提醒日期'),
 		parent: getString(fm, '父任务') || '',
+		opportunityIds: getStringArray(fm, '关联灵感'),
 		completeTime: getString(fm, '完成时间'),
 		dailyNodes: (() => {
 			// Body block is the source of truth; fall back to legacy frontmatter.

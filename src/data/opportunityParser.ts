@@ -35,6 +35,7 @@ export interface BoardItem {
 	stageNotes?: Record<string, string>; // 按阶段 label 存储的输入内容（仅 hasInput 的阶段）；缺省视为空
 	link: string;          // 详情双链，如 [[xxx-详情]]，可空
 	starred: boolean;      // 星标（重要 / 待跟进，与阶段终态解耦）
+	taskIds: string[];     // 关联任务文件路径；任务侧也写关联灵感 ID，便于重命名后统计
 	order: number;         // 手动排序权重（同状态内从小到大）
 	createDate: string;
 	updateDate: string;
@@ -105,6 +106,7 @@ function toFmObject(it: BoardItem): Record<string, unknown> {
 		备注: it.notes || '',
 		链接: it.link || '',
 		星标: !!it.starred,
+		关联任务: it.taskIds && it.taskIds.length ? it.taskIds : [],
 		创建时间: it.createDate || '',
 		更新时间: it.updateDate || '',
 	};
@@ -148,6 +150,7 @@ function fromFmObject(raw: Record<string, unknown>, fallbackId: string): BoardIt
 	const rawStatus = typeof raw['状态'] === 'string' ? (raw['状态'] as string) : '';
 	const status = rawStatus ? migrateStatus(rawStatus) : '收集箱';
 	const tags = Array.isArray(raw['标签']) ? (raw['标签'] as unknown[]).map(String) : [];
+	const taskIds = Array.isArray(raw['关联任务']) ? (raw['关联任务'] as unknown[]).map(String).filter(Boolean) : [];
 	return {
 		id: typeof raw['id'] === 'string' ? (raw['id'] as string) : fallbackId,
 		title: title || '',
@@ -157,6 +160,7 @@ function fromFmObject(raw: Record<string, unknown>, fallbackId: string): BoardIt
 		stageNotes,
 		link,
 		starred,
+		taskIds,
 		order: typeof raw['排序'] === 'number' ? (raw['排序'] as number) : -1,
 		createDate: typeof raw['创建时间'] === 'string' ? (raw['创建时间'] as string) : '',
 		updateDate: typeof raw['更新时间'] === 'string' ? (raw['更新时间'] as string) : '',
@@ -196,6 +200,7 @@ function buildDetails(items: BoardItem[], title: string): string {
 		lines.push(`### ${i + 1}. ${it.title}`);
 		lines.push(`- **状态**：${it.status} **星标**：${it.starred ? '★' : '-'}`);
 		lines.push(`- **标签**：${it.tags && it.tags.length ? it.tags.join('、') : '-'}`);
+		lines.push(`- **任务转化**：${it.taskIds?.length || 0}`);
 		lines.push(`- **背景 / 备注**：${it.notes || '-'}`);
 		const sn = it.stageNotes || {};
 		for (const [k, v] of Object.entries(sn)) {
@@ -302,6 +307,7 @@ export async function createOpportunity(app: App, path: string, data: BoardFormD
 		stageNotes: data.stageNotes || {},
 		link: data.link || '',
 		starred: !!data.starred,
+		taskIds: [],
 		order: items.length,
 		createDate: now,
 		updateDate: now,

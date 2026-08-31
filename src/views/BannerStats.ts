@@ -124,41 +124,41 @@ function statValue(stat: string, r: BannerStatsResult): string {
 }
 
 function hero(parent: HTMLElement, stat: string, value: string, prefix?: string): void {
-	const row = parent.createDiv({ cls: 'ad-banner-stat-hero' });
-	if (prefix) row.createDiv({ cls: 'ad-banner-stat-title-prefix', text: prefix });
-	const icon = row.createDiv({ cls: 'ad-banner-stat-icon' }); setIcon(icon, icons[stat] || 'bar-chart-3');
-	row.createDiv({ cls: 'ad-banner-stat-num', text: value });
-	row.createDiv({ cls: 'ad-banner-stat-label ad-banner-stat-label--inline', text: labels[stat] || stat });
+	const row = parent.createDiv({ cls: 'mq-ad-banner-stat-hero' });
+	if (prefix) row.createDiv({ cls: 'mq-ad-banner-stat-title-prefix', text: prefix });
+	const icon = row.createDiv({ cls: 'mq-ad-banner-stat-icon' }); setIcon(icon, icons[stat] || 'bar-chart-3');
+	row.createDiv({ cls: 'mq-ad-banner-stat-num', text: value });
+	row.createDiv({ cls: 'mq-ad-banner-stat-label mq-ad-banner-stat-label--inline', text: labels[stat] || stat });
 }
 
 export async function renderBannerStats(parent: HTMLElement, config: BannerStatsConfig | undefined, app: App, taskStore: TaskStore, dashboardTitle?: string): Promise<HTMLElement> {
 	const resolved = resolveBannerStats(config);
 	applyBannerStatsBackdrop(parent.parentElement || parent, resolved);
-	const el = parent.createDiv({ cls: 'ad-banner-stats' });
+	const el = parent.createDiv({ cls: 'mq-ad-banner-stats' });
 	const result = await computeBannerStats(app, taskStore);
 	if (resolved.showLeft !== false) {
-		const col = el.createDiv({ cls: 'ad-banner-stat-col ad-banner-stat-col--left' });
+		const col = el.createDiv({ cls: 'mq-ad-banner-stat-col mq-ad-banner-stat-col--left' });
 		hero(col, resolved.leftStat || 'totalNotes', statValue(resolved.leftStat || 'totalNotes', result));
 		if (resolved.showDetails !== false) {
-			const strip = col.createDiv({ cls: 'ad-banner-stat-strip' });
-			for (const [icon, text] of [['calendar-plus', `本月 ${result.newThisMonth}`], ['hash', `标签 ${result.tagsCount}`], ['link', `链接 ${result.totalLinks}`]]) { const item = strip.createDiv({ cls: 'ad-banner-stat-strip-item' }); const ico = item.createDiv({ cls: 'ad-banner-stat-strip-icon' }); setIcon(ico, icon); item.createSpan({ text }); }
+			const strip = col.createDiv({ cls: 'mq-ad-banner-stat-strip' });
+			for (const [icon, text] of [['calendar-plus', `本月 ${result.newThisMonth}`], ['hash', `标签 ${result.tagsCount}`], ['link', `链接 ${result.totalLinks}`]]) { const item = strip.createDiv({ cls: 'mq-ad-banner-stat-strip-item' }); const ico = item.createDiv({ cls: 'mq-ad-banner-stat-strip-icon' }); setIcon(ico, icon); item.createSpan({ text }); }
 		}
 	}
 	if (resolved.showCenter !== false) {
 		const stat = resolved.centerStat || 'streak';
-		const col = el.createDiv({ cls: 'ad-banner-stat-col ad-banner-stat-col--center' });
+		const col = el.createDiv({ cls: 'mq-ad-banner-stat-col mq-ad-banner-stat-col--center' });
 		hero(col, stat, statValue(stat, result), stat === 'streak' ? (dashboardTitle?.trim() || undefined) : undefined);
 		if (resolved.showDetails !== false) {
-			col.createDiv({ cls: 'ad-banner-stat-sub', text: stat === 'taskCompletion' ? `${result.doneTasks} / ${result.totalTasks} 个任务已完成` : `本周新增 ${result.newThisWeek} · 本月新增 ${result.newThisMonth}` });
-			const chart = col.createDiv({ cls: 'ad-banner-stat-chart' }); const grid = chart.createDiv({ cls: 'ad-banner-heatmap' }); const max = Math.max(1, ...result.activity);
-			result.activity.forEach((v, i) => { const cell = grid.createDiv({ cls: 'ad-banner-heatmap-cell' }); const level = v <= 0 ? 0 : Math.min(4, Math.ceil(v / max * 4)); cell.addClass(`ad-banner-heatmap-cell--l${level}`); if (i === result.activity.length - 1) cell.addClass('ad-banner-heatmap-cell--today'); });
+			col.createDiv({ cls: 'mq-ad-banner-stat-sub', text: stat === 'taskCompletion' ? `${result.doneTasks} / ${result.totalTasks} 个任务已完成` : `本周新增 ${result.newThisWeek} · 本月新增 ${result.newThisMonth}` });
+			const chart = col.createDiv({ cls: 'mq-ad-banner-stat-chart' }); const grid = chart.createDiv({ cls: 'mq-ad-banner-heatmap' }); const max = Math.max(1, ...result.activity);
+			result.activity.forEach((v, i) => { const cell = grid.createDiv({ cls: 'mq-ad-banner-heatmap-cell' }); const level = v <= 0 ? 0 : Math.min(4, Math.ceil(v / max * 4)); cell.addClass(`mq-ad-banner-heatmap-cell--l${level}`); if (i === result.activity.length - 1) cell.addClass('mq-ad-banner-heatmap-cell--today'); });
 		}
 	}
 	if (resolved.showRight !== false) {
-		const col = el.createDiv({ cls: 'ad-banner-stat-col ad-banner-stat-col--right' });
+		const col = el.createDiv({ cls: 'mq-ad-banner-stat-col mq-ad-banner-stat-col--right' });
 		for (const stat of resolved.rightStats || []) {
-			const row = col.createDiv({ cls: 'ad-banner-stat-prog' }); const head = row.createDiv({ cls: 'ad-banner-stat-prog-head' }); const title = head.createDiv({ cls: 'ad-banner-stat-prog-title' }); const ico = title.createDiv({ cls: 'ad-banner-stat-prog-icon' }); setIcon(ico, icons[stat] || 'bar-chart-3'); title.createSpan({ text: labels[stat] || stat }); head.createDiv({ cls: 'ad-banner-stat-prog-val', text: statValue(stat, result) });
-			const track = row.createDiv({ cls: 'ad-banner-stat-prog-track' }); const fill = track.createDiv({ cls: 'ad-banner-stat-prog-fill' }); const n = stat === 'avgLinksPerNote' ? Math.min(100, Math.round(result.avgLinksPerNote / 3 * 100)) : (result as unknown as Record<string, number>)[stat] || 0; fill.style.width = `${n}%`;
+			const row = col.createDiv({ cls: 'mq-ad-banner-stat-prog' }); const head = row.createDiv({ cls: 'mq-ad-banner-stat-prog-head' }); const title = head.createDiv({ cls: 'mq-ad-banner-stat-prog-title' }); const ico = title.createDiv({ cls: 'mq-ad-banner-stat-prog-icon' }); setIcon(ico, icons[stat] || 'bar-chart-3'); title.createSpan({ text: labels[stat] || stat }); head.createDiv({ cls: 'mq-ad-banner-stat-prog-val', text: statValue(stat, result) });
+			const track = row.createDiv({ cls: 'mq-ad-banner-stat-prog-track' }); const fill = track.createDiv({ cls: 'mq-ad-banner-stat-prog-fill' }); const n = stat === 'avgLinksPerNote' ? Math.min(100, Math.round(result.avgLinksPerNote / 3 * 100)) : (result as unknown as Record<string, number>)[stat] || 0; fill.style.width = `${n}%`;
 		}
 	}
 	return el;

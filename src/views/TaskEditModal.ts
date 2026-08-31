@@ -27,20 +27,20 @@ export class TaskEditModal extends Modal {
 	onOpen(): void {
 		const { contentEl } = this;
 		const task = this.opts.task;
-		contentEl.addClass('ad-task-modal');
-		contentEl.createEl('h3', { cls: 'ad-modal-title', text: UI_TEXT.taskDetail });
+		contentEl.addClass('mq-ad-task-modal');
+		contentEl.createEl('h3', { cls: 'mq-ad-modal-title', text: UI_TEXT.taskDetail });
 
 		// ---- Title (editable name) ----
 		this.field('任务名称 *', (wrap) => {
-			wrap.createEl('input', { cls: 'ad-modal-input ad-edit-title', attr: { type: 'text', value: task.content } });
+			wrap.createEl('input', { cls: 'mq-ad-modal-input mq-ad-edit-title', attr: { type: 'text', value: task.content } });
 		});
 
 		// Project assignment is stored in both the task frontmatter and its folder.
 		// Option values use the actual folder path, so nested project folders work.
-		const assignment = contentEl.createDiv({ cls: 'ad-modal-row' });
-		const projectCol = assignment.createDiv({ cls: 'ad-modal-col' });
-		projectCol.createEl('label', { cls: 'ad-modal-label', text: '所属项目' });
-		const projectSel = projectCol.createEl('select', { cls: 'ad-modal-input' });
+		const assignment = contentEl.createDiv({ cls: 'mq-ad-modal-row' });
+		const projectCol = assignment.createDiv({ cls: 'mq-ad-modal-col' });
+		projectCol.createEl('label', { cls: 'mq-ad-modal-label', text: '所属项目' });
+		const projectSel = projectCol.createEl('select', { cls: 'mq-ad-modal-input' });
 		const currentProject = this.opts.projects.find((project) => project.name === task.projectId);
 		if (!currentProject && task.projectId) {
 			projectSel.createEl('option', { value: '', text: task.projectId });
@@ -50,16 +50,16 @@ export class TaskEditModal extends Modal {
 		}
 		projectSel.value = currentProject?.path ?? '';
 
-		const typeCol = assignment.createDiv({ cls: 'ad-modal-col' });
-		typeCol.createEl('label', { cls: 'ad-modal-label', text: '任务类型' });
-		const typeSel = typeCol.createEl('select', { cls: 'ad-modal-input' });
+		const typeCol = assignment.createDiv({ cls: 'mq-ad-modal-col' });
+		typeCol.createEl('label', { cls: 'mq-ad-modal-label', text: '任务类型' });
+		const typeSel = typeCol.createEl('select', { cls: 'mq-ad-modal-input' });
 		typeSel.createEl('option', { value: '普通', text: '普通' });
 		typeSel.createEl('option', { value: '重复', text: '重复' });
 		typeSel.value = task.type === '重复' ? '重复' : '普通';
 
-		const parentField = contentEl.createDiv({ cls: 'ad-modal-field' });
-		parentField.createEl('label', { cls: 'ad-modal-label', text: '父任务' });
-		const parentSel = parentField.createEl('select', { cls: 'ad-modal-input' });
+		const parentField = contentEl.createDiv({ cls: 'mq-ad-modal-field' });
+		parentField.createEl('label', { cls: 'mq-ad-modal-label', text: '父任务' });
+		const parentSel = parentField.createEl('select', { cls: 'mq-ad-modal-input' });
 		const populateParents = (projectPath: string): void => {
 			parentSel.empty();
 			parentSel.createEl('option', { value: '', text: '无父任务' });
@@ -80,16 +80,16 @@ export class TaskEditModal extends Modal {
 		}
 
 		// ---- Status ----
-		contentEl.createEl('label', { cls: 'ad-modal-label', text: '状态' });
-		const statusSel = contentEl.createEl('select', { cls: 'ad-modal-input' });
+		contentEl.createEl('label', { cls: 'mq-ad-modal-label', text: '状态' });
+		const statusSel = contentEl.createEl('select', { cls: 'mq-ad-modal-input' });
 		for (const s of STATUS_LIST) {
 			const opt = statusSel.createEl('option', { text: s, attr: { value: s } });
 			if (s === task.status) opt.selected = true;
 		}
 
 		// ---- Priority ----
-		contentEl.createEl('label', { cls: 'ad-modal-label', text: '优先级' });
-		const prioSel = contentEl.createEl('select', { cls: 'ad-modal-input' });
+		contentEl.createEl('label', { cls: 'mq-ad-modal-label', text: '优先级' });
+		const prioSel = contentEl.createEl('select', { cls: 'mq-ad-modal-input' });
 		prioSel.createEl('option', { text: UI_TEXT.notSet, attr: { value: '' } });
 		for (const p of PRIORITY_LIST) {
 			if (!p) continue;
@@ -98,20 +98,20 @@ export class TaskEditModal extends Modal {
 		}
 
 		// ---- Dates ----
-		const row = contentEl.createDiv({ cls: 'ad-modal-row' });
-		const startCol = row.createDiv({ cls: 'ad-modal-col' });
-		startCol.createEl('label', { cls: 'ad-modal-label', text: '开始日期' });
-		const startInput = startCol.createEl('input', { cls: 'ad-modal-input', attr: { type: 'date' } });
+		const row = contentEl.createDiv({ cls: 'mq-ad-modal-row' });
+		const startCol = row.createDiv({ cls: 'mq-ad-modal-col' });
+		startCol.createEl('label', { cls: 'mq-ad-modal-label', text: '开始日期' });
+		const startInput = startCol.createEl('input', { cls: 'mq-ad-modal-input', attr: { type: 'date' } });
 		if (task.startDate) startInput.value = task.startDate;
 
-		const endCol = row.createDiv({ cls: 'ad-modal-col' });
-		endCol.createEl('label', { cls: 'ad-modal-label', text: '截止日期' });
-		const endInput = endCol.createEl('input', { cls: 'ad-modal-input', attr: { type: 'date' } });
+		const endCol = row.createDiv({ cls: 'mq-ad-modal-col' });
+		endCol.createEl('label', { cls: 'mq-ad-modal-label', text: '截止日期' });
+		const endInput = endCol.createEl('input', { cls: 'mq-ad-modal-input', attr: { type: 'date' } });
 		if (task.dueDate) endInput.value = task.dueDate;
 
 		// ---- Notes ----
-		contentEl.createEl('label', { cls: 'ad-modal-label', text: '备注' });
-		const notesArea = contentEl.createEl('textarea', { cls: 'ad-modal-input', attr: { rows: '3' } });
+		contentEl.createEl('label', { cls: 'mq-ad-modal-label', text: '备注' });
+		const notesArea = contentEl.createEl('textarea', { cls: 'mq-ad-modal-input', attr: { rows: '3' } });
 		if (task.notes) notesArea.value = task.notes;
 
 		// ---- Daily node axis (multi-day tasks only) ----
@@ -119,13 +119,13 @@ export class TaskEditModal extends Modal {
 		if (isMultiDay) this.renderNodeAxis(contentEl, task);
 
 		// ---- Buttons ----
-		const btns = contentEl.createDiv({ cls: 'ad-modal-btns' });
-		btns.createEl('button', { cls: 'ad-modal-btn', text: UI_TEXT.cancel })
+		const btns = contentEl.createDiv({ cls: 'mq-ad-modal-btns' });
+		btns.createEl('button', { cls: 'mq-ad-modal-btn', text: UI_TEXT.cancel })
 			.addEventListener('click', () => this.close());
-		btns.createEl('button', { cls: 'ad-modal-btn ad-modal-btn--primary', text: UI_TEXT.save })
+		btns.createEl('button', { cls: 'mq-ad-modal-btn mq-ad-modal-btn--primary', text: UI_TEXT.save })
 			.addEventListener('click', () => {
-				const titleEl = contentEl.querySelector('.ad-edit-title') as HTMLInputElement;
-				const nodeNoteEl = contentEl.querySelector('.ad-node-note') as HTMLTextAreaElement;
+				const titleEl = contentEl.querySelector('.mq-ad-edit-title') as HTMLInputElement;
+				const nodeNoteEl = contentEl.querySelector('.mq-ad-node-note') as HTMLTextAreaElement;
 				void this.saveTask(titleEl?.value?.trim() || task.content, statusSel.value, prioSel.value, startInput.value, endInput.value, notesArea.value, projectSel.value, parentSel.value, typeSel.value, nodeNoteEl?.value ?? '');
 			});
 	}
@@ -318,21 +318,21 @@ export class TaskEditModal extends Modal {
 		const dates = eachDate(task.startDate!, axisEnd);
 
 		// Side-by-side layout: axis + buttons on the left, today's note on the right
-		const row = parent.createDiv({ cls: 'ad-node-row' });
-		const left = row.createDiv({ cls: 'ad-node-col' });
-		const right = row.createDiv({ cls: 'ad-node-col' });
+		const row = parent.createDiv({ cls: 'mq-ad-node-row' });
+		const left = row.createDiv({ cls: 'mq-ad-node-col' });
+		const right = row.createDiv({ cls: 'mq-ad-node-col' });
 
-		left.createEl('label', { cls: 'ad-modal-label', text: '每日节点' });
-		const axis = left.createDiv({ cls: 'ad-node-axis' });
+		left.createEl('label', { cls: 'mq-ad-modal-label', text: '每日节点' });
+		const axis = left.createDiv({ cls: 'mq-ad-node-axis' });
 
 		// Weekday header (Mon=一 .. Sun=日)
-		const head = axis.createDiv({ cls: 'ad-node-axis__head' });
+		const head = axis.createDiv({ cls: 'mq-ad-node-axis__head' });
 		for (const w of ['一', '二', '三', '四', '五', '六', '日']) head.createSpan({ text: w });
 
 		// Cells aligned to weekday columns
-		const grid = axis.createDiv({ cls: 'ad-node-axis__grid' });
+		const grid = axis.createDiv({ cls: 'mq-ad-node-axis__grid' });
 		const firstDow = (new Date(task.startDate! + 'T00:00:00').getDay() + 6) % 7;
-		for (let i = 0; i < firstDow; i++) grid.createSpan({ cls: 'ad-node-cell ad-node-cell--empty' });
+		for (let i = 0; i < firstDow; i++) grid.createSpan({ cls: 'mq-ad-node-cell mq-ad-node-cell--empty' });
 		for (const date of dates) {
 			let node = task.dailyNodes[date];
 			// For a completed task, the completion day itself counts as done
@@ -342,7 +342,7 @@ export class TaskEditModal extends Modal {
 			}
 			const isOverdue = date > due;
 			const isCompleteDay = isDone && date === completeDate;
-			const cell = grid.createSpan({ cls: 'ad-node-cell' + this.cellClass(date, today, node, isOverdue, isCompleteDay) });
+			const cell = grid.createSpan({ cls: 'mq-ad-node-cell' + this.cellClass(date, today, node, isOverdue, isCompleteDay) });
 			cell.setAttribute('data-date', date);
 			const note = node?.n ? node.n : '（无备注）';
 			const tag = isOverdue ? '（延期）' : '';
@@ -350,13 +350,13 @@ export class TaskEditModal extends Modal {
 		}
 
 		// Today controls (left column, under the axis)
-		const ctrl = left.createDiv({ cls: 'ad-node-ctrl' });
-		const doneBtn = ctrl.createEl('button', { cls: 'ad-node-btn', text: '今日完成' });
-		const skipBtn = ctrl.createEl('button', { cls: 'ad-node-btn', text: '今日不做' });
+		const ctrl = left.createDiv({ cls: 'mq-ad-node-ctrl' });
+		const doneBtn = ctrl.createEl('button', { cls: 'mq-ad-node-btn', text: '今日完成' });
+		const skipBtn = ctrl.createEl('button', { cls: 'mq-ad-node-btn', text: '今日不做' });
 
 		// Today's note (right column)
-		right.createEl('label', { cls: 'ad-modal-label', text: `今日备注（${fmtMD(today)}）` });
-		const noteArea = right.createEl('textarea', { cls: 'ad-modal-input ad-node-note', attr: { rows: '4' } });
+		right.createEl('label', { cls: 'mq-ad-modal-label', text: `今日备注（${fmtMD(today)}）` });
+		const noteArea = right.createEl('textarea', { cls: 'mq-ad-modal-input mq-ad-node-note', attr: { rows: '4' } });
 
 		const existing = task.dailyNodes[today];
 		this.activeState = this.presetTodayNode ?? (existing ? existing.s : undefined);
@@ -366,10 +366,10 @@ export class TaskEditModal extends Modal {
 		const refresh = () => {
 			doneBtn.toggleClass('is-active', this.activeState === 'done');
 			skipBtn.toggleClass('is-active', this.activeState === 'skip');
-			const todayCell = grid.querySelector(`.ad-node-cell[data-date="${today}"]`) as HTMLElement;
+			const todayCell = grid.querySelector(`.mq-ad-node-cell[data-date="${today}"]`) as HTMLElement;
 			if (todayCell) {
 				const synth = this.activeState ? { s: this.activeState, n: noteArea.value } : undefined;
-				todayCell.className = 'ad-node-cell' + this.cellClass(today, today, synth, today > due, isDone && today === completeDate);
+				todayCell.className = 'mq-ad-node-cell' + this.cellClass(today, today, synth, today > due, isDone && today === completeDate);
 				const tag = today > due ? '（延期）' : '';
 				todayCell.setAttribute('title', `${today} ${weekdayLabel(today)}${tag}\n${noteArea.value ? noteArea.value : '（无备注）'}`);
 			}
@@ -396,13 +396,13 @@ export class TaskEditModal extends Modal {
 	}
 
 	private field(labelText: string, build: (wrap: HTMLElement) => void): void {
-		const wrap = this.contentEl.createDiv({ cls: 'ad-modal-field' });
+		const wrap = this.contentEl.createDiv({ cls: 'mq-ad-modal-field' });
 		this.label(wrap, labelText);
 		build(wrap);
 	}
 
 	private label(parent: HTMLElement, text: string): void {
-		parent.createEl('label', { cls: 'ad-modal-label', text });
+		parent.createEl('label', { cls: 'mq-ad-modal-label', text });
 	}
 
 	onClose(): void {

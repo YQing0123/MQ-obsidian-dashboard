@@ -1,12 +1,14 @@
-import { ItemView, Menu, TFile, TFolder, WorkspaceLeaf } from 'obsidian';
+import { ItemView, Menu, TFile, TFolder, WorkspaceLeaf, setIcon } from 'obsidian';
 import { MOCK_DATA, DashboardData } from '../data/mockData';
 import { BannerSettings, CountdownCardConfig, DEFAULT_SETTINGS, HomeModuleConfig } from '../settings';
 import { BannerModal } from './BannerModal';
 import { BannerEditModal } from './BannerEditModal';
 import { renderBannerStats } from './BannerStats';
 import { CountdownModal } from './CountdownModal';
+import { showPomodoroStats } from './PomodoroStatsModal';
+import { activityColor, PomodoroService } from '../pomodoro-service';
 import { TaskEditModal } from './TaskEditModal';
-import { TaskItem, ProjectInfo, TaskStatus, ProjectType, LONG_TERM_STAGES, isLongTermProject, priorityWeight, NodeState, RepeatRule } from '../data/taskParser';
+import { TaskItem, ProjectInfo, TaskStatus, ProjectType, LONG_TERM_STAGES, isLongTermProject, priorityWeight, NodeState, RepeatRule, parseDailyNodesFromBody, serializeDailyNodesBlock } from '../data/taskParser';
 import { TaskStore } from '../data/taskStore';
 import { writeFrontmatter as fmWriteFrontmatter, yamlScalar } from '../data/frontmatterWriter';
 import type { ParseIssue } from '../data/parserDiagnostics';
@@ -14,6 +16,7 @@ import { DashboardStore } from '../data/dashboardStore';
 import { OpportunityBoard } from './OpportunityBoard';
 import { ProjectBoard } from './ProjectBoard';
 import { fmtDate, todayStr, nowFmt, calcNextRemindDate, getTodayUniverse, getTodayTasks, isDoneToday, isSkipToday, overdueDays, urgencyMeta } from '../data/taskLogic';
+import { t } from '../i18n';
 
 import type Dashboard from '../main';
 import {
@@ -21,7 +24,7 @@ import {
 	ICON_allProjects, ICON_opportunity, injectSvg,
 } from '../icons';
 
-export const VIEW_TYPE = 'dashboard-view';
+export const VIEW_TYPE = 'mq-dashboard-view';
 
 /** 首页模块描述符：id 对应 settings.homeModules，render 为对应渲染函数 */
 interface HomeModule {
@@ -198,7 +201,7 @@ export class DashboardView extends ItemView {
 	public boardEl: HTMLElement | null = null;
 	private heatmapCard: HTMLElement | null = null;
 	private heatmapTimer: number | null = null;
-	private noiseId: number | null = null;
+	private bannerStatsTimer: number | null = null;
 	private pulseEls: { total: HTMLElement; pending: HTMLElement; today: HTMLElement; streak: HTMLElement } | null = null;
 	private dateEl: HTMLElement | null = null;
 	private bannerClockId: number | null = null;
@@ -242,7 +245,7 @@ export class DashboardView extends ItemView {
 	/** 编辑态下拦截卡片自身的点击（避免误触下钻），仅拦截卡片内部；比例按钮例外放行 */
 	private adClickGuard = (e: MouseEvent): void => {
 		const t = e.target as HTMLElement;
-		if (this.adEditMode && t.closest('.ad-card') && !t.closest('.ad-card__resize')) {
+		if (this.adEditMode && t.closest('.mq-ad-card') && !t.closest('.mq-ad-card__resize')) {
 			e.preventDefault();
 			e.stopPropagation();
 		}
@@ -250,12 +253,15 @@ export class DashboardView extends ItemView {
 
 	// 首页模块注册表：将 7 张卡的渲染从硬编码顺序统一为「注册表驱动 + settings.homeModules 排序/显隐」
 	private homeModules: HomeModule[] = [
-		{ id: 'quick-capture', title: '快速捕捉', cardCls: 'ad-card ad-b-capture', live: false, render: (b) => this.renderQuickCapture(b) },
-		{ id: 'todo', title: 'TODO', cardCls: 'ad-card ad-b-todo', render: (b, t) => void this.renderTodo(b, t) },
-		{ id: 'progress', title: '工作进度', cardCls: 'ad-card ad-b-progress', render: (b, t) => void this.renderProgress(b, t) },
-		{ id: 'weekly', title: '本周待办 & 逾期', cardCls: 'ad-card ad-b-weekly', render: (b, t) => void this.renderWeekly(b, t) },
-		{ id: 'projects', title: '项目情况', cardCls: 'ad-card ad-b-project', render: (b) => void this.renderProjects(b) },
-		{ id: 'heatmap', title: '笔记统计', cardCls: 'ad-card ad-b-heatmap', live: false, render: (b) => this.renderHeatmap(b) },
+		{ id: 'quick-capture', title: '快速捕捉', cardCls: 'mq-ad-card mq-ad-b-capture', live: false, render: (b) => this.renderQuickCapture(b) },
+		{ id: 'todo', title: 'TODO', cardCls: 'mq-ad-card mq-ad-b-todo', render: (b, t) => void this.renderTodo(b, t) },
+		{ id: 'progress', title: '工作进度', cardCls: 'mq-ad-card mq-ad-b-progress', render: (b, t) => void this.renderProgress(b, t) },
+		{ id: 'weekly', title: '本周待办 & 逾期', cardCls: 'mq-ad-card mq-ad-b-weekly', render: (b, t) => void this.renderWeekly(b, t) },
+		{ id: 'completed-history', title: '历史完成待办', cardCls: 'mq-ad-card mq-ad-b-completed-history', render: (b, t) => void this.renderCompletedHistory(b, t) },
+		{ id: 'projects', title: '项目情况', cardCls: 'mq-ad-card mq-ad-b-project', render: (b) => void this.renderProjects(b) },
+		{ id: 'heatmap', title: '笔记统计', cardCls: 'mq-ad-card mq-ad-b-heatmap', live: false, render: (b) => this.renderHeatmap(b) },
+		{ id: 'calendar', title: '项目日历', cardCls: 'mq-ad-card mq-ad-b-calendar', live: true, render: (b, t) => void this.renderCalendarCard(b, t ?? []) },
+		{ id: 'pomodoro', title: '番茄计时', cardCls: 'mq-ad-card mq-ad-b-pomodoro', live: false, render: (b) => this.renderPomodoroCard(b) },
 	];
 
 	// Project overview state (renderer extracted into ProjectBoard)
@@ -269,6 +275,8 @@ export class DashboardView extends ItemView {
 	private storeUnsub: (() => void) | null = null;
 	private oppBoard: OpportunityBoard;
 	private projectBoard: ProjectBoard;
+	private pomodoroService: PomodoroService | null = null;
+	private calendarCardDate = new Date();
 
 	constructor(leaf: WorkspaceLeaf, plugin: Dashboard) {
 		super(leaf);
@@ -288,7 +296,7 @@ export class DashboardView extends ItemView {
 	}
 
 	private applyTheme(): void {
-		const root = this.dashboardEl ?? (this.containerEl.querySelector('.dashboard-plugin'));
+		const root = this.dashboardEl ?? (this.containerEl.querySelector('.mq-dashboard-plugin'));
 		if (root) root.setAttribute('data-theme', this.effectiveTheme());
 		this.refreshThemeButton();
 	}
@@ -304,17 +312,18 @@ export class DashboardView extends ItemView {
 	}
 
 	getViewType(): string { return VIEW_TYPE; }
-	getDisplayText(): string { return 'Dashboard'; }
-	getIcon(): string { return 'layout-dashboard'; }
+	getDisplayText(): string { return '工作台'; }
+	getIcon(): string { return 'house'; }
 
 	async onOpen(): Promise<void> {
-		// NOTE: earlier builds emptied this.containerEl then added .dashboard-plugin
+		// NOTE: earlier builds emptied this.containerEl then added .mq-dashboard-plugin
 		// directly; that was fine (the "setText on null" bug was the titleEl field
 		// collision, NOT the empty()). Now we clear the container's leftovers
 		// (Obsidian/theme placeholders) so our root div sits at the very top, then
-		// create a child <div class="dashboard-plugin"> and render into it.
+		// create a child <div class="mq-dashboard-plugin"> and render into it.
 		this.containerEl.empty();
-		this.dashboardEl = this.containerEl.createDiv({ cls: 'dashboard-plugin' });
+		this.dashboardEl = this.containerEl.createDiv({ cls: 'mq-dashboard-plugin' });
+		this.pomodoroService = new PomodoroService(this.plugin);
 		this.applyTheme();
 		this.registerEvent(this.app.workspace.on('css-change', () => this.applyTheme()));
 
@@ -327,15 +336,24 @@ export class DashboardView extends ItemView {
 		this.renderBoard(this.dashboardEl, d);
 
 		// Auto-refresh on vault changes (home cards incl. progress + weekly, or project overview)
-		const refreshAll = () => {
-			this.taskStore.invalidate();
-			void this.refreshBannerStats();
-			void this.updatePulse();
-			if (this.currentPage === 'project') {
+		const refreshAll = (file: unknown) => {
+			// Assets and folders do not affect Markdown statistics or task data.
+			if (!(file instanceof TFile) || file.extension !== 'md') return;
+			this.scheduleBannerStatsRefresh();
+
+			const taskRelevant = this.taskStore.isTaskRelevantPath(file.path);
+			const opportunityRelevant = file.path === this.plugin.settings.opportunityFile;
+			if (!taskRelevant && !opportunityRelevant) return;
+
+			if (taskRelevant) this.taskStore.invalidate();
+			if (this.currentPage === 'project' && taskRelevant) {
+				void this.updatePulse();
 				void this.projectBoard.refresh();
-			} else if (this.currentPage === 'opportunity') {
+			} else if (this.currentPage === 'opportunity' && opportunityRelevant) {
+				void this.updatePulse();
 				this.oppBoard.scheduleRefresh();
-			} else {
+			} else if (this.currentPage === 'home' && taskRelevant) {
+				void this.updatePulse();
 				this.scheduleHeatmapRefresh();
 				this.dashboardStore.requestRefresh();
 			}
@@ -344,16 +362,19 @@ export class DashboardView extends ItemView {
 		this.registerEvent(this.app.vault.on('delete', refreshAll));
 		this.registerEvent(this.app.vault.on('rename', refreshAll));
 		this.registerEvent(this.app.vault.on('modify', (file) => {
-			this.taskStore.invalidate();
-			void this.refreshBannerStats();
+			if (!(file instanceof TFile) || file.extension !== 'md') return;
+			this.scheduleBannerStatsRefresh();
+			const taskRelevant = this.taskStore.isTaskRelevantPath(file.path);
 			if (this.currentPage === 'project') {
 				// Project config files are re-rendered by setProjectStage / updateProjectFile themselves.
 				// Skipping here avoids a stale re-scan clobbering the just-set stage (flash → reset to first stage).
-				if (file instanceof TFile && file.name.startsWith('project-')) return;
+				if (!taskRelevant || file.name.startsWith('project-')) return;
+				this.taskStore.invalidate();
 				void this.updatePulse();
 				void this.projectBoard.refresh();
 				} else if (this.currentPage === 'opportunity' && this.plugin.settings.boardEnabled) {
-					if (file instanceof TFile && file.path === this.plugin.settings.opportunityFile) {
+				if (file.path === this.plugin.settings.opportunityFile) {
+					this.taskStore.invalidate();
 					void this.updatePulse();
 					this.oppBoard.scheduleRefresh();
 				}
@@ -361,7 +382,8 @@ export class DashboardView extends ItemView {
 				// Home: ignore edits to unrelated files. Only task files (markdown under
 				// the projects folder) affect the home cards, so this saves a full rescan
 				// on every unrelated note edit while still staying fresh for real changes.
-				if (!(file instanceof TFile) || !this.taskStore.isTaskRelevantPath(file.path)) return;
+				if (!taskRelevant) return;
+				this.taskStore.invalidate();
 				void this.updatePulse();
 				this.dashboardStore.requestRefresh();
 			}
@@ -378,14 +400,18 @@ export class DashboardView extends ItemView {
 			try {
 				const e = err instanceof Error ? err : new Error(String(err));
 				this.dashboardEl?.empty();
-				this.dashboardEl?.createEl('pre', { cls: 'ad-error', text: 'Dashboard 渲染出错：\n' + (e.stack || e.message) });
+				this.dashboardEl?.createEl('pre', { cls: 'mq-ad-error', text: 'Dashboard 渲染出错：\n' + (e.stack || e.message) });
 			} catch { /* ignore */ }
 			console.error('[Dashboard] render error', err);
 		}
 	}
 
 	async onClose(): Promise<void> {
-		if (this.noiseId) { window.cancelAnimationFrame(this.noiseId); this.noiseId = null; }
+		this.pomodoroService?.destroy();
+		this.pomodoroService = null;
+		if (this.bannerClockId !== null) { window.clearInterval(this.bannerClockId); this.bannerClockId = null; }
+		if (this.bannerStatsTimer !== null) { window.clearTimeout(this.bannerStatsTimer); this.bannerStatsTimer = null; }
+		if (this.heatmapTimer !== null) { window.clearTimeout(this.heatmapTimer); this.heatmapTimer = null; }
 		if (this.adRowHObs) { this.adRowHObs.disconnect(); this.adRowHObs = undefined; }
 		if (this.adHmObs) { this.adHmObs.disconnect(); this.adHmObs = undefined; this.adHmObsTarget = undefined; }
 		if (this.adLimitTimer !== null) { window.clearTimeout(this.adLimitTimer); this.adLimitTimer = null; }
@@ -399,22 +425,22 @@ export class DashboardView extends ItemView {
 	   BANNER — image insert via modal, vertical drag only
 	   ============================================================ */
 	private renderBanner(root: HTMLElement): HTMLElement {
-		const banner = root.createDiv({ cls: 'ad-banner' });
+		const banner = root.createDiv({ cls: 'mq-ad-banner' });
 		this.bannerEl = banner;
 		const ph = this.bannerState.mode === 'stats'
 			? null
-			: banner.createDiv({ cls: 'ad-banner__ph', text: '[ banner ]  ·  点击右上角按钮插入封面图片' });
+			: banner.createDiv({ cls: 'mq-ad-banner__ph', text: '[ banner ]  ·  点击右上角按钮插入封面图片' });
 		this.bannerPh = ph;
 
-		const img = banner.createEl('img', { cls: 'ad-banner__img ad-banner__img--hidden' });
+		const img = banner.createEl('img', { cls: 'mq-ad-banner__img mq-ad-banner__img--hidden' });
 		img.alt = 'Banner';
 		this.bannerImg = img;
 
 		// toolbar
-		const bar = banner.createDiv({ cls: 'ad-banner__bar' });
-		const pickBtn = bar.createEl('button', { cls: 'ad-banner__btn', text: '更换图片' });
+		const bar = banner.createDiv({ cls: 'mq-ad-banner__bar' });
+		const pickBtn = bar.createEl('button', { cls: 'mq-ad-banner__btn', text: '更换图片' });
 		const modeBtn = bar.createEl('button', {
-			cls: 'ad-banner__btn',
+			cls: 'mq-ad-banner__btn',
 			text: '横幅设置',
 			attr: { title: '设置海报和数据统计' },
 		});
@@ -423,13 +449,13 @@ export class DashboardView extends ItemView {
 			this.openBannerEditModal();
 		});
 		if (this.bannerState.mode === 'stats') {
-			banner.addClass('ad-banner--stats');
+			banner.addClass('mq-ad-banner--stats');
 			void this.renderStatsBanner(banner);
 		}
 		this.renderBannerMeta(banner);
 
 		// hidden file input
-		const fileInput = root.createEl('input', { cls: 'ad-banner__fileinput', attr: { type: 'file', accept: 'image/*' } });
+		const fileInput = root.createEl('input', { cls: 'mq-ad-banner__fileinput', attr: { type: 'file', accept: 'image/*' } });
 
 		// restore saved image
 		if (this.bannerState.imageDataUrl && this.bannerImg) {
@@ -466,18 +492,18 @@ export class DashboardView extends ItemView {
 
 	/** Date, lunar date, theme and plugin settings now live inside the banner. */
 	private renderBannerMeta(banner: HTMLElement): void {
-		const right = banner.createDiv({ cls: 'ad-banner-meta' });
+		const right = banner.createDiv({ cls: 'mq-ad-banner-meta' });
 		const now = new Date();
 		const dateStr = now.toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' });
 		const timeStr = now.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' });
-		this.dateEl = right.createDiv({ cls: 'ad-header__date', text: `${dateStr} ${timeStr}` });
-		const meta = right.createDiv({ cls: 'ad-header__meta' });
+		this.dateEl = right.createDiv({ cls: 'mq-ad-header__date', text: `${dateStr} ${timeStr}` });
+		const meta = right.createDiv({ cls: 'mq-ad-header__meta' });
 		this.weekdayEl = meta.createSpan({ text: now.toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', weekday: 'long' }) });
-		meta.createSpan({ cls: 'ad-dot' });
+		meta.createSpan({ cls: 'mq-ad-dot' });
 		const lunar = getLunarDate(now);
 		this.lunarEl = meta.createSpan({ text: lunar ? '农历 ' + lunar : '' });
-		const btns = right.createDiv({ cls: 'ad-header__btns' });
-		const themeBtn = btns.createEl('button', { cls: 'ad-header__theme' });
+		const btns = right.createDiv({ cls: 'mq-ad-header__btns' });
+		const themeBtn = btns.createEl('button', { cls: 'mq-ad-header__theme' });
 		this.adThemeBtn = themeBtn;
 		this.refreshThemeButton();
 		themeBtn.addEventListener('click', () => { void (async () => {
@@ -488,7 +514,7 @@ export class DashboardView extends ItemView {
 			this.plugin.refreshThemeButtons();
 			this.applyTheme();
 		})(); });
-		const settings = btns.createEl('button', { cls: 'ad-header__settings', text: '\u2699 设置' });
+		const settings = btns.createEl('button', { cls: 'mq-ad-header__settings', text: '\u2699 设置' });
 		settings.addEventListener('click', () => {
 			interface SettingApi { open(): void; openTabById(id: string): void }
 			const app = this.app as unknown as { setting?: SettingApi };
@@ -514,9 +540,9 @@ export class DashboardView extends ItemView {
 		this.bannerState = { ...DEFAULT_SETTINGS.banner, ...this.plugin.settings.banner };
 		const holder = document.createElement('div');
 		this.renderBanner(holder);
-		const fresh = holder.querySelector('.ad-banner');
-		const input = holder.querySelector('.ad-banner__fileinput');
-		parent.querySelectorAll('.ad-banner__fileinput').forEach((node) => node.remove());
+		const fresh = holder.querySelector('.mq-ad-banner');
+		const input = holder.querySelector('.mq-ad-banner__fileinput');
+		parent.querySelectorAll('.mq-ad-banner__fileinput').forEach((node) => node.remove());
 		if (old && fresh) old.replaceWith(fresh);
 		if (input) parent.appendChild(input);
 	}
@@ -534,7 +560,7 @@ export class DashboardView extends ItemView {
 
 	private async renderStatsBanner(banner: HTMLElement): Promise<void> {
 		const stats = await renderBannerStats(banner, this.bannerState.statsConfig, this.app, this.taskStore, this.plugin.settings.dashboardTitle);
-		this.bannerTitleEl = stats.querySelector('.ad-banner-stat-title-prefix');
+		this.bannerTitleEl = stats.querySelector('.mq-ad-banner-stat-title-prefix');
 		if (banner.isConnected) this.bannerStatsEl = stats;
 	}
 
@@ -543,6 +569,15 @@ export class DashboardView extends ItemView {
 		this.bannerStatsEl?.remove();
 		this.bannerStatsEl = null;
 		await this.renderStatsBanner(this.bannerEl);
+	}
+
+	/** Coalesce bursts of vault writes before the all-vault banner scan. */
+	private scheduleBannerStatsRefresh(): void {
+		if (this.bannerStatsTimer !== null) window.clearTimeout(this.bannerStatsTimer);
+		this.bannerStatsTimer = window.setTimeout(() => {
+			this.bannerStatsTimer = null;
+			void this.refreshBannerStats();
+		}, 500);
 	}
 
 	private openBannerModal(dataUrl: string, currentOffsetY: number): void {
@@ -568,8 +603,8 @@ export class DashboardView extends ItemView {
 			img.style.transform = `translateY(${offsetY}px)`;
 		};
 		img.src = dataUrl;
-		img.removeClass('ad-banner__img--hidden');
-		ph?.addClass('ad-banner__ph--hidden');
+		img.removeClass('mq-ad-banner__img--hidden');
+		ph?.addClass('mq-ad-banner__ph--hidden');
 	}
 
 	private async saveBanner(): Promise<void> {
@@ -602,10 +637,11 @@ export class DashboardView extends ItemView {
 	}
 
 	/* ============================================================
-	   Noise background (canvas grain overlay)
+	   Noise background (optional static low-resolution grain overlay)
 	   ============================================================ */
 	private renderNoise(root: HTMLElement): void {
-		const canvas = root.createEl('canvas', { cls: 'ad-noise' });
+		if (!this.plugin.settings.showNoiseOverlay) return;
+		const canvas = root.createEl('canvas', { cls: 'mq-ad-noise' });
 		// Inline fallback so the grain overlay never occupies normal-flow space
 		// (covers flex %-height quirks + CSS load-order issues).
 		canvas.setCssProps({
@@ -620,33 +656,33 @@ export class DashboardView extends ItemView {
 		});
 		const ctx = canvas.getContext('2d', { alpha: true });
 		if (!ctx) return;
-		const size = 1024;
+		// This is intentionally a one-shot 128px texture. The old 1024px rAF loop
+		// allocated and uploaded a new 4 MB pixel buffer repeatedly while Home was open.
+		const size = 128;
 		canvas.width = size;
 		canvas.height = size;
-		// disable antialiasing for crisp pixel edges
+		// Disable antialiasing so the small texture remains visually consistent when scaled.
 		ctx.imageSmoothingEnabled = false;
-		let frame = 0;
-		const draw = () => {
-			if (frame % 2 === 0) {
-				const img = ctx.createImageData(size, size);
-				const d = img.data;
-				for (let i = 0; i < d.length; i += 4) {
-					const v = Math.random() * 255;
-					d[i] = v; d[i + 1] = v; d[i + 2] = v; d[i + 3] = 18;
-				}
-				ctx.putImageData(img, 0, 0);
-			}
-			frame++;
-			this.noiseId = window.requestAnimationFrame(draw);
-		};
-		this.noiseId = window.requestAnimationFrame(draw);
+		const img = ctx.createImageData(size, size);
+		const d = img.data;
+		for (let i = 0; i < d.length; i += 4) {
+			const v = Math.random() * 255;
+			d[i] = v; d[i + 1] = v; d[i + 2] = v; d[i + 3] = 18;
+		}
+		ctx.putImageData(img, 0, 0);
+	}
+
+	/** Re-render only the optional background when its setting changes. */
+	refreshNoiseOverlay(): void {
+		this.dashboardEl?.querySelector('.mq-ad-noise')?.remove();
+		if (this.dashboardEl) this.renderNoise(this.dashboardEl);
 	}
 
 	/* ============================================================
 	   Pulse
 	   ============================================================ */
 	private async renderPulse(root: HTMLElement, d: DashboardData): Promise<void> {
-		const bar = root.createDiv({ cls: 'ad-pulse' });
+		const bar = root.createDiv({ cls: 'mq-ad-pulse' });
 
 		const today = new Date();
 		const todayKey = todayStr();
@@ -662,16 +698,16 @@ export class DashboardView extends ItemView {
 		} catch { /* keep 0 */ }
 
 		const totalEl = bar.createSpan({ text: `${hs.total} NOTES` });
-		bar.createSpan({ cls: 'ad-pulse__sep', text: '\u00B7' });
+		bar.createSpan({ cls: 'mq-ad-pulse__sep', text: '\u00B7' });
 		const pendingEl = bar.createSpan({ text: `${pendingCount} PENDING` });
-		bar.createSpan({ cls: 'ad-pulse__sep', text: '\u00B7' });
+		bar.createSpan({ cls: 'mq-ad-pulse__sep', text: '\u00B7' });
 		const todayEl = bar.createSpan();
 		todayEl.textContent = `\u0394 TODAY +${todayCount}`;
-		bar.createSpan({ cls: 'ad-pulse__sep', text: '\u00B7' });
+		bar.createSpan({ cls: 'mq-ad-pulse__sep', text: '\u00B7' });
 		const streakEl = bar.createSpan({ text: `${hs.streak}D STREAK` });
 
 		// Fix 4: JS-based caret blink
-		const caret = bar.createSpan({ cls: 'ad-pulse__caret' });
+		const caret = bar.createSpan({ cls: 'mq-ad-pulse__caret' });
 		let caretOn = true;
 		this.registerInterval(window.setInterval(() => {
 			caretOn = !caretOn;
@@ -712,31 +748,31 @@ export class DashboardView extends ItemView {
 	   Header
 	   ============================================================ */
 	private renderHeader(root: HTMLElement, d: DashboardData): void {
-		const h = root.createEl('header', { cls: 'ad-header' });
-		const left = h.createDiv({ cls: 'ad-header__left' });
-		left.createEl('p', { cls: 'ad-eyebrow', text: d.header.eyebrow });
-		this.adTitleEl = left.createEl('h1', { cls: 'ad-title', text: this.plugin.settings.dashboardTitle || d.header.title });
-		left.createEl('p', { cls: 'ad-subtitle', text: 'Obsidian · Personal Dashboard · v' + (this.plugin.manifest?.version ?? d.header.subtitle.replace(/^.*v/, 'v')) });
+		const h = root.createEl('header', { cls: 'mq-ad-header' });
+		const left = h.createDiv({ cls: 'mq-ad-header__left' });
+		left.createEl('p', { cls: 'mq-ad-eyebrow', text: d.header.eyebrow });
+		this.adTitleEl = left.createEl('h1', { cls: 'mq-ad-title', text: this.plugin.settings.dashboardTitle || d.header.title });
+		left.createEl('p', { cls: 'mq-ad-subtitle', text: 'Obsidian · Personal Dashboard · v' + (this.plugin.manifest?.version ?? d.header.subtitle.replace(/^.*v/, 'v')) });
 
-		const right = h.createDiv({ cls: 'ad-header__right' });
+		const right = h.createDiv({ cls: 'mq-ad-header__right' });
 
 		const now = new Date();
 		const dateStr = now.toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' });
 		const timeStr = now.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' });
-		this.dateEl = right.createDiv({ cls: 'ad-header__date', text: `${dateStr} ${timeStr}` });
+		this.dateEl = right.createDiv({ cls: 'mq-ad-header__date', text: `${dateStr} ${timeStr}` });
 
-		const meta = right.createDiv({ cls: 'ad-header__meta' });
+		const meta = right.createDiv({ cls: 'mq-ad-header__meta' });
 		this.weekdayEl = meta.createSpan({ text: new Date().toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', weekday: 'long' }) });
-		meta.createSpan({ cls: 'ad-dot' });
+		meta.createSpan({ cls: 'mq-ad-dot' });
 		// Compute the real lunar date up front (mock data has a stale literal);
 		// the 30s interval below keeps it fresh across day boundaries.
 		const initialLunar = getLunarDate(new Date());
 		this.lunarEl = meta.createSpan({ text: initialLunar ? '农历 ' + initialLunar : d.lunar });
 
 		// Buttons row: theme toggle (left) + settings (right), same line
-		const btns = right.createDiv({ cls: 'ad-header__btns' });
+		const btns = right.createDiv({ cls: 'mq-ad-header__btns' });
 
-		const themeBtn = btns.createEl('button', { cls: 'ad-header__theme' });
+		const themeBtn = btns.createEl('button', { cls: 'mq-ad-header__theme' });
 		this.adThemeBtn = themeBtn;
 		this.refreshThemeButton();
 		themeBtn.addEventListener('click', () => { void (async () => {
@@ -749,7 +785,7 @@ export class DashboardView extends ItemView {
 			this.applyTheme();
 		})(); });
 
-		const settings = btns.createEl('button', { cls: 'ad-header__settings' });
+		const settings = btns.createEl('button', { cls: 'mq-ad-header__settings' });
 		settings.textContent = '\u2699 \u8BBE\u7F6E';
 		settings.addEventListener('click', () => {
 			interface SettingApi { open(): void; openTabById(id: string): void }
@@ -780,7 +816,7 @@ export class DashboardView extends ItemView {
 	   Actions toolbar
 	   ============================================================ */
 	private renderActions(root: HTMLElement): void {
-		const nav = root.createEl('nav', { cls: 'ad-toolbar' });
+		const nav = root.createEl('nav', { cls: 'mq-ad-toolbar' });
 
 		// 导航组：去哪看（主页 / 全部项目 / 机会点）
 		const navItems: Array<{ glyph: string; label: string; action: string; svg?: string }> = [
@@ -791,16 +827,20 @@ export class DashboardView extends ItemView {
 			navItems.push({ glyph: '\u25C8', label: this.plugin.settings.boardTitle || '\u770B\u677F', action: 'opportunity', svg: ICON_opportunity });
 		}
 		// 动作组：建什么（新建日记 / 新建任务 / 新建项目）
-		const actionItems: Array<{ glyph: string; label: string; action: string; svg?: string }> = [
+		const actionItems: Array<{ glyph: string; label: string; action: string; svg?: string; icon?: string }> = [
 			{ glyph: '+', label: '\u65B0\u5EFA\u65E5\u8BB0', action: 'diary', svg: ICON_newDiary },
 			{ glyph: '\u25A1', label: '\u65B0\u5EFA\u4EFB\u52A1', action: 'task', svg: ICON_newTask },
 			{ glyph: '\u25A3', label: '\u65B0\u5EFA\u9879\u76EE', action: 'project', svg: ICON_newProject },
 		];
+		if (this.plugin.settings.boardEnabled) {
+			actionItems.push({ glyph: '', label: '\u65B0\u5EFA\u7075\u611F\u6536\u96C6', action: 'opportunity-create', icon: 'pencil' });
+		}
 
-		const makeBtn = (it: { glyph: string; label: string; action: string; svg?: string }, extraCls = ''): HTMLElement => {
-			const btn = nav.createEl('button', { cls: 'ad-toolbar__btn' + (extraCls ? ' ' + extraCls : '') });
-			const glyphEl = btn.createSpan({ cls: 'ad-glyph' });
+		const makeBtn = (it: { glyph: string; label: string; action: string; svg?: string; icon?: string }, extraCls = ''): HTMLElement => {
+			const btn = nav.createEl('button', { cls: 'mq-ad-toolbar__btn' + (extraCls ? ' ' + extraCls : '') });
+			const glyphEl = btn.createSpan({ cls: 'mq-ad-glyph' });
 			if (it.svg) injectSvg(glyphEl, it.svg);
+			else if (it.icon) setIcon(glyphEl, it.icon);
 			else glyphEl.textContent = it.glyph;
 			btn.createSpan({ text: it.label });
 			btn.addEventListener('click', () => {
@@ -810,6 +850,7 @@ export class DashboardView extends ItemView {
 					if (it.action === 'diary') void this.createDiary();
 					if (it.action === 'task') void this.openTaskModal(this.selectedProject ?? undefined);
 					if (it.action === 'project') void this.createProjectFile();
+					if (it.action === 'opportunity-create') this.oppBoard.openCreateModal();
 					if (it.action === 'all') void this.projectBoard.show();
 					if (it.action === 'opportunity') void this.oppBoard.show();
 				} catch (e) {
@@ -822,18 +863,18 @@ export class DashboardView extends ItemView {
 			return btn;
 		};
 
-		const navGroup = nav.createDiv({ cls: 'ad-toolbar__group' });
+		const navGroup = nav.createDiv({ cls: 'mq-ad-toolbar__group' });
 		navItems.forEach((it) => navGroup.appendChild(makeBtn(it)));
-		nav.createDiv({ cls: 'ad-toolbar__sep' });
-		const actGroup = nav.createDiv({ cls: 'ad-toolbar__group ad-toolbar__group--action' });
-		actionItems.forEach((it) => actGroup.appendChild(makeBtn(it, 'ad-toolbar__btn--action')));
+		nav.createDiv({ cls: 'mq-ad-toolbar__sep' });
+		const actGroup = nav.createDiv({ cls: 'mq-ad-toolbar__group mq-ad-toolbar__group--action' });
+		actionItems.forEach((it) => actGroup.appendChild(makeBtn(it, 'mq-ad-toolbar__btn--action')));
 	}
 
 	/* ============================================================
 	   Parse-issue banner (shown directly under the banner image)
 	   ============================================================ */
 	private renderParseIssues(root: HTMLElement): void {
-		const el = root.createDiv({ cls: 'ad-parse-issues ad-parse-issues--hidden' });
+		const el = root.createDiv({ cls: 'mq-ad-parse-issues mq-ad-parse-issues--hidden' });
 		this.parseIssuesEl = el;
 		this.refreshParseIssues();
 	}
@@ -844,27 +885,27 @@ export class DashboardView extends ItemView {
 		const issues = this.taskStore.getParseIssues();
 		el.empty();
 		if (issues.length === 0) {
-			el.addClass('ad-parse-issues--hidden');
+			el.addClass('mq-ad-parse-issues--hidden');
 			return;
 		}
-		el.removeClass('ad-parse-issues--hidden');
+		el.removeClass('mq-ad-parse-issues--hidden');
 
-		const bar = el.createDiv({ cls: 'ad-parse-issues__bar' });
-		bar.createSpan({ cls: 'ad-parse-issues__icon', text: '⚠' });
-		bar.createSpan({ cls: 'ad-parse-issues__text', text: `${issues.length} 个文件解析异常（数据可能不完整），点击查看` });
-		const toggle = bar.createSpan({ cls: 'ad-parse-issues__toggle', text: '收起' });
-		const list = el.createDiv({ cls: 'ad-parse-issues__list ad-parse-issues__list--hidden' });
+		const bar = el.createDiv({ cls: 'mq-ad-parse-issues__bar' });
+		bar.createSpan({ cls: 'mq-ad-parse-issues__icon', text: '⚠' });
+		bar.createSpan({ cls: 'mq-ad-parse-issues__text', text: `${issues.length} 个文件解析异常（数据可能不完整），点击查看` });
+		const toggle = bar.createSpan({ cls: 'mq-ad-parse-issues__toggle', text: '收起' });
+		const list = el.createDiv({ cls: 'mq-ad-parse-issues__list mq-ad-parse-issues__list--hidden' });
 
 		bar.addEventListener('click', () => {
-			const hidden = list.classList.toggle('ad-parse-issues__list--hidden');
+			const hidden = list.classList.toggle('mq-ad-parse-issues__list--hidden');
 			toggle.textContent = hidden ? '展开' : '收起';
 		});
 
 		for (const it of issues) {
-			const row = list.createDiv({ cls: 'ad-parse-issues__item' });
-			row.createSpan({ cls: 'ad-parse-issues__path', text: it.path });
-			row.createSpan({ cls: 'ad-parse-issues__msg', text: `[${it.kind}] ${it.message}` });
-			const openBtn = row.createEl('button', { cls: 'ad-parse-issues__open', text: '在 Obsidian 打开' });
+			const row = list.createDiv({ cls: 'mq-ad-parse-issues__item' });
+			row.createSpan({ cls: 'mq-ad-parse-issues__path', text: it.path });
+			row.createSpan({ cls: 'mq-ad-parse-issues__msg', text: `[${it.kind}] ${it.message}` });
+			const openBtn = row.createEl('button', { cls: 'mq-ad-parse-issues__open', text: '在 Obsidian 打开' });
 			openBtn.addEventListener('click', (e) => {
 				e.stopPropagation();
 				void this.openFileByPath(it.path);
@@ -892,12 +933,12 @@ export class DashboardView extends ItemView {
 		actionLabel?: string;
 		onAction?: () => void;
 	}): void {
-		const e = container.createDiv({ cls: 'ad-empty' });
-		if (opts.icon) e.createDiv({ cls: 'ad-empty__icon', text: opts.icon });
-		e.createDiv({ cls: 'ad-empty__title', text: opts.title });
-		if (opts.hint) e.createDiv({ cls: 'ad-empty__hint', text: opts.hint });
+		const e = container.createDiv({ cls: 'mq-ad-empty' });
+		if (opts.icon) e.createDiv({ cls: 'mq-ad-empty__icon', text: opts.icon });
+		e.createDiv({ cls: 'mq-ad-empty__title', text: opts.title });
+		if (opts.hint) e.createDiv({ cls: 'mq-ad-empty__hint', text: opts.hint });
 		if (opts.actionLabel && opts.onAction) {
-			const btn = e.createEl('button', { cls: 'ad-empty__btn', text: opts.actionLabel });
+			const btn = e.createEl('button', { cls: 'mq-ad-empty__btn', text: opts.actionLabel });
 			btn.addEventListener('click', () => opts.onAction!());
 		}
 	}
@@ -910,12 +951,12 @@ export class DashboardView extends ItemView {
 		} catch {
 			return;
 		}
-		const card = board.createDiv({ cls: 'ad-card ad-card--guide' });
+		const card = board.createDiv({ cls: 'mq-ad-card mq-ad-card--guide' });
 		this.cardHead(card, '\u{1F680}', '欢迎使用 Dashboard');
-		card.createDiv({ cls: 'ad-guide__body', text: '检测到你的知识库还没有任何项目或任务。从下面任意一个开始，几秒即可上手：' });
-		const actions = card.createDiv({ cls: 'ad-guide__actions' });
+		card.createDiv({ cls: 'mq-ad-guide__body', text: '检测到你的知识库还没有任何项目或任务。从下面任意一个开始，几秒即可上手：' });
+		const actions = card.createDiv({ cls: 'mq-ad-guide__actions' });
 		const mk = (label: string, fn: () => void) => {
-			const b = actions.createEl('button', { cls: 'ad-guide__btn', text: label });
+			const b = actions.createEl('button', { cls: 'mq-ad-guide__btn', text: label });
 			b.addEventListener('click', fn);
 		};
 		mk('＋ 新建项目', () => void this.createProjectFile());
@@ -927,7 +968,7 @@ export class DashboardView extends ItemView {
 	   Board — single grid containing all cards
 	   ============================================================ */
 	private renderBoard(root: HTMLElement, d: DashboardData): void {
-		const board = root.createDiv({ cls: 'ad-board' });
+		const board = root.createDiv({ cls: 'mq-ad-board' });
 		this.boardEl = board;
 		// 按注册表渲染全部启用模块
 		void this.renderEnabledModules(board);
@@ -938,15 +979,15 @@ export class DashboardView extends ItemView {
 	/* ---- Quick Capture ---- */
 	private renderQuickCapture(board: HTMLElement): void {
 		// 复用已存在的卡壳（由 renderEnabledModules 按顺序建好），否则每次渲染都会追加一张新卡
-		const card = this.getOrCreateCard(board, 'ad-card ad-b-capture');
+		const card = this.getOrCreateCard(board, 'mq-ad-card mq-ad-b-capture');
 		this.cardHead(card, '\u25C6', '\u5FEB\u901F\u6355\u6349');
-		const qc = card.createDiv({ cls: 'ad-qc' });
+		const qc = card.createDiv({ cls: 'mq-ad-qc' });
 		const area = qc.createEl('textarea', {
-			cls: 'ad-qc__area',
+			cls: 'mq-ad-qc__area',
 			attr: { rows: '3', placeholder: '\u8BB0\u5F55\u4E00\u95EA\u800C\u8FC7\u7684\u60F3\u6CD5\u2026' },
 		});
-		const row = qc.createDiv({ cls: 'ad-qc__row' });
-		const cta = row.createEl('button', { cls: 'ad-qc__cta', text: '\u6355\u6349' });
+		const row = qc.createDiv({ cls: 'mq-ad-qc__row' });
+		const cta = row.createEl('button', { cls: 'mq-ad-qc__cta', text: '\u6355\u6349' });
 
 		const submit = async () => {
 			const content = area.value.trim();
@@ -972,10 +1013,10 @@ export class DashboardView extends ItemView {
 		// Append to <body> so the toast is fixed to the viewport TOP regardless of any
 		// transformed ancestor inside the Obsidian workspace (which would otherwise
 		// break position:fixed and push the toast to the bottom).
-		const toast = document.body.createDiv({ cls: 'ad-toast' + (kind === 'error' ? ' ad-toast--error' : '') });
+		const toast = document.body.createDiv({ cls: 'mq-ad-toast' + (kind === 'error' ? ' mq-ad-toast--error' : '') });
 		toast.createSpan({ text: message });
 		window.setTimeout(() => {
-			toast.addClass('ad-toast--out');
+			toast.addClass('mq-ad-toast--out');
 			window.setTimeout(() => toast.remove(), 300);
 		}, 2500);
 	}
@@ -1156,6 +1197,63 @@ export class DashboardView extends ItemView {
 		await fmWriteFrontmatter(this.app, file, updates);
 	}
 
+	/** Update one daily-node state while preserving the task note's existing body. */
+	async setDailyNode(task: TaskItem, date: string, state: 'done' | 'todo' | 'skip'): Promise<void> {
+		if (!task.sourceFile) return;
+		const file = this.app.vault.getAbstractFileByPath(task.sourceFile);
+		if (!(file instanceof TFile)) return;
+
+		const raw = await this.app.vault.read(file);
+		const lines = raw.split(/\r?\n/);
+		const eol = raw.includes('\r\n') ? '\r\n' : '\n';
+		let fmEnd = 0;
+		if (lines[0]?.trim() === '---') {
+			for (let i = 1; i < lines.length; i++) {
+				if (lines[i]?.trim() === '---') { fmEnd = i; break; }
+			}
+		}
+
+		const bodyNodes = parseDailyNodesFromBody(raw);
+		// Keep legacy frontmatter nodes when a note has not been migrated yet.
+		const nodes = Object.keys(bodyNodes).length ? bodyNodes : { ...task.dailyNodes };
+		if (state === 'todo') delete nodes[date];
+		else nodes[date] = { s: state, n: nodes[date]?.n || '' };
+
+		// Remove the legacy frontmatter map so deleting its last node cannot make it
+		// reappear on the next scan. Handle both inline and indented YAML values.
+		for (let i = fmEnd - 1; i >= 1; i--) {
+			if (!/^\s*每日节点\s*:/.test(lines[i] ?? '')) continue;
+			let end = i + 1;
+			while (end < fmEnd && (/^\s+/.test(lines[end] ?? '') || (lines[end] ?? '').trim() === '')) end++;
+			lines.splice(i, end - i);
+			fmEnd -= end - i;
+		}
+
+		const block = serializeDailyNodesBlock(nodes);
+		const fmPart = lines.slice(0, fmEnd + 1).join(eol);
+		const bodyLines: string[] = [];
+		let inDailyNodes = false;
+		for (let i = fmEnd + 1; i < lines.length; i++) {
+			const line = lines[i] ?? '';
+			if (/^#{1,6}\s+每日节点\s*$/.test(line.trim())) { inDailyNodes = true; continue; }
+			if (inDailyNodes) {
+				if (/^-\s*\d{4}-\d{2}-\d{2}/.test(line.trim()) || line.trim() === '') continue;
+				inDailyNodes = false;
+			}
+			bodyLines.push(line);
+		}
+		while (bodyLines.length && (bodyLines[bodyLines.length - 1] ?? '').trim() === '') bodyLines.pop();
+		const tail = bodyLines.join(eol).trim();
+		let out = fmPart;
+		if (tail) out += eol + tail;
+		if (block) out += eol + eol + block.replace(/\n/g, eol) + eol;
+		await this.app.vault.modify(file, out.trimEnd() + eol);
+
+		task.dailyNodes = nodes;
+		this.showToast(state === 'done' ? t('home.nodeDone', { date }) : state === 'skip' ? t('home.nodeSkipped', { date }) : t('home.nodeTodo', { date }));
+		this.refreshRelevant();
+	}
+
 	private async writeTaskField(task: TaskItem, fieldKey: string, value: string): Promise<void> {
 		if (!task.sourceFile) return;
 		const file = this.app.vault.getAbstractFileByPath(task.sourceFile);
@@ -1251,9 +1349,9 @@ export class DashboardView extends ItemView {
 		// 进入首页前确保退出可能的编辑态（修复「切页未退出编辑态」残留）
 		this.exitEditMode();
 		this.boardEl.empty();
-		this.boardEl.removeClass('po-board');
-		this.boardEl.removeClass('op-board');
-		this.boardEl.addClass('ad-board');
+		this.boardEl.removeClass('mq-po-board');
+		this.boardEl.removeClass('mq-op-board');
+		this.boardEl.addClass('mq-ad-board');
 		this.currentPage = 'home';
 		// 按注册表渲染全部启用模块（顺序/显隐由 settings.homeModules 决定）
 		await this.renderEnabledModules(this.boardEl);
@@ -1332,11 +1430,12 @@ export class DashboardView extends ItemView {
 		repeatWeekdays: number[],
 		repeatMonthDay: number,
 		noEndDate: boolean,
-	): Promise<void> {
+		opportunityId?: string,
+	): Promise<string | null> {
 		const projectFolder = await this.findProjectFolder(projectName);
 		if (!projectFolder) {
 			this.showToast(`\u274C \u627E\u4E0D\u5230\u9879\u76EE\u6587\u4EF6\u5939: ${projectName}`);
-			return;
+			return null;
 		}
 
 		const safeTitle = title.replace(/[*"/<>:|?\\]/g, '-');
@@ -1346,7 +1445,7 @@ export class DashboardView extends ItemView {
 		// Check if already exists
 		if (this.app.vault.getAbstractFileByPath(filePath)) {
 			this.showToast(`\u274C ${title} \u5DF2\u5B58\u5728\u4E8E\u8BE5\u9879\u76EE\u4E2D`);
-			return;
+			return null;
 		}
 
 		// Map status values
@@ -1393,6 +1492,7 @@ export class DashboardView extends ItemView {
 	lines.push(`\u63D0\u9192: ${JSON.stringify(reminders)}`);
 	lines.push(`\u5907\u6CE8: ${yamlScalar(notes)}`);
 	if (parent) lines.push(`\u7236\u4EFB\u52A1: ${yamlScalar(parent)}`);
+	if (opportunityId) lines.push(`\u5173\u8054\u7075\u611F: ${JSON.stringify([opportunityId])}`);
 
 		if (isRecurring && repeatRule) {
 			lines.push('\u91CD\u590D\u89C4\u5219:');
@@ -1411,6 +1511,7 @@ export class DashboardView extends ItemView {
 
 		await this.app.vault.create(filePath, lines.join('\n'));
 		this.showToast(`\u2728 \u4EFB\u52A1\u5DF2\u521B\u5EFA`);
+		return filePath;
 	}
 
 	/** Create a project folder + project.md with Chinese frontmatter */
@@ -1469,7 +1570,7 @@ export class DashboardView extends ItemView {
 	}
 
 	/** Open TaskModal for creating a new task */
-	private async openTaskModal(defaultProject?: string): Promise<void> {
+	async openTaskModal(defaultProject?: string, options?: { defaultTitle?: string; opportunityId?: string; onCreated?: (taskId: string) => void }): Promise<void> {
 		const { TaskModal } = await import('./TaskModal');
 		const projects = await this.taskStore.scanAllProjects();
 		const allTasks = await this.taskStore.scanAllTasks();
@@ -1479,8 +1580,10 @@ export class DashboardView extends ItemView {
 			projects: projects.map((p) => ({ name: p.name, path: p.path })),
 			allTasks: allTasks.map((t) => ({ id: t.id, title: t.content, projectId: t.projectId })),
 			defaultProject,
+			defaultTitle: options?.defaultTitle,
 			onSave: (data) => {
-				void this.createTaskFile(
+				void (async () => {
+					const taskId = await this.createTaskFile(
 					data.title,
 					data.project,
 					data.startDate,
@@ -1498,7 +1601,10 @@ export class DashboardView extends ItemView {
 					data.repeatWeekdays,
 					data.repeatMonthDay,
 					data.noEndDate,
+					options?.opportunityId,
 				);
+					if (taskId) options?.onCreated?.(taskId);
+				})();
 			},
 		}).open();
 	}
@@ -1562,10 +1668,10 @@ export class DashboardView extends ItemView {
 	}
 
 	/**
-	 * 由多类名字符串构造合法的类选择器：'ad-card ad-b-todo' → '.ad-card.ad-b-todo'
+	 * 由多类名字符串构造合法的类选择器：'mq-ad-card mq-ad-b-todo' → '.mq-ad-card.mq-ad-b-todo'
 	 *
 	 * ⚠️ 历史 bug（本轮修复的总根因）：此前各处直接写 `'.' + cardCls`，得到的是
-	 * **后代选择器** `.ad-card ad-b-todo`（在 .ad-card 内找 <ad-b-todo> 标签），永远匹配不到。
+	 * **后代选择器** `.mq-ad-card mq-ad-b-todo`（在 .mq-ad-card 内找 <mq-ad-b-todo> 标签），永远匹配不到。
 	 * 由此连锁导致：卡片拿不到 data-mod（缩放手柄不注入、拖拽删除拿不到 id、顺序无法回写）、
 	 * 拿不到 --cols/--rows（所有卡片回退 1:1），并且 getOrCreateCard 永远命中不到旧卡片而重复创建。
 	 */
@@ -1618,14 +1724,14 @@ export class DashboardView extends ItemView {
 			enabled.push({
 				id: this.countdownModuleId(card.id),
 				cfg: card,
-				mod: { id: 'countdown', title: '倒计时', cardCls: 'ad-card ad-b-countdown', live: false, render: () => undefined },
+				mod: { id: 'countdown', title: '倒计时', cardCls: 'mq-ad-card mq-ad-b-countdown', live: false, render: () => undefined },
 			});
 		}
 		enabled.sort((a, b) => a.cfg.order - b.cfg.order);
 		const enabledIds = new Set(enabled.map((entry) => entry.id));
 
 		// 移除被禁用模块残留的卡片（显隐切换后旧卡需清掉，否则会留空白卡）
-		board.querySelectorAll('.ad-card').forEach((el) => {
+		board.querySelectorAll('.mq-ad-card').forEach((el) => {
 			if (!enabledIds.has(el.getAttribute('data-mod') ?? '')) el.remove();
 		});
 
@@ -1731,18 +1837,18 @@ export class DashboardView extends ItemView {
 		if (!this.dashboardEl) return;
 		// 1) 重渲染顶部导航：看板入口显隐 + 看板名称 label 实时生效。
 		//    横幅现在承载日期/设置区，导航固定插在横幅之后。
-		const oldToolbar = this.dashboardEl.querySelector('.ad-toolbar');
+		const oldToolbar = this.dashboardEl.querySelector('.mq-ad-toolbar');
 		if (oldToolbar) oldToolbar.remove();
 		const tmp = this.dashboardEl.createDiv();
 		this.renderActions(tmp);
 		const nav = tmp.firstElementChild;
 		tmp.remove();
 		if (nav) {
-			const banner = this.dashboardEl.querySelector('.ad-banner');
+			const banner = this.dashboardEl.querySelector('.mq-ad-banner');
 			if (banner) {
 				banner.after(nav);
 			} else {
-				const boardEl = this.dashboardEl.querySelector('.ad-board');
+				const boardEl = this.dashboardEl.querySelector('.mq-ad-board');
 				if (boardEl) this.dashboardEl.insertBefore(nav, boardEl);
 				else this.dashboardEl.appendChild(nav);
 			}
@@ -1781,8 +1887,8 @@ export class DashboardView extends ItemView {
 		requestAnimationFrame(() => this.updateRowH());
 	}
 
-	/** 响应式布局中枢：按板面（= Obsidian 窗格）实际宽度算出列数并写入 --ad-cols，
-	 *  同时把 Grid 行高 --ad-row-h 锁成「单列宽」（1×1 卡正方、多列卡与 1×1 同高、比例不变）。
+	/** 响应式布局中枢：按板面（= Obsidian 窗格）实际宽度算出列数并写入 --mq-ad-cols，
+	 *  同时把 Grid 行高 --mq-ad-row-h 锁成「单列宽」（1×1 卡正方、多列卡与 1×1 同高、比例不变）。
 	 *  列数走 4→3→2→1 梯度，保证每列宽度 ≥ MIN_CARD_W（可读下限），列宽仍是 1fr 随窗口等比缩放。
 	 *  列数变化时重夹紧全部卡片（防 2 列卡在仅剩 1 列时撑出隐式列被挤压）。 */
 	private updateRowH(): void {
@@ -1793,10 +1899,10 @@ export class DashboardView extends ItemView {
 		const width = board.getBoundingClientRect().width;
 		if (width <= 0) return; // 视图尚未布局（隐藏 tab / 首帧），等 ResizeObserver 再来
 		const colCount = this.computeColCount(width, gap);
-		board.style.setProperty('--ad-cols', String(colCount));
+		board.style.setProperty('--mq-ad-cols', String(colCount));
 		// 行高 = 单列宽：与 CSS 的 minmax(0,1fr) 等宽轨道算法一致
 		const unit = Math.max(40, (width - gap * (colCount - 1)) / colCount);
-		board.style.setProperty('--ad-row-h', `${Math.round(unit)}px`);
+		board.style.setProperty('--mq-ad-row-h', `${Math.round(unit)}px`);
 		if (colCount !== this.adLastColCount) {
 			this.adLastColCount = colCount;
 			this.reapplySpans();
@@ -1817,7 +1923,7 @@ export class DashboardView extends ItemView {
 	private reapplySpans(): void {
 		const board = this.boardEl;
 		if (!board) return;
-		board.querySelectorAll('.ad-card').forEach((card) => {
+		board.querySelectorAll('.mq-ad-card').forEach((card) => {
 			const el = card as HTMLElement;
 			const modId = el.getAttribute('data-mod') ?? '';
 			const m = this.findCardConfig(modId);
@@ -1831,15 +1937,15 @@ export class DashboardView extends ItemView {
 	private onBoardPointerDown(e: PointerEvent): void {
 		if (e.button !== 0) return;
 		// 编辑态（长按进入 / 加卡片）仅首页有效。项目总览与机会点页复用同一个 boardEl 渲染，
-		// 但其中没有 .ad-card 元素，boardEmpty 恒为 true；若不拦截，长按空白处（含甘特轴/看板拖动）
+		// 但其中没有 .mq-ad-card 元素，boardEmpty 恒为 true；若不拦截，长按空白处（含甘特轴/看板拖动）
 		// 会误触发 enterEditMode 并弹出「添加卡片」编辑条。这两个页面本就没有卡片编辑模式，
 		// 故非首页一律不响应板面长按。
 		if (this.currentPage !== 'home') return;
 		// 比例手柄的按下：交给缩放逻辑，绝不触发长按下进入编辑态/拖拽
-		if ((e.target as HTMLElement).closest('.ad-card__resize')) return;
+		if ((e.target as HTMLElement).closest('.mq-ad-card__resize')) return;
 		const board = this.boardEl;
 		if (!board) return;
-		const target = (e.target as HTMLElement).closest('.ad-card') as HTMLElement | null;
+		const target = (e.target as HTMLElement).closest('.mq-ad-card') as HTMLElement | null;
 		// 表单控件内的按下不进入编辑态（如快速捕捉文本框）
 		if ((e.target as HTMLElement).closest('input, textarea, button, select, a')) {
 			if (!this.adEditMode) return;
@@ -1853,7 +1959,7 @@ export class DashboardView extends ItemView {
 		// 未进入编辑态：仅在「卡片边缘」长按时才进入，避免拖动滑轨/滑块/正文时误入。
 		// 首页已无卡片时，长按空白板面仍可进入（以便直接添加）。
 		const onEdge = target ? this.isOnCardEdge(target, e.clientX, e.clientY) : false;
-		const boardEmpty = board.querySelectorAll('.ad-card').length === 0;
+		const boardEmpty = board.querySelectorAll('.mq-ad-card').length === 0;
 		if (!onEdge && !boardEmpty) return;
 
 		// 长按 450ms 进入，期间移动超过 10px 视为滚动/意图滑动而取消
@@ -1897,7 +2003,7 @@ export class DashboardView extends ItemView {
 		// 右键菜单仅首页编辑态下用于倒计时卡片；项目/机会点页无卡片编辑模式，直接放行系统右键菜单
 		if (this.currentPage !== 'home') return;
 		if (!this.adEditMode) return;
-		const card = (e.target as HTMLElement).closest('.ad-card') as HTMLElement | null;
+		const card = (e.target as HTMLElement).closest('.mq-ad-card') as HTMLElement | null;
 		if (!card) return;
 		const modId = card.getAttribute('data-mod') ?? '';
 		if (!this.countdownIdFromModuleId(modId)) return;
@@ -1939,7 +2045,7 @@ export class DashboardView extends ItemView {
 		const rows = card.style.getPropertyValue('--rows') || '1';
 		// 占位符：保留当前卡片在网格中的尺寸与槽位，其余卡片据此让位
 		const ph = document.createElement('div');
-		ph.className = 'ad-ph';
+		ph.className = 'mq-ad-ph';
 		ph.style.setProperty('--cols', cols);
 		ph.style.setProperty('--rows', rows);
 		ph.style.gridColumn = `span ${cols}`;
@@ -1947,7 +2053,7 @@ export class DashboardView extends ItemView {
 		card.parentNode?.insertBefore(ph, card);
 
 		// 提起当前卡片：脱离网格流，跟随指针
-		card.classList.add('ad-card--dragging');
+		card.classList.add('mq-ad-card--dragging');
 		card.style.width = rect.width + 'px';
 		card.style.height = rect.height + 'px';
 		card.style.left = rect.left + 'px';
@@ -1986,7 +2092,7 @@ export class DashboardView extends ItemView {
 	 * 是此前「拖到删除位置却删不掉」的直接原因。外扩 TRASH_PAD 让热区更好命中。
 	 */
 	private isOverTrash(x: number, y: number): boolean {
-		const trash = this.adEditBar?.querySelector('.ad-editbar__trash') as HTMLElement | null;
+		const trash = this.adEditBar?.querySelector('.mq-ad-editbar__trash') as HTMLElement | null;
 		if (!trash) return false;
 		const r = trash.getBoundingClientRect();
 		if (r.width === 0 && r.height === 0) return false;
@@ -2006,7 +2112,7 @@ export class DashboardView extends ItemView {
 		// 悬停垃圾桶：高亮并暂停重排，避免边删边抖
 		const overTrash = this.isOverTrash(ev.clientX, ev.clientY);
 		ds.overTrash = overTrash;
-		this.adEditBar?.querySelector('.ad-editbar__trash')?.classList.toggle('is-over', overTrash);
+		this.adEditBar?.querySelector('.mq-ad-editbar__trash')?.classList.toggle('is-over', overTrash);
 		ds.card.classList.toggle('is-doomed', overTrash);
 		if (overTrash) return;
 
@@ -2034,7 +2140,7 @@ export class DashboardView extends ItemView {
 		const x = ds.lastX;
 		const y = ds.lastY;
 		const cards = Array.from(
-			board.querySelectorAll('.ad-card:not(.ad-card--dragging)'),
+			board.querySelectorAll('.mq-ad-card:not(.mq-ad-card--dragging)'),
 		) as HTMLElement[];
 
 		let ref: HTMLElement | null = null;
@@ -2057,7 +2163,7 @@ export class DashboardView extends ItemView {
 	/** FLIP 第一步：记录移动前所有卡片的位置 */
 	private captureCardRects(board: HTMLElement): Map<HTMLElement, DOMRect> {
 		const map = new Map<HTMLElement, DOMRect>();
-		board.querySelectorAll('.ad-card:not(.ad-card--dragging)').forEach((el) => {
+		board.querySelectorAll('.mq-ad-card:not(.mq-ad-card--dragging)').forEach((el) => {
 			map.set(el as HTMLElement, el.getBoundingClientRect());
 		});
 		return map;
@@ -2096,7 +2202,7 @@ export class DashboardView extends ItemView {
 		const card = ds.card;
 		const id = card.getAttribute('data-mod') || '';
 		// 还原卡片样式，使其回到网格流
-		card.classList.remove('ad-card--dragging');
+		card.classList.remove('mq-ad-card--dragging');
 		card.classList.remove('is-doomed');
 		card.style.removeProperty('position');
 		card.style.removeProperty('left');
@@ -2105,7 +2211,7 @@ export class DashboardView extends ItemView {
 		card.style.removeProperty('height');
 		card.style.removeProperty('z-index');
 		card.style.removeProperty('pointer-events');
-		this.adEditBar?.querySelector('.ad-editbar__trash')?.classList.remove('is-over');
+		this.adEditBar?.querySelector('.mq-ad-editbar__trash')?.classList.remove('is-over');
 
 		// 落点复检垃圾桶（最后一次 move 可能未触发，漏判会导致「拖过去了却没删」）
 		const overTrash = ds.overTrash || this.isOverTrash(ds.lastX, ds.lastY);
@@ -2124,7 +2230,7 @@ export class DashboardView extends ItemView {
 	private syncOrderFromDom(): void {
 		if (!this.boardEl) return;
 		const order: string[] = [];
-		this.boardEl.querySelectorAll('.ad-card').forEach((el) => {
+		this.boardEl.querySelectorAll('.mq-ad-card').forEach((el) => {
 			const id = el.getAttribute('data-mod');
 			if (id) order.push(id);
 		});
@@ -2159,7 +2265,7 @@ export class DashboardView extends ItemView {
 		}
 		void this.plugin.saveSettings();
 		this.boardEl?.querySelector(`[data-mod="${id}"]`)?.remove();
-		if (this.boardEl && this.boardEl.querySelectorAll('.ad-card').length === 0) {
+		if (this.boardEl && this.boardEl.querySelectorAll('.mq-ad-card').length === 0) {
 			this.renderBoardEmptyHint();
 		}
 	}
@@ -2190,19 +2296,19 @@ export class DashboardView extends ItemView {
 		m.order = maxOrder + 1;
 		await this.plugin.saveSettings();
 		// 保持编辑态：加回卡片后用户通常还要继续排序/调比例
-		this.boardEl?.querySelector('.ad-empty')?.remove();
+		this.boardEl?.querySelector('.mq-ad-empty')?.remove();
 		await this.showDashboardKeepEditMode();
 	}
 
 	private enterEditMode(): void {
 		if (this.adEditMode) return;
 		this.adEditMode = true;
-		this.dashboardEl?.classList.add('ad-edit');
+		this.dashboardEl?.classList.add('mq-ad-edit');
 		this.showEditBar();
 		this.injectCardResizeButtons();
 		this.boardEl?.addEventListener('click', this.adClickGuard, true);
 		// 若首页已无卡片，直接进入添加流程
-		if (this.boardEl && this.boardEl.querySelectorAll('.ad-card').length === 0) {
+		if (this.boardEl && this.boardEl.querySelectorAll('.mq-ad-card').length === 0) {
 			this.openAddMenu();
 		}
 	}
@@ -2211,30 +2317,30 @@ export class DashboardView extends ItemView {
 	public exitEditMode(): void {
 		if (!this.adEditMode) return;
 		this.adEditMode = false;
-		this.dashboardEl?.classList.remove('ad-edit');
-		this.boardEl?.querySelectorAll('.ad-card__resize, .ad-card__ratio, .ad-ph').forEach((b) => b.remove());
+		this.dashboardEl?.classList.remove('mq-ad-edit');
+		this.boardEl?.querySelectorAll('.mq-ad-card__resize, .mq-ad-card__ratio, .mq-ad-ph').forEach((b) => b.remove());
 		// 清掉拖拽/缩放过程中可能残留的瞬时类，避免退出后卡片still抖动或带高亮描边
-		this.boardEl?.querySelectorAll('.ad-card').forEach((c) => {
-			c.classList.remove('ad-card--dragging', 'ad-card--resizing', 'is-doomed');
+		this.boardEl?.querySelectorAll('.mq-ad-card').forEach((c) => {
+			c.classList.remove('mq-ad-card--dragging', 'mq-ad-card--resizing', 'is-doomed');
 			(c as HTMLElement).style.removeProperty('transform');
 			(c as HTMLElement).style.removeProperty('transition');
 		});
 		// 清理残留弹层：添加卡片列表 / 比例选择器（修复「点完成后小卡片未消失」）
-		this.dashboardEl?.querySelectorAll('.ad-addmenu-backdrop, .ad-propmenu-backdrop').forEach((b) => b.remove());
+		this.dashboardEl?.querySelectorAll('.mq-ad-addmenu-backdrop, .mq-ad-propmenu-backdrop').forEach((b) => b.remove());
 		this.hideEditBar();
 		this.boardEl?.removeEventListener('click', this.adClickGuard, true);
 	}
 
 	private showEditBar(): void {
 		if (this.adEditBar || !this.dashboardEl) return;
-		const bar = this.dashboardEl.createDiv({ cls: 'ad-editbar' });
-		bar.createEl('button', { cls: 'ad-editbar__trash', text: '\uD83D\uDDD1 拖到此处删除' });
-		bar.createDiv({ cls: 'ad-editbar__spacer' });
-		const add = bar.createEl('button', { cls: 'ad-editbar__add', text: '＋ 添加卡片' });
+		const bar = this.dashboardEl.createDiv({ cls: 'mq-ad-editbar' });
+		bar.createEl('button', { cls: 'mq-ad-editbar__trash', text: '\uD83D\uDDD1 拖到此处删除' });
+		bar.createDiv({ cls: 'mq-ad-editbar__spacer' });
+		const add = bar.createEl('button', { cls: 'mq-ad-editbar__add', text: '＋ 添加卡片' });
 		add.addEventListener('click', () => this.openAddMenu());
-		const reset = bar.createEl('button', { cls: 'ad-editbar__reset', text: '↺ 重置布局' });
+		const reset = bar.createEl('button', { cls: 'mq-ad-editbar__reset', text: '↺ 重置布局' });
 		reset.addEventListener('click', () => void this.resetLayout());
-		const done = bar.createEl('button', { cls: 'ad-editbar__done', text: '完成' });
+		const done = bar.createEl('button', { cls: 'mq-ad-editbar__done', text: '完成' });
 		done.addEventListener('click', () => this.exitEditMode());
 		this.adEditBar = bar;
 	}
@@ -2248,15 +2354,15 @@ export class DashboardView extends ItemView {
 	 *  手柄在卡片右下角，悬停可见；按下并拖动即可按方向缩放比例，轻点则打开精确比例菜单。 */
 	private injectCardResizeButtons(): void {
 		if (!this.boardEl) return;
-		this.boardEl.querySelectorAll('.ad-card__resize').forEach((b) => b.remove());
-		this.boardEl.querySelectorAll('.ad-card').forEach((card) => {
+		this.boardEl.querySelectorAll('.mq-ad-card__resize').forEach((b) => b.remove());
+		this.boardEl.querySelectorAll('.mq-ad-card').forEach((card) => {
 			const c = card as HTMLElement;
 			// data-mod 优先；兜底用卡片类名反查模块 id，避免任何一处遗漏就整卡失去缩放能力
 			const modId = c.getAttribute('data-mod')
 				?? this.homeModules.find((m) => c.classList.contains(m.cardCls.split(' ')[1] ?? ''))?.id;
 			if (!modId) return;
 			if (!c.getAttribute('data-mod')) c.setAttribute('data-mod', modId);
-			const btn = c.createDiv({ cls: 'ad-card__resize', text: '⤢' });
+			const btn = c.createDiv({ cls: 'mq-ad-card__resize', text: '⤢' });
 			btn.setAttribute('aria-label', '调整卡片比例（拖动缩放，点击精确设置）');
 			btn.addEventListener('pointerdown', (ev) => {
 				ev.stopPropagation();
@@ -2266,14 +2372,14 @@ export class DashboardView extends ItemView {
 		});
 	}
 
-	/** 当前网格列数（1~4，由 updateRowH 按板面宽度写入 --ad-cols）。
+	/** 当前网格列数（1~4，由 updateRowH 按板面宽度写入 --mq-ad-cols）。
 	 *  用于 resolveSpan / gridUnit：卡片 span 必须 ≤ 此值，否则会撑出隐式列被挤压。 */
 	private currentColCount(): number {
 		const board = this.boardEl;
 		if (!board) return MAX_SPAN;
-		const v = parseInt(board.style.getPropertyValue('--ad-cols'), 10);
+		const v = parseInt(board.style.getPropertyValue('--mq-ad-cols'), 10);
 		if (v > 0) return Math.max(1, Math.min(MAX_SPAN, v));
-		// --ad-cols 尚未写入（首屏同步渲染阶段）：按当前宽度即时推算，
+		// --mq-ad-cols 尚未写入（首屏同步渲染阶段）：按当前宽度即时推算，
 		// 避免误按 4 列把 MIN_COLS=2 的 projects/heatmap 钉成 2 列而在窄窗格撑出隐式列
 		const gap = parseFloat(getComputedStyle(board).columnGap) || 12;
 		const width = board.getBoundingClientRect().width;
@@ -2304,7 +2410,7 @@ export class DashboardView extends ItemView {
 		const startCols = clampSpan(m?.cols);
 		const startRows = clampSpan(m?.rows);
 		this.adResize = { card, modId, startCols, startRows, x0: e.clientX, y0: e.clientY, moved: false };
-		card.classList.add('ad-card--resizing');
+		card.classList.add('mq-ad-card--resizing');
 		const move = (ev: PointerEvent) => this.onResizeMove(ev);
 		const up = (ev: PointerEvent) => {
 			this.onResizeEnd(ev);
@@ -2351,9 +2457,9 @@ export class DashboardView extends ItemView {
 		const st = this.adResize;
 		if (!st) return;
 		this.adResize = null;
-		st.card.classList.remove('ad-card--resizing');
+		st.card.classList.remove('mq-ad-card--resizing');
 		st.card.classList.remove('is-limit');
-		st.card.querySelector('.ad-card__ratio')?.remove();
+		st.card.querySelector('.mq-ad-card__ratio')?.remove();
 		// 几乎没拖动（视为点击）→ 打开精确比例菜单
 		if (!st.moved) {
 			this.openProportionMenu(st.card, st.modId);
@@ -2371,8 +2477,8 @@ export class DashboardView extends ItemView {
 
 	/** 缩放过程中在卡片中央显示当前比例，如「2×1」 */
 	private showResizeBadge(card: HTMLElement, cols: number, rows: number): void {
-		let badge = card.querySelector('.ad-card__ratio') as HTMLElement | null;
-		if (!badge) badge = card.createDiv({ cls: 'ad-card__ratio' });
+		let badge = card.querySelector('.mq-ad-card__ratio') as HTMLElement | null;
+		if (!badge) badge = card.createDiv({ cls: 'mq-ad-card__ratio' });
 		badge.setText(`${cols} × ${rows}`);
 	}
 
@@ -2380,10 +2486,10 @@ export class DashboardView extends ItemView {
 	 * 创建统一的弹层容器。
 	 * 挂到 document.body 而非 dashboardEl：面板所在的滚动容器会成为 fixed 的包含块，
 	 * 导致「居中」被算到整个滚动内容的中点（表现为弹窗跑到最底部、要滚动才点得到）。
-	 * 同时把 data-theme 复制过来，令牌（--ad-*）在 body 层依然按当前主题解析。
+	 * 同时把 data-theme 复制过来，令牌（--mq-ad-*）在 body 层依然按当前主题解析。
 	 */
 	private createPopover(cls: string, opts?: { anchored?: boolean }): { backdrop: HTMLElement; close: () => void } {
-		const backdrop = document.body.createDiv({ cls: `ad-popover ${cls}` + (opts?.anchored ? ' is-anchored' : '') });
+		const backdrop = document.body.createDiv({ cls: `mq-ad-popover ${cls}` + (opts?.anchored ? ' is-anchored' : '') });
 		const theme = this.dashboardEl?.getAttribute('data-theme');
 		if (theme) backdrop.setAttribute('data-theme', theme);
 		const close = (): void => {
@@ -2426,14 +2532,14 @@ export class DashboardView extends ItemView {
 		if (!m) return;
 		const curCols = m.cols ?? 1;
 		const curRows = m.rows ?? 1;
-		const { backdrop, close } = this.createPopover('ad-propmenu-backdrop', { anchored: true });
-		const menu = backdrop.createDiv({ cls: 'ad-propmenu' });
+		const { backdrop, close } = this.createPopover('mq-ad-propmenu-backdrop', { anchored: true });
+		const menu = backdrop.createDiv({ cls: 'mq-ad-propmenu' });
 		const ratioHint = MIN_RATIO[modId] ? `（本卡最低宽高比 ${MIN_RATIO[modId]}:1）` : '';
-		menu.createDiv({ cls: 'ad-propmenu__title', text: `调整卡片比例（宽 1-4 格，高 1-4 格；如 1×2 竖卡）${ratioHint}` });
-		const grid = menu.createDiv({ cls: 'ad-propmenu__grid' });
+		menu.createDiv({ cls: 'mq-ad-propmenu__title', text: `调整卡片比例（宽 1-4 格，高 1-4 格；如 1×2 竖卡）${ratioHint}` });
+		const grid = menu.createDiv({ cls: 'mq-ad-propmenu__grid' });
 		for (let r = 1; r <= 4; r++) {
 			for (let c = 1; c <= 4; c++) {
-				const cell = grid.createDiv({ cls: 'ad-propmenu__cell', text: `${c}×${r}` });
+				const cell = grid.createDiv({ cls: 'mq-ad-propmenu__cell', text: `${c}×${r}` });
 				if (c === curCols && r === curRows) cell.addClass('is-current');
 				// 经 resolveSpan 校验：会被最低宽度/最低宽高比改写的组合直接置灰，避免选到非法比例
 				const res = this.resolveSpan(modId, c, r);
@@ -2452,7 +2558,7 @@ export class DashboardView extends ItemView {
 			}
 		}
 		// 就近定位到该卡片的「⤢」手柄旁（需先入 DOM 才能量到菜单尺寸）
-		this.placeNearAnchor(menu, cardEl.querySelector('.ad-card__resize') as HTMLElement | null);
+		this.placeNearAnchor(menu, cardEl.querySelector('.mq-ad-card__resize') as HTMLElement | null);
 	}
 
 	/** 非法比例格的拒绝反馈：红色抖动一次 */
@@ -2474,11 +2580,11 @@ export class DashboardView extends ItemView {
 		const hidden = hm.filter((m) => m.id !== 'countdown' && !m.enabled);
 		const titleMap = new Map(this.homeModules.map((m) => [m.id, m.title]));
 		const countdownCards = this.plugin.settings.countdownCards ?? [];
-		const { backdrop, close } = this.createPopover('ad-addmenu-backdrop');
-		const menu = backdrop.createDiv({ cls: 'ad-addmenu' });
-		menu.createDiv({ cls: 'ad-addmenu__title', text: '添加卡片到首页' });
+		const { backdrop, close } = this.createPopover('mq-ad-addmenu-backdrop');
+		const menu = backdrop.createDiv({ cls: 'mq-ad-addmenu' });
+		menu.createDiv({ cls: 'mq-ad-addmenu__title', text: '添加卡片到首页' });
 		if (countdownCards.length < 5) {
-			const item = menu.createDiv({ cls: 'ad-addmenu__item' });
+			const item = menu.createDiv({ cls: 'mq-ad-addmenu__item' });
 			item.createSpan({ text: '倒计时卡片' });
 			item.createSpan({ text: '＋' });
 			item.addEventListener('click', () => {
@@ -2487,10 +2593,10 @@ export class DashboardView extends ItemView {
 			});
 		}
 		if (hidden.length === 0 && countdownCards.length >= 5) {
-			menu.createDiv({ cls: 'ad-addmenu__empty', text: '所有模块均已显示在首页' });
+			menu.createDiv({ cls: 'mq-ad-addmenu__empty', text: '所有模块均已显示在首页' });
 		}
 		for (const m of hidden) {
-			const item = menu.createDiv({ cls: 'ad-addmenu__item' });
+			const item = menu.createDiv({ cls: 'mq-ad-addmenu__item' });
 			item.createSpan({ text: titleMap.get(m.id) ?? m.id });
 			item.createSpan({ text: '＋' });
 			item.addEventListener('click', () => {
@@ -2519,7 +2625,7 @@ export class DashboardView extends ItemView {
 		cards.push({ id, eventName: '新年', targetDate: '2027-01-01', enabled: true, order, cols: 1, rows: 1 });
 		this.plugin.settings.countdownCards = cards;
 		await this.plugin.saveSettings();
-		this.boardEl?.querySelector('.ad-empty')?.remove();
+		this.boardEl?.querySelector('.mq-ad-empty')?.remove();
 		await this.showDashboardKeepEditMode();
 	}
 
@@ -2527,10 +2633,10 @@ export class DashboardView extends ItemView {
 	private renderBoardEmptyHint(): void {
 		if (!this.boardEl) return;
 		this.boardEl.empty();
-		const hint = this.boardEl.createDiv({ cls: 'ad-empty' });
-		hint.createDiv({ cls: 'ad-empty__icon', text: '\uD83D\uDD12' });
-		hint.createDiv({ cls: 'ad-empty__title', text: '首页暂无卡片' });
-		hint.createDiv({ cls: 'ad-empty__hint', text: '长按此处或点「＋ 添加卡片」把模块加回来' });
+		const hint = this.boardEl.createDiv({ cls: 'mq-ad-empty' });
+		hint.createDiv({ cls: 'mq-ad-empty__icon', text: '\uD83D\uDD12' });
+		hint.createDiv({ cls: 'mq-ad-empty__title', text: '首页暂无卡片' });
+		hint.createDiv({ cls: 'mq-ad-empty__hint', text: '长按此处或点「＋ 添加卡片」把模块加回来' });
 	}
 
 	/** Refresh all home dashboard cards (todo + progress + weekly) in-place.
@@ -2540,7 +2646,7 @@ export class DashboardView extends ItemView {
 		if (this.currentPage !== 'home' || !this.boardEl) return;
 		// A first-run guide (if shown at load) should yield as soon as the user
 		// starts populating the vault, so drop any stale guide on refresh.
-		this.boardEl.querySelector('.ad-card--guide')?.remove();
+		this.boardEl.querySelector('.mq-ad-card--guide')?.remove();
 		const allTasks = this.dashboardStore.getTasks() ?? await this.taskStore.scanAllTasks();
 		// scanAllTasks 是异步耗时操作；期间用户可能已切到其它页面。
 		// 必须在渲染前重校验，否则会把主页卡片渲染进机会点/项目页面。
@@ -2592,10 +2698,10 @@ export class DashboardView extends ItemView {
 	   ============================================================ */
 	private async renderTodo(board: HTMLElement, allTasks?: TaskItem[]): Promise<void> {
 		const tasks = allTasks ?? await this.taskStore.scanAllTasks();
-		const card = this.getOrCreateCard(board, 'ad-card ad-b-todo');
-		const summary = card.createSpan({ cls: 'ad-card__hint' });
+		const card = this.getOrCreateCard(board, 'mq-ad-card mq-ad-b-todo');
+		const summary = card.createSpan({ cls: 'mq-ad-card__hint' });
 		this.cardHead(card, '\u25CE', 'TODO', undefined, summary);
-		const list = card.createDiv({ cls: 'ad-todo' });
+		const list = card.createDiv({ cls: 'mq-ad-todo' });
 
 		try {
 			const today = todayStr();
@@ -2613,24 +2719,24 @@ export class DashboardView extends ItemView {
 
 			sorted.forEach((task) => {
 				const isDone = isDoneRow(task);
-				const row = list.createDiv({ cls: 'ad-todo__item' + (isDone ? ' is-done' : '') + (task.isOverdue ? ' is-overdue' : '') });
+				const row = list.createDiv({ cls: 'mq-ad-todo__item' + (isDone ? ' is-done' : '') + (task.isOverdue ? ' is-overdue' : '') });
 
 				// Circle click → toggle task (handles repeat tasks)
-				const check = row.createSpan({ cls: 'ad-todo__check' });
+				const check = row.createSpan({ cls: 'mq-ad-todo__check' });
 				check.addEventListener('click', (e) => {
 					e.stopPropagation();
 					void this.toggleTask(task, row);
 				});
 
 		// Text click → open edit modal
-		const text = row.createSpan({ cls: 'ad-todo__text', text: task.content });
+		const text = row.createSpan({ cls: 'mq-ad-todo__text', text: task.content });
 		text.addEventListener('click', () => {
 			this.openTaskEditModal(task);
 		});
 
 			// Tag with priority
 				const prioLabel = task.priority || '\u672A\u8BBE\u7F6E';
-				row.createSpan({ cls: 'ad-todo__tag', text: prioLabel, attr: { 'data-prio': task.priority || '' } });
+				row.createSpan({ cls: 'mq-ad-todo__tag', text: prioLabel, attr: { 'data-prio': task.priority || '' } });
 
 				// Right-click context menu
 				row.addEventListener('contextmenu', (e) => {
@@ -2667,16 +2773,16 @@ export class DashboardView extends ItemView {
 			summary.textContent = `${doneCount} / ${totalForSummary} done \u00B7 \u6309\u4F18\u5148\u7EA7`;
 		} catch {
 			summary.textContent = '0 / 0 done';
-			list.createDiv({ cls: 'ad-todo__empty', text: '\u6682\u65E0\u4ECA\u65E5\u4EFB\u52A1' });
+			list.createDiv({ cls: 'mq-ad-todo__empty', text: '\u6682\u65E0\u4ECA\u65E5\u4EFB\u52A1' });
 		}
 	}
 
 	/* ---- Progress (dual ring, real task data) ---- */
 	private async renderProgress(board: HTMLElement, allTasks?: TaskItem[]): Promise<void> {
 		const tasks = allTasks ?? await this.taskStore.scanAllTasks();
-		const card = this.getOrCreateCard(board, 'ad-card ad-b-progress');
+		const card = this.getOrCreateCard(board, 'mq-ad-card mq-ad-b-progress');
 		this.cardHead(card, '\u25D0', '\u5DE5\u4F5C\u8FDB\u5EA6', 'today \u00B7 ring');
-		const dp = card.createDiv({ cls: 'ad-dp' });
+		const dp = card.createDiv({ cls: 'mq-ad-dp' });
 
 		let todayDone = 0, todayTotal = 0, allDone = 0, allTotal = 0;
 		try {
@@ -2707,30 +2813,30 @@ export class DashboardView extends ItemView {
 
 		// Top ring — today's tasks
 		const todayPct = todayTotal ? Math.round((todayDone / todayTotal) * 100) : 0;
-		this.buildRing(dp, todayPct, 'ad-dp__pct-daily', 'daily');
-		dp.createDiv({ cls: 'ad-dp__stat' }).createEl('strong', { text: `\u4ECA\u65E5\u5DF2\u5B8C\u6210 ${todayDone} / \u4ECA\u65E5\u603B\u4EFB\u52A1 ${todayTotal}` });
+		this.buildRing(dp, todayPct, 'mq-ad-dp__pct-daily', 'daily');
+		dp.createDiv({ cls: 'mq-ad-dp__stat' }).createEl('strong', { text: `\u4ECA\u65E5\u5DF2\u5B8C\u6210 ${todayDone} / \u4ECA\u65E5\u603B\u4EFB\u52A1 ${todayTotal}` });
 
 		// Bottom ring — all tasks
 		const allPct = allTotal ? Math.round((allDone / allTotal) * 100) : 0;
-		this.buildRing(dp, allPct, 'ad-dp__pct-proj', 'proj');
-		dp.createDiv({ cls: 'ad-dp__stat' }).createEl('strong', { text: `\u5DF2\u5B8C\u6210 ${allDone} / \u603B\u4EFB\u52A1 ${allTotal}` });
+		this.buildRing(dp, allPct, 'mq-ad-dp__pct-proj', 'proj');
+		dp.createDiv({ cls: 'mq-ad-dp__stat' }).createEl('strong', { text: `\u5DF2\u5B8C\u6210 ${allDone} / \u603B\u4EFB\u52A1 ${allTotal}` });
 	}
 
 	private buildRing(parent: HTMLElement, pct: number, pctCls: string, ringKey: string): void {
 		const C = 263.9;
-		const wrap = parent.createDiv({ cls: 'ad-dp__ring' });
+		const wrap = parent.createDiv({ cls: 'mq-ad-dp__ring' });
 		const svg = wrap.createSvg('svg');
 		svg.setAttribute('viewBox', '0 0 100 100');
 		const track = svg.createSvg('circle');
 		track.setAttribute('cx', '50');
 		track.setAttribute('cy', '50');
 		track.setAttribute('r', '42');
-		track.classList.add('ad-track');
+		track.classList.add('mq-ad-track');
 		const fill = svg.createSvg('circle');
 		fill.setAttribute('cx', '50');
 		fill.setAttribute('cy', '50');
 		fill.setAttribute('r', '42');
-		fill.classList.add('ad-fill');
+		fill.classList.add('mq-ad-fill');
 		fill.setAttribute('stroke-dasharray', C.toFixed(2));
 
 		// 起点 = 上次显示值（首帧即落位，避免整圈闪烁）；终点 = 当前目标进度
@@ -2738,8 +2844,8 @@ export class DashboardView extends ItemView {
 		const to = Math.max(0, Math.min(100, pct));
 		fill.setAttribute('stroke-dashoffset', (C * (1 - from / 100)).toFixed(2));
 
-		const center = wrap.createDiv({ cls: 'ad-dp__center' });
-		const pctEl = center.createDiv({ cls: `ad-dp__pct ${pctCls}` });
+		const center = wrap.createDiv({ cls: 'mq-ad-dp__center' });
+		const pctEl = center.createDiv({ cls: `mq-ad-dp__pct ${pctCls}` });
 		pctEl.textContent = Math.round(from) + '%';
 
 		// 记录目标值，供下次刷新衔接；动画过程中该值会被实时更新为当前显示值
@@ -2800,15 +2906,15 @@ export class DashboardView extends ItemView {
 	/* ---- Weekly & Overdue (real task data) ---- */
 	private async renderWeekly(board: HTMLElement, allTasks?: TaskItem[]): Promise<void> {
 		const tasks = allTasks ?? await this.taskStore.scanAllTasks();
-		const card = this.getOrCreateCard(board, 'ad-card ad-b-weekly');
+		const card = this.getOrCreateCard(board, 'mq-ad-card mq-ad-b-weekly');
 
 		// Header: calendar icon + title + overdue badge (right)
-		const head = card.createDiv({ cls: 'ad-card__head' });
-		const h3 = head.createEl('h3', { cls: 'ad-card__title' });
-		h3.createSpan({ cls: 'ad-marker', text: '\u{1F4C5}' });
+		const head = card.createDiv({ cls: 'mq-ad-card__head' });
+		const h3 = head.createEl('h3', { cls: 'mq-ad-card__title' });
+		h3.createSpan({ cls: 'mq-ad-marker', text: '\u{1F4C5}' });
 		h3.appendText('\u672C\u5468\u5F85\u529E & \u903E\u671F\u63D0\u9192');
 
-		const list = card.createDiv({ cls: 'ad-wo' });
+		const list = card.createDiv({ cls: 'mq-ad-wo' });
 
 		try {
 			const today = todayStr();
@@ -2821,21 +2927,13 @@ export class DashboardView extends ItemView {
 			const weekStartStr = fmtDate(weekStart);
 			const weekEndStr = fmtDate(weekEnd);
 
-			const isDone = (t: TaskItem): boolean =>
-				t.status === '\u5DF2\u5B8C\u6210' || t.status === '\u5DF2\u53D6\u6D88';
-			const keepDone = this.plugin.settings.todoShowCompleted;
-
 			// ALL overdue tasks (even outside this week), sorted earliest-overdue first
 			const overdue = tasks.filter((t) => t.isOverdue);
 			overdue.sort((a, b) => (a.dueDate! < b.dueDate! ? -1 : a.dueDate! > b.dueDate! ? 1 : 0));
 
-	// This-week, non-overdue, not done — incl. multi-day tasks that span the week
-	const thisWeek = tasks.filter((t) => {
-		if (isDone(t)) {
-			if (!keepDone || !t.completeTime) return false;
-			const completedDate = t.completeTime.slice(0, 10);
-			return completedDate >= weekStartStr && completedDate < weekEndStr;
-		}
+			// This-week, non-overdue, incomplete tasks — incl. multi-day tasks that span the week.
+			const thisWeek = tasks.filter((t) => {
+				if (t.status === '\u5DF2\u5B8C\u6210' || t.status === '\u5DF2\u53D6\u6D88') return false;
 		// Recurring tasks: show when their next 提醒日期 falls within this week
 		if (t.type === '\u91CD\u590D' && t.remindDate) {
 			return t.remindDate < weekEndStr && t.remindDate >= weekStartStr;
@@ -2847,63 +2945,97 @@ export class DashboardView extends ItemView {
 		// AND due on/after week start. Using '<' (not '<=') keeps tasks whose start
 		// falls on next Monday or later out of "this week".
 		return start < weekEndStr && t.dueDate >= weekStartStr;
-	});
+			});
 			thisWeek.sort((a, b) => (a.dueDate! < b.dueDate! ? -1 : a.dueDate! > b.dueDate! ? 1 : 0));
 
 			// Overdue badge (hidden when 0)
 			if (overdue.length > 0) {
-				const badge = head.createSpan({ cls: 'ad-badge ad-badge--danger', text: String(overdue.length) });
+				const badge = head.createSpan({ cls: 'mq-ad-badge mq-ad-badge--danger', text: String(overdue.length) });
 				badge.title = `${overdue.length} \u4E2A\u903E\u671F\u4EFB\u52A1`;
 			}
 
 			// Section: overdue (pinned top, red)
 			if (overdue.length > 0) {
-				const og = list.createDiv({ cls: 'ad-wo__group ad-wo--overdue' });
+				const og = list.createDiv({ cls: 'mq-ad-wo__group mq-ad-wo--overdue' });
 				const oh4 = og.createEl('h4');
-			oh4.createSpan({ cls: 'ad-wo-mark', text: '▲' });
+			oh4.createSpan({ cls: 'mq-ad-wo-mark', text: '▲' });
 			oh4.appendText('逾期提醒');
-				const ul = og.createEl('ul', { cls: 'ad-wo__list' });
+				const ul = og.createEl('ul', { cls: 'mq-ad-wo__list' });
 				overdue.forEach((t) => this.renderWeeklyRow(ul, t, true));
 			}
 
-			list.createDiv({ cls: 'ad-wo__sep' });
+			list.createDiv({ cls: 'mq-ad-wo__sep' });
 
 			// Section: this week
-			const wg = list.createDiv({ cls: 'ad-wo__group' });
+			const wg = list.createDiv({ cls: 'mq-ad-wo__group' });
 			const wh4 = wg.createEl('h4');
-			wh4.createSpan({ cls: 'ad-wo-mark', text: '◆' });
+			wh4.createSpan({ cls: 'mq-ad-wo-mark', text: '◆' });
 			wh4.appendText('本周待办');
-			const ul = wg.createEl('ul', { cls: 'ad-wo__list' });
+			const ul = wg.createEl('ul', { cls: 'mq-ad-wo__list' });
 			if (thisWeek.length === 0 && overdue.length === 0) {
-				list.createDiv({ cls: 'ad-wo__empty', text: '\u{1F389} \u672C\u5468\u6682\u65E0\u5F85\u529E\u4EFB\u52A1' });
+				list.createDiv({ cls: 'mq-ad-wo__empty', text: '\u{1F389} \u672C\u5468\u6682\u65E0\u5F85\u529E\u4EFB\u52A1' });
 			} else {
 				thisWeek.forEach((t) => this.renderWeeklyRow(ul, t, false));
 			}
 
 			// Footer stats
-			const foot = card.createDiv({ cls: 'ad-wo__foot' });
+			const foot = card.createDiv({ cls: 'mq-ad-wo__foot' });
 			foot.textContent = `\u672C\u5468\u5171 ${thisWeek.length} \u4E2A\u4EFB\u52A1\uFF0C\u903E\u671F ${overdue.length} \u4E2A`;
 		} catch {
-			list.createDiv({ cls: 'ad-wo__empty', text: '\u52A0\u8F7D\u5931\u8D25' });
+			list.createDiv({ cls: 'mq-ad-wo__empty', text: '\u52A0\u8F7D\u5931\u8D25' });
+		}
+	}
+
+	/** All completed tasks across projects, most recently completed first. */
+	private async renderCompletedHistory(board: HTMLElement, allTasks?: TaskItem[]): Promise<void> {
+		const tasks = allTasks ?? await this.taskStore.scanAllTasks();
+		const card = this.getOrCreateCard(board, 'mq-ad-card mq-ad-b-completed-history');
+		const head = card.createDiv({ cls: 'mq-ad-card__head' });
+		const h3 = head.createEl('h3', { cls: 'mq-ad-card__title' });
+		h3.createSpan({ cls: 'mq-ad-marker', text: '\u2713' });
+		h3.appendText('历史完成待办');
+		const list = card.createDiv({ cls: 'mq-ad-wo mq-ad-completed-history' });
+
+		try {
+			const completed = tasks
+				.filter((task) => task.status === '\u5DF2\u5B8C\u6210')
+				.sort((a, b) => {
+					const aDate = a.completeTime || a.dueDate || '';
+					const bDate = b.completeTime || b.dueDate || '';
+					return bDate.localeCompare(aDate);
+				});
+
+			if (completed.length === 0) {
+				list.createDiv({ cls: 'mq-ad-wo__empty', text: '暂无已完成待办' });
+			} else {
+				const ul = list.createEl('ul', { cls: 'mq-ad-wo__list' });
+				completed.forEach((task) => this.renderWeeklyRow(ul, task, false, task.completeTime?.slice(0, 10)));
+			}
+
+			const foot = card.createDiv({ cls: 'mq-ad-wo__foot' });
+			foot.textContent = `历史共 ${completed.length} 个已完成任务`;
+		} catch {
+			list.createDiv({ cls: 'mq-ad-wo__empty', text: '加载失败' });
 		}
 	}
 
 	/** Build a single weekly/overdue task row (li) with click + context menu */
-	private renderWeeklyRow(ul: HTMLElement, task: TaskItem, isOverdue: boolean): void {
+	private renderWeeklyRow(ul: HTMLElement, task: TaskItem, isOverdue: boolean, displayDate?: string): void {
 		const li = ul.createEl('li');
-		if (task.status === '\u5DF2\u5B8C\u6210') li.addClass('is-done');
-		const due = task.dueDate || task.remindDate || '';
-		li.createSpan({ cls: 'ad-wo__date', text: due ? due.slice(5) : '\u2014' });
-		li.createSpan({ cls: 'ad-wo__text', text: task.content });
+		const isCompleted = task.status === '\u5DF2\u5B8C\u6210';
+		if (isCompleted) li.addClass('is-done');
+		const due = displayDate || task.dueDate || task.remindDate || '';
+		li.createSpan({ cls: 'mq-ad-wo__date', text: due ? due.slice(5) : '\u2014' });
+		li.createSpan({ cls: 'mq-ad-wo__text', text: task.content });
 		if (isOverdue) {
 			const days = overdueDays(task.dueDate);
-			li.createSpan({ cls: 'ad-wo__over', text: `\u903E\u671F ${days}\u5929` });
+			li.createSpan({ cls: 'mq-ad-wo__over', text: `\u903E\u671F ${days}\u5929` });
 			li.classList.add('is-overdue-row');
-		} else {
+		} else if (!isCompleted) {
 			// This-week rows: show urgency tag (color-coded by priority)
 			const urg = urgencyMeta(task.priority);
 			if (urg) {
-				li.createSpan({ cls: 'ad-wo__urg', text: urg.label, attr: { 'data-urg': urg.key } });
+				li.createSpan({ cls: 'mq-ad-wo__urg', text: urg.label, attr: { 'data-urg': urg.key } });
 			}
 		}
 
@@ -2975,12 +3107,12 @@ export class DashboardView extends ItemView {
 
 	/* ---- Projects (real data) ---- */
 	private async renderProjects(board: HTMLElement): Promise<void> {
-		const card = this.getOrCreateCard(board, 'ad-card ad-b-project');
-		const head = card.createDiv({ cls: 'ad-card__head ad-card__head--proj' });
-		const h3 = head.createEl('h3', { cls: 'ad-card__title' });
-		h3.createSpan({ cls: 'ad-marker', text: '\u25A6' });
+		const card = this.getOrCreateCard(board, 'mq-ad-card mq-ad-b-project');
+		const head = card.createDiv({ cls: 'mq-ad-card__head mq-ad-card__head--proj' });
+		const h3 = head.createEl('h3', { cls: 'mq-ad-card__title' });
+		h3.createSpan({ cls: 'mq-ad-marker', text: '\u25A6' });
 		h3.appendText('\u9879\u76EE\u60C5\u51B5');
-		const hint = head.createSpan({ cls: 'ad-card__hint ad-card__hint--inline' });
+		const hint = head.createSpan({ cls: 'mq-ad-card__hint mq-ad-card__hint--inline' });
 
 		const stages = this.plugin.settings.npdpStages;
 		const maxStageFilter = this.plugin.settings.npdpProgressFilter ?? stages.length;
@@ -3013,8 +3145,8 @@ export class DashboardView extends ItemView {
 			return;
 		}
 
-		const proj = card.createDiv({ cls: 'ad-proj' });
-		const list = proj.createDiv({ cls: 'ad-proj__list' });
+		const proj = card.createDiv({ cls: 'mq-ad-proj' });
+		const list = proj.createDiv({ cls: 'mq-ad-proj__list' });
 
 		let activeCount = 0;
 		filtered.forEach((p) => {
@@ -3022,15 +3154,15 @@ export class DashboardView extends ItemView {
 			if (projStage > 0 && projStage < (p.stages?.length ?? stages.length)) activeCount++;
 			const pct = p.taskCount > 0 ? Math.round((p.activeCount / p.taskCount) * 100) : 0;
 
-			const row = list.createDiv({ cls: 'ad-proj__row' });
-			row.createSpan({ cls: 'ad-proj__dot', attr: { style: `background:${p.color}` } });
-			const name = row.createDiv({ cls: 'ad-proj__name' });
+			const row = list.createDiv({ cls: 'mq-ad-proj__row' });
+			row.createSpan({ cls: 'mq-ad-proj__dot', attr: { style: `background:${p.color}` } });
+			const name = row.createDiv({ cls: 'mq-ad-proj__name' });
 			name.appendText(p.name);
-			name.createSpan({ cls: 'ad-meta', text: `${p.taskCount} \u4EFB\u52A1 \u00B7 ${p.activeCount}\u6D3B\u8DC3 \u00B7 ${pct}%` });
+			name.createSpan({ cls: 'mq-ad-meta', text: `${p.taskCount} \u4EFB\u52A1 \u00B7 ${p.activeCount}\u6D3B\u8DC3 \u00B7 ${pct}%` });
 
 			// Stage pipeline mini (connector line segments colored by progress, ends at last dot)
-			const track = row.createDiv({ cls: 'ad-proj__track' });
-			const stageNodes = track.createDiv({ cls: 'ad-proj__stages' });
+			const track = row.createDiv({ cls: 'mq-ad-proj__track' });
+			const stageNodes = track.createDiv({ cls: 'mq-ad-proj__stages' });
 			const projStages = p.stages || (isLongTermProject(p.type) ? LONG_TERM_STAGES : stages);
 			// Auto-size stage dots by count: more stages → smaller, fixed width for connector math
 			const stageMinW = Math.max(20, Math.min(36, Math.floor(160 / projStages.length)));
@@ -3041,13 +3173,13 @@ export class DashboardView extends ItemView {
 			projStages.forEach((label, i) => {
 				const isDone = i < projStage;
 				const isCurrent = i === projStage;
-				const s = stageNodes.createDiv({ cls: 'ad-proj__stage' + (isDone ? ' is-done' : '') + (isCurrent ? ' is-current' : '') });
+				const s = stageNodes.createDiv({ cls: 'mq-ad-proj__stage' + (isDone ? ' is-done' : '') + (isCurrent ? ' is-current' : '') });
 				s.style.width = stageMinW + 'px';
-				s.createSpan({ cls: 'ad-pip' });
+				s.createSpan({ cls: 'mq-ad-pip' });
 				s.appendText(label);
 			});
 
-			row.createDiv({ cls: 'ad-proj__chev', text: '\u203A' });
+			row.createDiv({ cls: 'mq-ad-proj__chev', text: '\u203A' });
 
 			// Right-click context menu
 			row.addEventListener('contextmenu', (e) => {
@@ -3067,10 +3199,10 @@ export class DashboardView extends ItemView {
 		});
 
 		// Footer summary
-		const sum = proj.createDiv({ cls: 'ad-proj__sum' });
+		const sum = proj.createDiv({ cls: 'mq-ad-proj__sum' });
 		const filterLabel = maxStageFilter < stages.length ? `\u2264 ${stages[maxStageFilter - 1]}` : '\u5168\u90E8';
-		const sumRow = sum.createSpan({ cls: 'ad-row' });
-		sumRow.createSpan({ cls: 'ad-key', text: '\u2299' });
+		const sumRow = sum.createSpan({ cls: 'mq-ad-row' });
+		sumRow.createSpan({ cls: 'mq-ad-key', text: '\u2299' });
 		sumRow.appendText(` ${activeCount} \u8FDB\u884C\u4E2D \u00B7 ${filterLabel}`);
 	}
 
@@ -3081,7 +3213,7 @@ export class DashboardView extends ItemView {
 
 	/* ---- Heatmap (year-based: Jan 1 -> Dec 31) ---- */
 		private renderHeatmap(board: HTMLElement): void {
-		const card = this.getOrCreateCard(board, 'ad-card ad-b-heatmap');
+		const card = this.getOrCreateCard(board, 'mq-ad-card mq-ad-b-heatmap');
 		this.heatmapCard = card;
 		// 渲染可能重建卡片元素（如 refreshHeatmap 先 remove 再渲染），需重新套用标识与比例，
 		// 否则新元素无 --cols/--rows，会回退成 1×1（新建笔记刷新热力图后比例丢失即此因）。
@@ -3097,17 +3229,17 @@ export class DashboardView extends ItemView {
 		const stats = calcHeatmapStats(noteCounts, year, today);
 		
 		// Title header (dashboard header style)
-		const head = card.createDiv({ cls: 'ad-card__head' });
-		const h3 = head.createEl('h3', { cls: 'ad-card__title' });
-		h3.createSpan({ cls: 'ad-marker', text: '\u25A5' });
+		const head = card.createDiv({ cls: 'mq-ad-card__head' });
+		const h3 = head.createEl('h3', { cls: 'mq-ad-card__title' });
+		h3.createSpan({ cls: 'mq-ad-marker', text: '\u25A5' });
 		h3.appendText('\u7B14\u8BB0\u7EDF\u8BA1');
 		
 		// 统计数字 + 活跃度指标（顶部右上角，与标题同行右对齐）
-		const nsHead = head.createDiv({ cls: 'ad-ns__head' });
-		nsHead.createDiv({ cls: 'ad-ns__big', text: String(stats.total) });
-		const small = nsHead.createDiv({ cls: 'ad-ns__small' });
-		small.createDiv({ cls: 'ad-ns__active', text: `${stats.active} \u5929\u6D3B\u8DC3` });
-		const streak = small.createDiv({ cls: 'ad-ns__streak' });
+		const nsHead = head.createDiv({ cls: 'mq-ad-ns__head' });
+		nsHead.createDiv({ cls: 'mq-ad-ns__big', text: String(stats.total) });
+		const small = nsHead.createDiv({ cls: 'mq-ad-ns__small' });
+		small.createDiv({ cls: 'mq-ad-ns__active', text: `${stats.active} \u5929\u6D3B\u8DC3` });
+		const streak = small.createDiv({ cls: 'mq-ad-ns__streak' });
 		streak.appendText('\u5F53\u524D\u8FDE\u7EED ');
 		streak.createEl('strong', { text: String(stats.streak) });
 		streak.appendText(' \u5929');
@@ -3127,10 +3259,10 @@ export class DashboardView extends ItemView {
 		const totalWeeks = Math.ceil(totalDays / 7);
 		
 		// --- Heat area (flex column + horizontal scroll; fixed 13px cells) ---
-		const heat = card.createDiv({ cls: 'ad-ns__heat' });
+		const heat = card.createDiv({ cls: 'mq-ad-ns__heat' });
 		
 		// 月份标签行：内容由 layoutHeatmap 按「可见周窗口 + 实际列间距」动态重建（此处只建容器）
-		heat.createDiv({ cls: 'ad-ns__months' });
+		heat.createDiv({ cls: 'mq-ad-ns__months' });
 		const startMs = startMonday.getTime();
 		// 缓存每周所属月份（取该周周四所在月，GitHub 同款口径），供 layoutHeatmap 重建月份标签
 		const weekMonths: number[] = [];
@@ -3143,19 +3275,19 @@ export class DashboardView extends ItemView {
 		this.adHmKey = ''; // DOM 已重建，强制重新布局
 		
 		// Grid: day-of-week column + cells (column flow, fixed 13px cells)
-		const grid = heat.createDiv({ cls: 'ad-ns__grid' });
-		const dow = grid.createDiv({ cls: 'ad-ns__dow' });
+		const grid = heat.createDiv({ cls: 'mq-ad-ns__grid' });
+		const dow = grid.createDiv({ cls: 'mq-ad-ns__dow' });
 		['', '\u4E00', '', '\u4E09', '', '\u4E94', ''].forEach((t) => dow.createSpan({ text: t }));
 		
-		const cells = grid.createDiv({ cls: 'ad-ns__cells' });
+		const cells = grid.createDiv({ cls: 'mq-ad-ns__cells' });
 		for (let w = 0; w < totalWeeks; w++) {
 			for (let r = 0; r < 7; r++) {
 				const cellDate = new Date(startMs + (w * 7 + r) * 86400000);
 				const cellTime = cellDate.getTime();
-				const cell = cells.createDiv({ cls: 'ad-ns__cell' });
+				const cell = cells.createDiv({ cls: 'mq-ad-ns__cell' });
 				
 				if (cellTime < yearStartTime || cellTime > yearEndTime) {
-					cell.addClass('ad-ns__cell--empty');
+					cell.addClass('mq-ad-ns__cell--empty');
 					continue;
 				}
 				
@@ -3179,14 +3311,14 @@ export class DashboardView extends ItemView {
 		}
 		
 		// Footer legend (less ... more)
-		const foot = card.createDiv({ cls: 'ad-ns__foot' });
-		foot.createSpan({ cls: 'ad-ns__window', text: `${year} \u5168\u5E74` });
-		const legend = foot.createSpan({ cls: 'ad-ns__legend' });
-		legend.createSpan({ cls: 'ad-ns__lbl', text: '\u5C11' });
+		const foot = card.createDiv({ cls: 'mq-ad-ns__foot' });
+		foot.createSpan({ cls: 'mq-ad-ns__window', text: `${year} \u5168\u5E74` });
+		const legend = foot.createSpan({ cls: 'mq-ad-ns__legend' });
+		legend.createSpan({ cls: 'mq-ad-ns__lbl', text: '\u5C11' });
 		['', 'l1', 'l2', 'l3', 'l4'].forEach((lv) => {
-			legend.createSpan({ cls: 'ad-ns__sw' + (lv ? ' ' + lv : '') });
+			legend.createSpan({ cls: 'mq-ad-ns__sw' + (lv ? ' ' + lv : '') });
 		});
-		legend.createSpan({ cls: 'ad-ns__lbl', text: '\u591A' });
+		legend.createSpan({ cls: 'mq-ad-ns__lbl', text: '\u591A' });
 
 		// 按卡片实际宽高摊开格子间距（格子尺寸恒为 HM_CELL，绝不缩放），并监听尺寸变化实时重排
 		this.layoutHeatmap(card);
@@ -3208,10 +3340,10 @@ export class DashboardView extends ItemView {
 	 * 4) 月份标签按可见周窗口 + 实际间距重建，保证与格子列严格对齐。
 	 */
 	private layoutHeatmap(card: HTMLElement): void {
-		const heat = card.querySelector('.ad-ns__heat') as HTMLElement | null;
-		const cells = card.querySelector('.ad-ns__cells') as HTMLElement | null;
-		const dow = card.querySelector('.ad-ns__dow') as HTMLElement | null;
-		const monthsRow = card.querySelector('.ad-ns__months') as HTMLElement | null;
+		const heat = card.querySelector('.mq-ad-ns__heat') as HTMLElement | null;
+		const cells = card.querySelector('.mq-ad-ns__cells') as HTMLElement | null;
+		const dow = card.querySelector('.mq-ad-ns__dow') as HTMLElement | null;
+		const monthsRow = card.querySelector('.mq-ad-ns__months') as HTMLElement | null;
 		if (!heat || !cells || !dow || !monthsRow) return;
 		const total = this.adHmWeekMonths.length;
 		if (total === 0) return;
@@ -3270,12 +3402,110 @@ export class DashboardView extends ItemView {
 		flush(curM, curS);
 
 		// 底部窗口文案随可见范围变化
-		const win = card.querySelector('.ad-ns__window') as HTMLElement | null;
+		const win = card.querySelector('.mq-ad-ns__window') as HTMLElement | null;
 		if (win) win.setText(weeks >= total ? `${this.adHmYear} \u5168\u5E74` : `\u8FD1 ${weeks} \u5468`);
 	}
 
 
 	/* ---- Countdown ---- */
+	private async renderCalendarCard(board: HTMLElement, tasks: TaskItem[]): Promise<void> {
+		const card = this.getOrCreateCard(board, 'mq-ad-card mq-ad-b-calendar');
+		card.setAttribute('data-mod', 'calendar');
+		const head = card.createDiv({ cls: 'mq-ad-card__head' });
+		head.createEl('h3', { cls: 'mq-ad-card__title', text: '项目日历' });
+		const open = head.createEl('button', { cls: 'mq-ad-card__icon-btn', text: '↗', attr: { title: '打开完整项目日历' } });
+		open.addEventListener('click', (event) => { event.stopPropagation(); void this.projectBoard.openCalendarModal(); });
+		const body = card.createDiv({ cls: 'mq-ad-mini-calendar' });
+		const render = (): void => {
+			body.empty();
+			const y = this.calendarCardDate.getFullYear(); const m = this.calendarCardDate.getMonth();
+			const bar = body.createDiv({ cls: 'mq-ad-mini-calendar__bar' });
+			bar.createEl('button', { cls: 'mq-ad-mini-calendar__nav', text: '‹', attr: { title: '上个月' } }).addEventListener('click', (e) => { e.stopPropagation(); this.calendarCardDate = new Date(y, m - 1, 1); render(); });
+			bar.createSpan({ text: `${y}年${m + 1}月` });
+			bar.createEl('button', { cls: 'mq-ad-mini-calendar__nav', text: '›', attr: { title: '下个月' } }).addEventListener('click', (e) => { e.stopPropagation(); this.calendarCardDate = new Date(y, m + 1, 1); render(); });
+			const labels = body.createDiv({ cls: 'mq-ad-mini-calendar__weekdays' });
+			['一', '二', '三', '四', '五', '六', '日'].forEach((label) => labels.createSpan({ text: label }));
+			const days = body.createDiv({ cls: 'mq-ad-mini-calendar__days' });
+			const offset = (new Date(y, m, 1).getDay() + 6) % 7;
+			for (let i = 0; i < offset; i++) days.createDiv({ cls: 'mq-ad-mini-calendar__day is-empty' });
+			const today = fmtDate(new Date()); const count = new Date(y, m + 1, 0).getDate();
+			for (let d = 1; d <= count; d++) {
+				const date = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+				const dayTasks = tasks.filter((task) => task.startDate && task.dueDate && task.startDate <= date && date <= task.dueDate || (task.remindDate || task.dueDate || task.startDate) === date);
+				const cell = days.createDiv({ cls: 'mq-ad-mini-calendar__day' + (date === today ? ' is-today' : '') + (dayTasks.length ? ' has-tasks' : ''), attr: { title: dayTasks.map((task) => task.content).join('\n') || date } });
+				cell.createSpan({ text: String(d) });
+				if (dayTasks.length) cell.createSpan({ cls: 'mq-ad-mini-calendar__count', text: String(dayTasks.length) });
+				cell.addEventListener('click', (e) => { e.stopPropagation(); void this.projectBoard.openCalendarModal(); });
+			}
+		};
+		render();
+	}
+
+	private renderPomodoroCard(board: HTMLElement): void {
+		const card = this.getOrCreateCard(board, 'mq-ad-card mq-ad-b-pomodoro');
+		card.setAttribute('data-mod', 'pomodoro');
+		const service = this.pomodoroService;
+		if (!service) return;
+		// The homepage card follows MQ's card vocabulary; only its statistics
+		// dialog deliberately retains the complete Apex overlay presentation.
+		const head = card.createDiv({ cls: 'mq-ad-card__head' });
+		const title = head.createEl('h3', { cls: 'mq-ad-card__title' });
+		title.createSpan({ cls: 'mq-ad-marker', text: '◒' }); title.appendText('番茄计时');
+		const top = card.createDiv({ cls: 'mq-ad-pomo-top' });
+		const today = top.createSpan({ cls: 'mq-ad-pomo-today' });
+		this.renderPomodoroActivitySelector(top, service);
+		const stats = top.createEl('button', { cls: 'mq-ad-pomo-stats-btn', attr: { type: 'button', 'aria-label': '专注统计', title: '专注统计' } });
+		setIcon(stats, 'bar-chart-2');
+		const openStats = (event?: Event): void => { event?.stopPropagation(); showPomodoroStats(card.ownerDocument, service); };
+		stats.addEventListener('click', openStats); stats.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') openStats(event); });
+
+		const ring = card.createDiv({ cls: 'mq-ad-pomo-ring' });
+		const svgSize = 72; const stroke = 6; const radius = (svgSize - stroke) / 2; const circumference = 2 * Math.PI * radius;
+		const svg = ring.createSvg('svg', { cls: 'mq-ad-pomo-ring__svg', attr: { viewBox: `0 0 ${svgSize} ${svgSize}`, width: String(svgSize), height: String(svgSize) } });
+		svg.createSvg('circle', { cls: 'mq-ad-pomo-ring__bg', attr: { cx: svgSize / 2, cy: svgSize / 2, r: radius, 'stroke-width': stroke, fill: 'none' } });
+		const arc = svg.createSvg('circle', { cls: 'mq-ad-pomo-ring__progress', attr: { cx: svgSize / 2, cy: svgSize / 2, r: radius, 'stroke-width': stroke, fill: 'none', 'stroke-linecap': 'round', 'stroke-dasharray': String(circumference), transform: `rotate(-90 ${svgSize / 2} ${svgSize / 2})` } });
+		const time = ring.createDiv({ cls: 'mq-ad-pomo-time' });
+		const phase = ring.createDiv({ cls: 'mq-ad-pomo-phase' });
+		const dots = card.createDiv({ cls: 'mq-ad-pomo-dots' });
+		const main = card.createEl('button', { cls: 'mq-ad-pomo-main', attr: { type: 'button' } });
+		const update = (): void => {
+			const state = service.getState(); const mins = Math.floor(state.remainingSeconds / 60); const seconds = state.remainingSeconds % 60;
+			time.textContent = `${String(mins).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+			phase.textContent = state.phase === 'work' ? '专注' : state.phase === 'short-break' ? '短休息' : '长休息';
+			arc.setAttribute('stroke-dashoffset', String(circumference * (1 - (state.totalSeconds ? state.remainingSeconds / state.totalSeconds : 1))));
+			today.textContent = `🍅 今日 ${service.getTodayCount()}`;
+			const standby = state.status === 'paused' && state.remainingSeconds === state.totalSeconds;
+			main.textContent = state.status === 'running' ? '停止' : standby ? (state.phase === 'work' ? '继续专注' : '开始休息') : '开始专注';
+			main.toggleClass('is-running', state.status === 'running');
+			dots.empty(); const interval = this.plugin.settings.pomodoro?.pomodoroLongBreakInterval ?? 4;
+			for (let index = 0; index < interval; index++) dots.createDiv({ cls: 'mq-ad-pomo-dot' + (index < state.completedWorkSessions ? ' is-filled' : '') });
+		};
+		service.setOnTick(update); service.setOnComplete(update); update();
+		main.addEventListener('click', (event) => { event.stopPropagation(); if (service.getState().status === 'running') service.reset(); else service.start(); update(); });
+	}
+
+	private renderPomodoroActivitySelector(parent: HTMLElement, service: PomodoroService): void {
+		const wrap = parent.createDiv({ cls: 'mq-ad-pomo-activity-selector' });
+		const trigger = wrap.createEl('button', { cls: 'mq-ad-pomo-activity-trigger', attr: { type: 'button' } });
+		let panel: HTMLElement | null = null;
+		const update = (activity: string): void => {
+			trigger.empty(); trigger.toggleClass('is-set', !!activity);
+			if (activity) { const dot = trigger.createDiv({ cls: 'mq-ad-pomo-activity-dot' }); dot.style.backgroundColor = activityColor(activity); trigger.createSpan({ text: activity }); }
+			else trigger.createSpan({ cls: 'mq-ad-pomo-activity-placeholder', text: '设置活动' });
+		};
+		const close = (): void => { panel?.remove(); panel = null; };
+		const open = (): void => {
+			close(); panel = wrap.createDiv({ cls: 'mq-ad-pomo-activity-panel' });
+			const input = panel.createEl('input', { cls: 'mq-ad-pomo-activity-input', attr: { type: 'text', placeholder: '输入当前活动' } });
+			const recent = service.getRecentActivities();
+			if (recent.length) { const chips = panel.createDiv({ cls: 'mq-ad-pomo-activity-chips' }); for (const activity of recent) { const chip = chips.createDiv({ cls: 'mq-ad-pomo-activity-chip', text: activity }); const dot = chip.createDiv({ cls: 'mq-ad-pomo-activity-dot' }); dot.style.backgroundColor = activityColor(activity); chip.addEventListener('click', (event) => { event.stopPropagation(); service.setActivity(activity); update(activity); close(); }); } }
+			input.focus(); input.addEventListener('keydown', (event) => { if (event.key === 'Enter' && input.value.trim()) { service.setActivity(input.value); update(input.value.trim()); close(); } if (event.key === 'Escape') close(); });
+		};
+		trigger.addEventListener('click', (event) => { event.stopPropagation(); panel ? close() : open(); });
+		parent.ownerDocument.addEventListener('click', (event) => { if (panel && !panel.contains(event.target as Node) && !trigger.contains(event.target as Node)) close(); });
+		update(service.getActivity());
+	}
+
 	private renderCountdownCard(board: HTMLElement, modId: string, cfg: CountdownCardConfig): void {
 		const card = board.querySelector(`[data-mod="${modId}"]`) as HTMLElement | null;
 		if (!card) return;
@@ -3290,9 +3520,9 @@ export class DashboardView extends ItemView {
 
 		this.cardHead(card, '\u25C7', '\u5012\u8BA1\u65F6', 'Days Left');
 
-		const cd = card.createDiv({ cls: 'ad-cd' });
+		const cd = card.createDiv({ cls: 'mq-ad-cd' });
 		// 副标题：距离 {事件名}
-		cd.createDiv({ cls: 'ad-cd__sub', text: `\u8DDD\u79BB ${cfg.eventName}` });
+		cd.createDiv({ cls: 'mq-ad-cd__sub', text: `\u8DDD\u79BB ${cfg.eventName}` });
 
 		if (diffDays > 0) {
 			// 进度：以「事件日期前一年」为起点、事件日期为终点（默认即日历年度进度），随事件日期动态变化
@@ -3301,33 +3531,33 @@ export class DashboardView extends ItemView {
 			const elapsed = now.getTime() - periodStart.getTime();
 			const pct = Math.max(0, Math.min(100, (elapsed / total) * 100));
 
-			const big = cd.createDiv({ cls: 'ad-cd__big' });
+			const big = cd.createDiv({ cls: 'mq-ad-cd__big' });
 			big.createSpan({ text: String(diffDays) });
-			big.createSpan({ cls: 'ad-unit', text: 'DAYS' });
+			big.createSpan({ cls: 'mq-ad-unit', text: 'DAYS' });
 
 			// 底部组：小字行紧贴进度条（保留少量间距），整体下移到底部
-			const bottom = cd.createDiv({ cls: 'ad-cd__bottom' });
-			const row = bottom.createDiv({ cls: 'ad-cd__row' });
+			const bottom = cd.createDiv({ cls: 'mq-ad-cd__bottom' });
+			const row = bottom.createDiv({ cls: 'mq-ad-cd__row' });
 			row.createSpan({ text: '\u5269\u4F59\u5468\u6570 ' }).createEl('strong', { text: String(Math.ceil(diffDays / 7)) });
-			row.createSpan({ cls: 'ad-dot', attr: { style: 'display:inline-block;width:3px;height:3px;background:var(--ad-text-dim);border-radius:50%;' } });
+			row.createSpan({ cls: 'mq-ad-dot', attr: { style: 'display:inline-block;width:3px;height:3px;background:var(--mq-ad-text-dim);border-radius:50%;' } });
 			row.createSpan({ text: '\u5DF2\u5B8C\u6210 ' }).createEl('strong', { text: pct.toFixed(1) + '%' });
 
-			const barWrap = bottom.createDiv({ cls: 'ad-cd__bar' });
-			const fill = barWrap.createDiv({ cls: 'ad-fill' });
+			const barWrap = bottom.createDiv({ cls: 'mq-ad-cd__bar' });
+			const fill = barWrap.createDiv({ cls: 'mq-ad-fill' });
 			fill.style.width = pct + '%';
 		} else if (diffDays === 0) {
 			// 当天到达目标日期：隐藏数字与 DAYS，居中显示「此时此刻」
-			cd.createDiv({ cls: 'ad-cd__arrived', text: '\uD83C\uDF89 \u6B64\u65F6\u6B64\u523B' });
-			const bottom = cd.createDiv({ cls: 'ad-cd__bottom' });
-			const barWrap = bottom.createDiv({ cls: 'ad-cd__bar' });
-			const fill = barWrap.createDiv({ cls: 'ad-fill' });
+			cd.createDiv({ cls: 'mq-ad-cd__arrived', text: '\uD83C\uDF89 \u6B64\u65F6\u6B64\u523B' });
+			const bottom = cd.createDiv({ cls: 'mq-ad-cd__bottom' });
+			const barWrap = bottom.createDiv({ cls: 'mq-ad-cd__bar' });
+			const fill = barWrap.createDiv({ cls: 'mq-ad-fill' });
 			fill.style.width = '100%';
 		} else {
 			// 已过期：居中显示「旅程已然到达」
-			cd.createDiv({ cls: 'ad-cd__arrived', text: '\uD83C\uDFC1 \u65C5\u7A0B\u5DF2\u7136\u5230\u8FBE' });
-			const bottom = cd.createDiv({ cls: 'ad-cd__bottom' });
-			const barWrap = bottom.createDiv({ cls: 'ad-cd__bar' });
-			const fill = barWrap.createDiv({ cls: 'ad-fill' });
+			cd.createDiv({ cls: 'mq-ad-cd__arrived', text: '\uD83C\uDFC1 \u65C5\u7A0B\u5DF2\u7136\u5230\u8FBE' });
+			const bottom = cd.createDiv({ cls: 'mq-ad-cd__bottom' });
+			const barWrap = bottom.createDiv({ cls: 'mq-ad-cd__bar' });
+			const fill = barWrap.createDiv({ cls: 'mq-ad-fill' });
 			fill.style.width = '100%';
 		}
 	}
@@ -3352,12 +3582,12 @@ export class DashboardView extends ItemView {
 
 	/* ---- Shared card header ---- */
 	private cardHead(card: HTMLElement, icon: string, title: string, hint?: string, hintEl?: HTMLElement): void {
-		const head = card.createDiv({ cls: 'ad-card__head' });
-		const h3 = head.createEl('h3', { cls: 'ad-card__title' });
-		h3.createSpan({ cls: 'ad-marker', text: icon });
+		const head = card.createDiv({ cls: 'mq-ad-card__head' });
+		const h3 = head.createEl('h3', { cls: 'mq-ad-card__title' });
+		h3.createSpan({ cls: 'mq-ad-marker', text: icon });
 		h3.appendText(title);
 		if (hintEl) head.appendChild(hintEl);
-		else if (hint) head.createSpan({ cls: 'ad-card__hint', text: hint });
+		else if (hint) head.createSpan({ cls: 'mq-ad-card__hint', text: hint });
 	}
 
 }

@@ -14,6 +14,7 @@ function makeTask(partial: Partial<TaskItem> = {}): TaskItem {
 		repeatRule: null, reminder: [], notes: '', completeTime: null,
 		dailyNodes: {}, projectId: 'p', color: '#fff', sourceFile: 'p/t.md',
 		isOverdue: false, remindDate: null, parent: '',
+		opportunityIds: [],
 		...partial,
 	};
 }

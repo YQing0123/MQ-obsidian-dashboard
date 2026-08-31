@@ -1,7 +1,7 @@
 import { ItemView, WorkspaceLeaf } from 'obsidian';
 import type Dashboard from '../main';
 
-export const KNOWLEDGE_WORKBENCH_VIEW_TYPE = 'knowledge-workbench-view';
+export const KNOWLEDGE_WORKBENCH_VIEW_TYPE = 'mq-knowledge-workbench-view';
 
 export class KnowledgeWorkbenchView extends ItemView {
 	private frame: HTMLIFrameElement | null = null;
@@ -22,9 +22,9 @@ export class KnowledgeWorkbenchView extends ItemView {
 
 	async onOpen(): Promise<void> {
 		this.containerEl.empty();
-		this.containerEl.addClass('knowledge-workbench-view');
-		const shell = this.containerEl.createDiv({ cls: 'knowledge-workbench-view__shell' });
-		const status = shell.createDiv({ cls: 'knowledge-workbench-view__status', text: '正在启动知识工作台服务…' });
+		this.containerEl.addClass('mq-knowledge-workbench-view');
+		const shell = this.containerEl.createDiv({ cls: 'mq-knowledge-workbench-view__shell' });
+		const status = shell.createDiv({ cls: 'mq-knowledge-workbench-view__status', text: '正在启动知识工作台服务…' });
 		const ok = await this.plugin.knowledgeWorkbench.ensureStarted();
 		if (!ok) {
 			status.empty();
@@ -36,7 +36,7 @@ export class KnowledgeWorkbenchView extends ItemView {
 		}
 		status.remove();
 		this.frame = shell.createEl('iframe', {
-			cls: 'knowledge-workbench-view__frame',
+			cls: 'mq-knowledge-workbench-view__frame',
 			attr: {
 				title: '知识工作台',
 				loading: 'eager',

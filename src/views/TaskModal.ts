@@ -35,6 +35,7 @@ interface TaskModalOptions {
 	allTasks?: TaskInfo[];
 	defaultProject?: string;
 	defaultParent?: string;
+	defaultTitle?: string;
 	onSave: (data: TaskFormData) => void;
 }
 
@@ -106,20 +107,21 @@ export class TaskModal extends Modal {
 
 	onOpen(): void {
 		const { contentEl } = this;
-		contentEl.addClass('ad-task-modal');
-		contentEl.createEl('h3', { cls: 'ad-modal-title', text: '新建任务' });
+		contentEl.addClass('mq-ad-task-modal');
+		contentEl.createEl('h3', { cls: 'mq-ad-modal-title', text: '新建任务' });
 
 		// ---- Title ----
 		this.field('任务名称 *', (wrap) => {
-			wrap.createEl('input', { cls: 'ad-modal-input ad-input-title', attr: { type: 'text', placeholder: '输入任务名称' } });
+			const input = wrap.createEl('input', { cls: 'mq-ad-modal-input mq-ad-input-title', attr: { type: 'text', placeholder: '输入任务名称' } });
+			input.value = this.opts.defaultTitle || '';
 		});
 
 		// ---- Project + Parent (side by side) ----
-		const row1 = contentEl.createDiv({ cls: 'ad-modal-row' });
+		const row1 = contentEl.createDiv({ cls: 'mq-ad-modal-row' });
 
-		const projCol = row1.createDiv({ cls: 'ad-modal-col' });
+		const projCol = row1.createDiv({ cls: 'mq-ad-modal-col' });
 		this.label(projCol, '所属项目 *');
-		const projSel = projCol.createEl('select', { cls: 'ad-modal-input' });
+		const projSel = projCol.createEl('select', { cls: 'mq-ad-modal-input' });
 		for (const p of this.opts.projects) {
 			projSel.createEl('option', { text: p.name, attr: { value: p.name } });
 		}
@@ -130,9 +132,9 @@ export class TaskModal extends Modal {
 			else projSel.value = initialProject;
 		}
 
-		const parentCol = row1.createDiv({ cls: 'ad-modal-col' });
+		const parentCol = row1.createDiv({ cls: 'mq-ad-modal-col' });
 		this.label(parentCol, '父任务');
-		const parentSel = parentCol.createEl('select', { cls: 'ad-modal-input' });
+		const parentSel = parentCol.createEl('select', { cls: 'mq-ad-modal-input' });
 		parentSel.createEl('option', { text: '无（顶级任务）', attr: { value: '' } });
 
 		const populateParents = (projectName: string): void => {
@@ -151,22 +153,22 @@ export class TaskModal extends Modal {
 		});
 
 		// ---- Dates (side by side) ----
-		const row2 = contentEl.createDiv({ cls: 'ad-modal-row' });
+		const row2 = contentEl.createDiv({ cls: 'mq-ad-modal-row' });
 
-		const startCol = row2.createDiv({ cls: 'ad-modal-col' });
-		const startLabel = startCol.createEl('label', { cls: 'ad-modal-label', text: '开始日期 *' });
-		const startInput = startCol.createEl('input', { cls: 'ad-modal-input', attr: { type: 'date' } });
+		const startCol = row2.createDiv({ cls: 'mq-ad-modal-col' });
+		const startLabel = startCol.createEl('label', { cls: 'mq-ad-modal-label', text: '开始日期 *' });
+		const startInput = startCol.createEl('input', { cls: 'mq-ad-modal-input', attr: { type: 'date' } });
 		startInput.value = getToday();
 
-		const endCol = row2.createDiv({ cls: 'ad-modal-col' });
-		const endLabel = endCol.createEl('label', { cls: 'ad-modal-label', text: '结束日期' });
-		const endInput = endCol.createEl('input', { cls: 'ad-modal-input', attr: { type: 'date' } });
+		const endCol = row2.createDiv({ cls: 'mq-ad-modal-col' });
+		const endLabel = endCol.createEl('label', { cls: 'mq-ad-modal-label', text: '结束日期' });
+		const endInput = endCol.createEl('input', { cls: 'mq-ad-modal-input', attr: { type: 'date' } });
 		endInput.value = getToday();
 
 		// "No end date" — only relevant for recurring tasks
-		const noEndWrap = contentEl.createDiv({ cls: 'ad-modal-row ad-hidden' });
-		const noEndCol = noEndWrap.createDiv({ cls: 'ad-modal-col' });
-		const noEndLbl = noEndCol.createEl('label', { cls: 'ad-rem-item' });
+		const noEndWrap = contentEl.createDiv({ cls: 'mq-ad-modal-row mq-ad-hidden' });
+		const noEndCol = noEndWrap.createDiv({ cls: 'mq-ad-modal-col' });
+		const noEndLbl = noEndCol.createEl('label', { cls: 'mq-ad-rem-item' });
 		const noEndCb = noEndLbl.createEl('input', { attr: { type: 'checkbox' } });
 		noEndLbl.createSpan({ text: '无结束日期（无限重复）' });
 		noEndCb.addEventListener('change', () => {
@@ -175,67 +177,67 @@ export class TaskModal extends Modal {
 		});
 
 		// ---- Priority + Status + Type (side by side) ----
-		const row3 = contentEl.createDiv({ cls: 'ad-modal-row' });
+		const row3 = contentEl.createDiv({ cls: 'mq-ad-modal-row' });
 
-		const prioCol = row3.createDiv({ cls: 'ad-modal-col' });
+		const prioCol = row3.createDiv({ cls: 'mq-ad-modal-col' });
 		this.label(prioCol, '优先级');
-		const prioSel = prioCol.createEl('select', { cls: 'ad-modal-input' });
+		const prioSel = prioCol.createEl('select', { cls: 'mq-ad-modal-input' });
 		for (const p of PRIORITIES) prioSel.createEl('option', { text: p.label, attr: { value: p.value } });
 
-		const statusCol = row3.createDiv({ cls: 'ad-modal-col' });
+		const statusCol = row3.createDiv({ cls: 'mq-ad-modal-col' });
 		this.label(statusCol, '状态 *');
-		const statusSel = statusCol.createEl('select', { cls: 'ad-modal-input' });
+		const statusSel = statusCol.createEl('select', { cls: 'mq-ad-modal-input' });
 		for (const s of STATUSES) statusSel.createEl('option', { text: s.label, attr: { value: s.value } });
 
-		const typeCol = row3.createDiv({ cls: 'ad-modal-col' });
+		const typeCol = row3.createDiv({ cls: 'mq-ad-modal-col' });
 		this.label(typeCol, '类型 *');
-		const typeSel = typeCol.createEl('select', { cls: 'ad-modal-input' });
+		const typeSel = typeCol.createEl('select', { cls: 'mq-ad-modal-input' });
 		for (const t of TYPES) typeSel.createEl('option', { text: t.label, attr: { value: t.value } });
 
 		// ---- Repeat (conditional, structured) ----
-		const repeatWrap = contentEl.createDiv({ cls: 'ad-modal-row ad-repeat-section ad-hidden' });
+		const repeatWrap = contentEl.createDiv({ cls: 'mq-ad-modal-row mq-ad-repeat-section mq-ad-hidden' });
 
-		const freqCol = repeatWrap.createDiv({ cls: 'ad-modal-col' });
+		const freqCol = repeatWrap.createDiv({ cls: 'mq-ad-modal-col' });
 		this.label(freqCol, '重复频率');
-		const freqSel = freqCol.createEl('select', { cls: 'ad-modal-input' });
+		const freqSel = freqCol.createEl('select', { cls: 'mq-ad-modal-input' });
 		for (const f of REPEAT_FREQS) freqSel.createEl('option', { text: f.label, attr: { value: f.value } });
 
 		// Dynamic options container (re-rendered on frequency change)
-		const repeatOptsWrap = contentEl.createDiv({ cls: 'ad-repeat-opts ad-hidden' });
+		const repeatOptsWrap = contentEl.createDiv({ cls: 'mq-ad-repeat-opts mq-ad-hidden' });
 
 		const renderRepeatOpts = (): void => {
 			repeatOptsWrap.empty();
 			const f = freqSel.value;
-			if (!f) { repeatOptsWrap.addClass('ad-hidden'); return; }
-			repeatOptsWrap.removeClass('ad-hidden');
+			if (!f) { repeatOptsWrap.addClass('mq-ad-hidden'); return; }
+			repeatOptsWrap.removeClass('mq-ad-hidden');
 
 			if (f === 'daily') {
-				const row = repeatOptsWrap.createDiv({ cls: 'ad-modal-row' });
-				const c1 = row.createDiv({ cls: 'ad-modal-col' });
+				const row = repeatOptsWrap.createDiv({ cls: 'mq-ad-modal-row' });
+				const c1 = row.createDiv({ cls: 'mq-ad-modal-col' });
 				this.label(c1, '每 N 天');
-				const interval = c1.createEl('input', { cls: 'ad-modal-input ad-repeat-interval', attr: { type: 'number', min: '1', value: '1' } });
-				const c2 = row.createDiv({ cls: 'ad-modal-col' });
-				const wdLbl = c2.createEl('label', { cls: 'ad-rem-item' });
-				const wd = wdLbl.createEl('input', { cls: 'ad-repeat-workdays', attr: { type: 'checkbox' } });
+				const interval = c1.createEl('input', { cls: 'mq-ad-modal-input mq-ad-repeat-interval', attr: { type: 'number', min: '1', value: '1' } });
+				const c2 = row.createDiv({ cls: 'mq-ad-modal-col' });
+				const wdLbl = c2.createEl('label', { cls: 'mq-ad-rem-item' });
+				const wd = wdLbl.createEl('input', { cls: 'mq-ad-repeat-workdays', attr: { type: 'checkbox' } });
 				wdLbl.createSpan({ text: '仅工作日' });
 			} else if (f === 'weekly') {
-				const row = repeatOptsWrap.createDiv({ cls: 'ad-modal-row' });
-				const c = row.createDiv({ cls: 'ad-modal-col' });
+				const row = repeatOptsWrap.createDiv({ cls: 'mq-ad-modal-row' });
+				const c = row.createDiv({ cls: 'mq-ad-modal-col' });
 				this.label(c, '重复星期（可多选）');
-				const wdRow = c.createDiv({ cls: 'ad-repeat-weekdays' });
+				const wdRow = c.createDiv({ cls: 'mq-ad-repeat-weekdays' });
 				const startDow = dateToDow(startInput.value);
 				for (const wd of WEEKDAYS) {
-					const lbl = wdRow.createEl('label', { cls: 'ad-rem-item' });
-					const cb = lbl.createEl('input', { cls: 'ad-repeat-weekday', attr: { type: 'checkbox', value: String(wd.value) } });
+					const lbl = wdRow.createEl('label', { cls: 'mq-ad-rem-item' });
+					const cb = lbl.createEl('input', { cls: 'mq-ad-repeat-weekday', attr: { type: 'checkbox', value: String(wd.value) } });
 					if (wd.value === startDow) cb.checked = true;
 					lbl.createSpan({ text: wd.label });
 				}
 			} else if (f === 'monthly') {
-				const row = repeatOptsWrap.createDiv({ cls: 'ad-modal-row' });
-				const c = row.createDiv({ cls: 'ad-modal-col' });
+				const row = repeatOptsWrap.createDiv({ cls: 'mq-ad-modal-row' });
+				const c = row.createDiv({ cls: 'mq-ad-modal-col' });
 				this.label(c, '每月几号');
 				const mdVal = startInput.value ? new Date(startInput.value + 'T00:00:00').getDate() : 1;
-				c.createEl('input', { cls: 'ad-modal-input ad-repeat-monthday', attr: { type: 'number', min: '1', max: '31', value: String(mdVal) } });
+				c.createEl('input', { cls: 'mq-ad-modal-input mq-ad-repeat-monthday', attr: { type: 'number', min: '1', max: '31', value: String(mdVal) } });
 			}
 		};
 
@@ -244,9 +246,9 @@ export class TaskModal extends Modal {
 		// Type change: show/hide repeat UI, status picker, no-end checkbox, relabel dates
 		const applyType = (): void => {
 			const isRecurring = typeSel.value === 'recurring';
-			repeatWrap.toggleClass('ad-hidden', !isRecurring);
-			noEndWrap.toggleClass('ad-hidden', !isRecurring);
-			statusCol.toggleClass('ad-hidden', isRecurring); // recurring is always 进行中
+			repeatWrap.toggleClass('mq-ad-hidden', !isRecurring);
+			noEndWrap.toggleClass('mq-ad-hidden', !isRecurring);
+			statusCol.toggleClass('mq-ad-hidden', isRecurring); // recurring is always 进行中
 			if (isRecurring) {
 				startLabel.textContent = '首次发生日期 *';
 				endLabel.textContent = '结束日期（界限）';
@@ -260,9 +262,9 @@ export class TaskModal extends Modal {
 
 		// ---- Reminders ----
 		this.label(contentEl, '提醒');
-		const remWrap = contentEl.createDiv({ cls: 'ad-rem-group' });
+		const remWrap = contentEl.createDiv({ cls: 'mq-ad-rem-group' });
 		for (const opt of REMINDER_OPTIONS) {
-			const lbl = remWrap.createEl('label', { cls: 'ad-rem-item' });
+			const lbl = remWrap.createEl('label', { cls: 'mq-ad-rem-item' });
 			const cb = lbl.createEl('input', { attr: { type: 'checkbox' } });
 			cb.addEventListener('change', () => {
 				if (cb.checked) this.selectedReminders.push(opt);
@@ -273,10 +275,10 @@ export class TaskModal extends Modal {
 
 		// ---- Tags ----
 		this.label(contentEl, '标签');
-		const tagWrap = contentEl.createDiv({ cls: 'ad-tag-wrap' });
-		const tagChips = tagWrap.createDiv({ cls: 'ad-tag-chips' });
+		const tagWrap = contentEl.createDiv({ cls: 'mq-ad-tag-wrap' });
+		const tagChips = tagWrap.createDiv({ cls: 'mq-ad-tag-chips' });
 		const tagInput = tagWrap.createEl('input', {
-			cls: 'ad-modal-input ad-tag-input',
+			cls: 'mq-ad-modal-input mq-ad-tag-input',
 			attr: { type: 'text', placeholder: '输入后回车添加' },
 		});
 		tagInput.addEventListener('keydown', (e: KeyboardEvent) => {
@@ -295,19 +297,19 @@ export class TaskModal extends Modal {
 		// ---- Notes ----
 		this.label(contentEl, '备注');
 		const notesArea = contentEl.createEl('textarea', {
-			cls: 'ad-modal-input',
+			cls: 'mq-ad-modal-input',
 			attr: { rows: '5', placeholder: '补充说明…' },
 		});
 
 		// ---- Buttons ----
-		const btns = contentEl.createDiv({ cls: 'ad-modal-btns' });
-		btns.createEl('button', { cls: 'ad-modal-btn', text: UI_TEXT.cancel })
+		const btns = contentEl.createDiv({ cls: 'mq-ad-modal-btns' });
+		btns.createEl('button', { cls: 'mq-ad-modal-btn', text: UI_TEXT.cancel })
 			.addEventListener('click', () => this.close());
-		btns.createEl('button', { cls: 'ad-modal-btn ad-modal-btn--primary', text: '创建任务' })
+		btns.createEl('button', { cls: 'mq-ad-modal-btn mq-ad-modal-btn--primary', text: '创建任务' })
 			.addEventListener('click', () => {
-				contentEl.querySelectorAll('.ad-input-error').forEach((el) => el.removeClass('ad-input-error'));
+				contentEl.querySelectorAll('.mq-ad-input-error').forEach((el) => el.removeClass('mq-ad-input-error'));
 
-				const titleEl = contentEl.querySelector('.ad-input-title') as HTMLInputElement;
+				const titleEl = contentEl.querySelector('.mq-ad-input-title') as HTMLInputElement;
 				const title = titleEl?.value?.trim();
 
 				const fields: [HTMLElement | null, string][] = [
@@ -322,7 +324,7 @@ export class TaskModal extends Modal {
 				let firstError: HTMLElement | null = null;
 				for (const [el, val] of fields) {
 					if (!val && el) {
-						el.addClass('ad-input-error');
+						el.addClass('mq-ad-input-error');
 						if (!firstError) firstError = el;
 					}
 				}
@@ -330,10 +332,10 @@ export class TaskModal extends Modal {
 
 				const isRecurring = typeSel.value === 'recurring';
 				const noEnd = isRecurring && noEndCb.checked;
-				const intervalEl = repeatOptsWrap.querySelector('.ad-repeat-interval');
-				const workdayEl = repeatOptsWrap.querySelector('.ad-repeat-workdays');
-				const weekdayEls = repeatOptsWrap.querySelectorAll('.ad-repeat-weekday');
-				const monthDayEl = repeatOptsWrap.querySelector('.ad-repeat-monthday');
+				const intervalEl = repeatOptsWrap.querySelector('.mq-ad-repeat-interval');
+				const workdayEl = repeatOptsWrap.querySelector('.mq-ad-repeat-workdays');
+				const weekdayEls = repeatOptsWrap.querySelectorAll('.mq-ad-repeat-weekday');
+				const monthDayEl = repeatOptsWrap.querySelector('.mq-ad-repeat-monthday');
 
 				const data: TaskFormData = {
 					title,
@@ -358,23 +360,23 @@ export class TaskModal extends Modal {
 				this.close();
 			});
 
-		(contentEl.querySelector('.ad-input-title') as HTMLInputElement)?.focus();
+		(contentEl.querySelector('.mq-ad-input-title') as HTMLInputElement)?.focus();
 	}
 
 	private label(parent: HTMLElement, text: string): void {
-		parent.createEl('label', { cls: 'ad-modal-label', text });
+		parent.createEl('label', { cls: 'mq-ad-modal-label', text });
 	}
 
 	private field(labelText: string, build: (wrap: HTMLElement) => void): void {
-		const wrap = this.contentEl.createDiv({ cls: 'ad-modal-field' });
+		const wrap = this.contentEl.createDiv({ cls: 'mq-ad-modal-field' });
 		this.label(wrap, labelText);
 		build(wrap);
 	}
 
 	private renderTagChip(container: HTMLElement, tag: string): void {
-		const chip = container.createSpan({ cls: 'ad-tag-chip' });
+		const chip = container.createSpan({ cls: 'mq-ad-tag-chip' });
 		chip.createSpan({ text: tag });
-		const x = chip.createSpan({ cls: 'ad-tag-x', text: '\u00D7' });
+		const x = chip.createSpan({ cls: 'mq-ad-tag-x', text: '\u00D7' });
 		x.addEventListener('click', () => {
 			this.tags = this.tags.filter((t) => t !== tag);
 			chip.remove();

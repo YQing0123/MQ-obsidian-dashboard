@@ -1,5 +1,7 @@
-import { Menu } from 'obsidian';
+import { Menu, Modal } from 'obsidian';
 import type { App } from 'obsidian';
+import type { TaskItem } from '../data/taskParser';
+import type { TaskStore } from '../data/taskStore';
 import { OpportunityModal } from './OpportunityModal';
 import {
 	BoardItem, BoardFormData, BoardStage,
@@ -14,13 +16,23 @@ import { UI_TEXT } from '../constants';
 export interface OpportunityHost {
 	app: App;
 	plugin: {
-		settings: { opportunityFile: string; boardTitle: string; boardStages: BoardStage[]; currentOppView: string };
+		settings: {
+			opportunityFile: string;
+			boardTitle: string;
+			boardStages: BoardStage[];
+			currentOppView: string;
+			oppKanbanColumnWidth?: number;
+			oppListColumnWidths?: Record<string, number>;
+		};
 		saveSettings(): Promise<void>;
 	};
 	boardEl: HTMLElement | null;
 	currentPage: 'home' | 'project' | 'opportunity';
 	exitEditMode(): void;
 	showToast(message: string, kind?: 'success' | 'error'): void;
+	taskStore: TaskStore;
+	openTaskEditModal(task: TaskItem): void;
+	openTaskModal(defaultProject?: string, options?: { defaultTitle?: string; opportunityId?: string; onCreated?: (taskId: string) => void }): Promise<void>;
 }
 
 /** 通用看板（第三页）渲染器 — extracted from DashboardView. */
@@ -38,9 +50,15 @@ export class OpportunityBoard {
 	private sortDir: 'asc' | 'desc' = 'asc';
 	private refreshTimer: number | null = null;
 	private cache: { at: number; items: BoardItem[] } | null = null;
+	private currentTasks: TaskItem[] = [];
 
 	constructor(host: OpportunityHost) {
 		this.host = host;
+	}
+
+	/** 供顶部导航直接打开灵感新建弹窗。 */
+	openCreateModal(): void {
+		this.openModal();
 	}
 
 	/** Debounced refresh of the board (250ms) to coalesce rapid vault events. */
@@ -76,7 +94,7 @@ export class OpportunityBoard {
 
 	private stageColor(label: string): string {
 		const st = this.stageByLabel(label);
-		return st ? st.color : 'var(--ad-muted)';
+		return st ? st.color : 'var(--mq-ad-muted)';
 	}
 
 	private async loadItems(): Promise<BoardItem[]> {
@@ -100,35 +118,36 @@ export class OpportunityBoard {
 	async show(): Promise<void> {
 		if (!this.host.boardEl) return;
 		this.host.exitEditMode();
-		const items = await this.loadItems();
+		const [items, tasks] = await Promise.all([this.loadItems(), this.host.taskStore.scanAllTasks()]);
 		this.host.boardEl.empty();
-		this.host.boardEl.removeClass('ad-board');
-		this.host.boardEl.removeClass('po-board');
-		this.host.boardEl.addClass('op-board');
+		this.host.boardEl.removeClass('mq-ad-board');
+		this.host.boardEl.removeClass('mq-po-board');
+		this.host.boardEl.addClass('mq-op-board');
 		this.host.currentPage = 'opportunity';
 
 		this.currentItems = items;
+		this.currentTasks = tasks;
 		this.selectedStatus = 'all';
 		this.showStarredOnly = false;
 		this.selectedDetailId = null;
 
-		const container = this.host.boardEl.createDiv({ cls: 'po-container op-container' });
-		const sidebar = container.createDiv({ cls: 'po-sidebar op-sidebar' });
+		const container = this.host.boardEl.createDiv({ cls: 'mq-po-container mq-op-container' });
+		const sidebar = container.createDiv({ cls: 'mq-po-sidebar mq-op-sidebar' });
 		this.renderSidebar(sidebar);
-		this.mainEl = container.createDiv({ cls: 'po-main op-main' });
+		this.mainEl = container.createDiv({ cls: 'mq-po-main mq-op-main' });
 		this.renderPanels();
 	}
 
 	private renderSidebar(sidebar: HTMLElement): void {
 		sidebar.empty();
-		const list = sidebar.createDiv({ cls: 'po-sidebar__list' });
+		const list = sidebar.createDiv({ cls: 'mq-po-sidebar__list' });
 		const items = this.currentItems;
 		const total = items.length;
 
-		const allItem = list.createDiv({ cls: 'po-sidebar__item' + (this.selectedStatus === 'all' && !this.showStarredOnly ? ' is-active' : '') });
-		allItem.createSpan({ cls: 'po-dot', attr: { style: 'background:var(--ad-accent);color:var(--ad-accent)' } });
+		const allItem = list.createDiv({ cls: 'mq-po-sidebar__item' + (this.selectedStatus === 'all' && !this.showStarredOnly ? ' is-active' : '') });
+		allItem.createSpan({ cls: 'mq-po-dot', attr: { style: 'background:var(--mq-ad-accent);color:var(--mq-ad-accent)' } });
 		allItem.createSpan({ text: UI_TEXT.opAll });
-		allItem.createSpan({ cls: 'po-count', text: String(total) });
+		allItem.createSpan({ cls: 'mq-po-count', text: String(total) });
 		allItem.addEventListener('click', () => {
 			this.selectedStatus = 'all';
 			this.showStarredOnly = false;
@@ -139,10 +158,10 @@ export class OpportunityBoard {
 
 		for (const st of this.host.plugin.settings.boardStages) {
 			const count = items.filter((i) => i.status === st.label).length;
-			const item = list.createDiv({ cls: 'po-sidebar__item' + (this.selectedStatus === st.label ? ' is-active' : '') });
-			item.createSpan({ cls: 'po-dot', attr: { style: 'background:' + st.color + ';color:' + st.color } });
+			const item = list.createDiv({ cls: 'mq-po-sidebar__item' + (this.selectedStatus === st.label ? ' is-active' : '') });
+			item.createSpan({ cls: 'mq-po-dot', attr: { style: 'background:' + st.color + ';color:' + st.color } });
 			item.createSpan({ text: st.label });
-			item.createSpan({ cls: 'po-count', text: String(count) });
+			item.createSpan({ cls: 'mq-po-count', text: String(count) });
 			item.addEventListener('click', () => {
 				this.selectedStatus = st.label;
 				this.showStarredOnly = false;
@@ -152,10 +171,10 @@ export class OpportunityBoard {
 			});
 		}
 
-		const starItem = list.createDiv({ cls: 'po-sidebar__item' + (this.showStarredOnly ? ' is-active' : '') });
-		starItem.createSpan({ cls: 'po-dot', attr: { style: 'background:#eab308;color:#eab308' } });
+		const starItem = list.createDiv({ cls: 'mq-po-sidebar__item' + (this.showStarredOnly ? ' is-active' : '') });
+		starItem.createSpan({ cls: 'mq-po-dot', attr: { style: 'background:#eab308;color:#eab308' } });
 		starItem.createSpan({ text: UI_TEXT.opRoadmap });
-		starItem.createSpan({ cls: 'po-count', text: String(items.filter((i) => i.starred).length) });
+		starItem.createSpan({ cls: 'mq-po-count', text: String(items.filter((i) => i.starred).length) });
 		starItem.addEventListener('click', () => {
 			this.showStarredOnly = !this.showStarredOnly;
 			this.selectedStatus = 'all';
@@ -169,28 +188,28 @@ export class OpportunityBoard {
 		if (!this.mainEl) return;
 		this.mainEl.empty();
 		const items = this.filteredItems();
-		const tabs = this.mainEl.createDiv({ cls: 'po-tabs' });
+		const tabs = this.mainEl.createDiv({ cls: 'mq-po-tabs' });
 		const tabDefs = [
 			{ key: 'kanban', label: '▦ 看板' },
 			{ key: 'list', label: '☰ 列表' },
 		];
-		const content = this.mainEl.createDiv({ cls: 'po-content' });
+		const content = this.mainEl.createDiv({ cls: 'mq-po-content' });
 		const panels: Record<string, HTMLElement> = {};
 		const cur = this.host.plugin.settings.currentOppView || 'kanban';
 		for (const td of tabDefs) {
-			const btn = tabs.createEl('button', { cls: 'po-tab' + (td.key === cur ? ' is-active' : ''), text: td.label });
+			const btn = tabs.createEl('button', { cls: 'mq-po-tab' + (td.key === cur ? ' is-active' : ''), text: td.label });
 			btn.dataset.view = td.key;
-			panels[td.key] = content.createDiv({ cls: 'po-panel' + (td.key === cur ? ' is-active' : ''), attr: { 'data-view': td.key } });
+			panels[td.key] = content.createDiv({ cls: 'mq-po-panel' + (td.key === cur ? ' is-active' : ''), attr: { 'data-view': td.key } });
 		}
-		const newBtn = tabs.createEl('button', { cls: 'po-add-btn op-new-btn', text: '+ 新建' + this.boardTitle() });
+		const newBtn = tabs.createEl('button', { cls: 'mq-po-add-btn mq-op-new-btn', text: '+ 新建' + this.boardTitle() });
 		newBtn.addEventListener('click', (e) => { e.stopPropagation(); void this.createItem(); });
 		this.renderPanel(cur, panels[cur]!, items);
 		tabs.addEventListener('click', (e) => {
-			const btn = (e.target as HTMLElement).closest('.po-tab') as HTMLElement;
+			const btn = (e.target as HTMLElement).closest('.mq-po-tab') as HTMLElement;
 			if (!btn) return;
 			const view = btn.dataset.view;
 			if (!view) return;
-			tabs.querySelectorAll('.po-tab').forEach((t) => t.removeClass('is-active'));
+			tabs.querySelectorAll('.mq-po-tab').forEach((t) => t.removeClass('is-active'));
 			btn.addClass('is-active');
 			Object.values(panels).forEach((p) => p.classList.remove('is-active'));
 			if (panels[view]) panels[view].addClass('is-active');
@@ -220,14 +239,46 @@ export class OpportunityBoard {
 		const extra = dataStatuses.filter((s) => !configured.some((c) => c.label === s));
 		return [
 			...configured,
-			...extra.map((label) => ({ id: label, label, color: 'var(--ad-muted)', hasInput: false })),
+			...extra.map((label) => ({ id: label, label, color: 'var(--mq-ad-muted)', hasInput: false })),
 		];
+	}
+
+	private opportunityKanbanColumnWidth(): number {
+		const width = this.host.plugin.settings.oppKanbanColumnWidth;
+		return typeof width === 'number' ? Math.max(200, Math.min(640, width)) : 230;
+	}
+
+	private setupOpportunityKanbanResize(board: HTMLElement, handle: HTMLElement): void {
+		handle.addEventListener('mousedown', (e) => {
+			e.preventDefault();
+			e.stopPropagation();
+			const startX = e.clientX;
+			const startWidth = this.opportunityKanbanColumnWidth();
+			const clamp = (x: number): number => Math.max(200, Math.min(640, Math.round(x)));
+			const onMove = (move: MouseEvent): void => {
+				board.style.setProperty('--mq-op-kanban-col-width', clamp(startWidth + move.clientX - startX) + 'px');
+			};
+			const onUp = (up: MouseEvent): void => {
+				document.removeEventListener('mousemove', onMove);
+				document.removeEventListener('mouseup', onUp);
+				this.host.plugin.settings.oppKanbanColumnWidth = clamp(startWidth + up.clientX - startX);
+				void this.host.plugin.saveSettings();
+			};
+			document.addEventListener('mousemove', onMove);
+			document.addEventListener('mouseup', onUp);
+		});
+	}
+
+	private compactTags(item: BoardItem): string {
+		const text = item.tags.filter(Boolean).join('、');
+		return text.length > 6 ? text.slice(0, 6) + '…' : text;
 	}
 
 	private renderKanban(panel: HTMLElement, items: BoardItem[]): void {
 		const singleMode = this.selectedStatus !== 'all' && !this.showStarredOnly;
 		const stages = singleMode ? this.activeStages().filter((s) => s.label === this.selectedStatus) : this.activeStages();
-		const board = panel.createDiv({ cls: 'po-kanban op-kanban' + (singleMode ? ' op-kanban--single' : '') });
+		const board = panel.createDiv({ cls: 'mq-po-kanban mq-op-kanban' + (singleMode ? ' mq-op-kanban--single' : '') });
+		board.style.setProperty('--mq-op-kanban-col-width', this.opportunityKanbanColumnWidth() + 'px');
 
 		if (singleMode) {
 			const ordered = sortBoardItems(items, this.stageLabels());
@@ -237,32 +288,36 @@ export class OpportunityBoard {
 		}
 
 		for (const st of stages) {
-			const colEl = board.createDiv({ cls: 'po-kanban__col op-kanban__col' });
+			const colEl = board.createDiv({ cls: 'mq-po-kanban__col mq-op-kanban__col' });
 			colEl.dataset.status = st.label;
-			const hd = colEl.createDiv({ cls: 'po-kanban__hd' });
+			this.setupOpportunityKanbanResize(board, colEl.createDiv({ cls: 'mq-op-kanban__resize', attr: { 'aria-label': '调整看板列宽度' } }));
+			const hd = colEl.createDiv({ cls: 'mq-po-kanban__hd' });
 			hd.createSpan({ text: st.label });
 			const ct = items.filter((i) => i.status === st.label).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-			hd.createSpan({ cls: 'po-kanban__count', text: String(ct.length) });
-			if (ct.length === 0) colEl.createDiv({ cls: 'op-empty-col' });
+			hd.createSpan({ cls: 'mq-po-kanban__count', text: String(ct.length) });
+			if (ct.length === 0) colEl.createDiv({ cls: 'mq-op-empty-col' });
 
 			ct.forEach((it) => {
-				const card = colEl.createDiv({ cls: 'po-kanban__card op-card' + (singleMode && it.id === this.selectedDetailId ? ' is-selected' : '') });
+				const card = colEl.createDiv({ cls: 'mq-po-kanban__card mq-op-card' + (singleMode && it.id === this.selectedDetailId ? ' is-selected' : '') });
 				card.draggable = true;
 				card.dataset.oppId = it.id;
-				const chip = card.createDiv({ cls: 'op-st' });
+				const chip = card.createDiv({ cls: 'mq-op-st' });
 				chip.style.background = this.stageColor(it.status);
 				chip.textContent = it.status;
-				const title = card.createDiv({ cls: 'op-card__title' });
+				const title = card.createDiv({ cls: 'mq-op-card__title' });
 				title.textContent = it.title;
-				const desc = card.createDiv({ cls: 'op-card__desc' });
+				const desc = card.createDiv({ cls: 'mq-op-card__desc' });
 				desc.textContent = it.notes || it.link || '';
-				if (it.starred) card.createDiv({ cls: 'op-badge--roadmap', text: UI_TEXT.opRoadmap });
+				const meta = card.createDiv({ cls: 'mq-op-card__meta' });
+				if (it.starred) meta.createSpan({ cls: 'mq-op-badge--roadmap', text: UI_TEXT.opRoadmap });
+				const tags = this.compactTags(it);
+				if (tags) meta.createSpan({ cls: 'mq-op-card__tags', text: tags, attr: { title: it.tags.join('、') } });
 				card.addEventListener('click', () => {
 					if (singleMode) {
 						this.selectedDetailId = it.id;
-						board.querySelectorAll('.op-card').forEach((c) => c.removeClass('is-selected'));
+						board.querySelectorAll('.mq-op-card').forEach((c) => c.removeClass('is-selected'));
 						card.addClass('is-selected');
-						const detail = board.querySelector('.op-detail');
+						const detail = board.querySelector('.mq-op-detail');
 						if (detail instanceof HTMLElement) this.renderDetail(detail, it);
 					} else {
 						this.openModal(it);
@@ -272,11 +327,12 @@ export class OpportunityBoard {
 					e.preventDefault();
 					const menu = new Menu();
 					menu.addItem((m) => m.setTitle(UI_TEXT.edit).setIcon('pencil').onClick(() => this.openModal(it)));
+					menu.addItem((m) => m.setTitle('转为任务').setIcon('list-plus').onClick(() => void this.convertToTask(it)));
 					if (singleMode) menu.addItem((m) => m.setTitle('在右侧查看').setIcon('eye').onClick(() => {
 						this.selectedDetailId = it.id;
-						board.querySelectorAll('.op-card').forEach((c) => c.removeClass('is-selected'));
+						board.querySelectorAll('.mq-op-card').forEach((c) => c.removeClass('is-selected'));
 						card.addClass('is-selected');
-						const detail = board.querySelector('.op-detail');
+						const detail = board.querySelector('.mq-op-detail');
 						if (detail instanceof HTMLElement) this.renderDetail(detail, it);
 					}));
 					menu.addItem((m) => m.setTitle('打开链接').setIcon('file-text').onClick(() => void this.openLink(it)));
@@ -293,15 +349,15 @@ export class OpportunityBoard {
 					this.draggedId = it.id;
 					e.dataTransfer?.setData('text/opp-id', it.id);
 					if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
-					card.addClass('po-kanban__card--dragging');
+					card.addClass('mq-po-kanban__card--dragging');
 				});
-				card.addEventListener('dragend', () => { this.draggedId = null; card.removeClass('po-kanban__card--dragging'); });
-				card.addEventListener('dragover', (e) => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'; card.addClass('op-card--drag-over'); });
-				card.addEventListener('dragleave', () => card.removeClass('op-card--drag-over'));
+				card.addEventListener('dragend', () => { this.draggedId = null; card.removeClass('mq-po-kanban__card--dragging'); });
+				card.addEventListener('dragover', (e) => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'; card.addClass('mq-op-card--drag-over'); });
+				card.addEventListener('dragleave', () => card.removeClass('mq-op-card--drag-over'));
 				card.addEventListener('drop', (e) => {
 					e.preventDefault();
 					e.stopPropagation();
-					card.removeClass('op-card--drag-over');
+					card.removeClass('mq-op-card--drag-over');
 					const id = this.draggedId ?? e.dataTransfer?.getData('text/opp-id');
 					this.draggedId = null;
 					if (!id) return;
@@ -309,11 +365,11 @@ export class OpportunityBoard {
 				});
 			});
 
-			colEl.addEventListener('dragover', (e) => { e.preventDefault(); colEl.addClass('po-kanban__col--drag-over'); });
-			colEl.addEventListener('dragleave', () => colEl.removeClass('po-kanban__col--drag-over'));
+			colEl.addEventListener('dragover', (e) => { e.preventDefault(); colEl.addClass('mq-po-kanban__col--drag-over'); });
+			colEl.addEventListener('dragleave', () => colEl.removeClass('mq-po-kanban__col--drag-over'));
 			colEl.addEventListener('drop', (e) => {
 				e.preventDefault();
-				colEl.removeClass('po-kanban__col--drag-over');
+				colEl.removeClass('mq-po-kanban__col--drag-over');
 				const id = this.draggedId ?? e.dataTransfer?.getData('text/opp-id');
 				this.draggedId = null;
 				if (!id) return;
@@ -322,7 +378,7 @@ export class OpportunityBoard {
 		}
 
 		if (singleMode) {
-			const detail = board.createDiv({ cls: 'op-detail' });
+			const detail = board.createDiv({ cls: 'mq-op-detail' });
 			const sel = items.find((i) => i.id === this.selectedDetailId) || sortBoardItems(items, this.stageLabels())[0];
 			if (sel) this.renderDetail(detail, sel);
 			else detail.createSpan({ text: '（该状态暂无条目）' });
@@ -359,48 +415,48 @@ export class OpportunityBoard {
 	/** 单状态模式下，右侧内联详情编辑器 */
 	private renderDetail(container: HTMLElement, item: BoardItem): void {
 		container.empty();
-		const wrap = container.createDiv({ cls: 'op-detail__inner' });
-		wrap.createDiv({ cls: 'op-detail__hd', text: this.boardTitle() + '详情' });
+		const wrap = container.createDiv({ cls: 'mq-op-detail__inner' });
+		wrap.createDiv({ cls: 'mq-op-detail__hd', text: this.boardTitle() + '详情' });
 
-		const titleInput = wrap.createEl('input', { cls: 'ad-modal-input', attr: { type: 'text' } });
+		const titleInput = wrap.createEl('input', { cls: 'mq-ad-modal-input', attr: { type: 'text' } });
 		titleInput.value = item.title; titleInput.placeholder = this.boardTitle() + '名称';
 
-		const statusSel = wrap.createEl('select', { cls: 'ad-modal-input' });
+		const statusSel = wrap.createEl('select', { cls: 'mq-ad-modal-input' });
 		for (const s of this.host.plugin.settings.boardStages) {
 			const o = statusSel.createEl('option', { value: s.label, text: s.label });
 			if (s.label === item.status) o.selected = true;
 		}
 
-		const tagInput = wrap.createEl('input', { cls: 'ad-modal-input', attr: { type: 'text' } });
+		const tagInput = wrap.createEl('input', { cls: 'mq-ad-modal-input', attr: { type: 'text' } });
 		tagInput.value = (item.tags || []).join('、'); tagInput.placeholder = '标签，顿号/逗号分隔';
 
-		const notes = wrap.createEl('textarea', { cls: 'ad-modal-input', attr: { rows: '3' } });
+		const notes = wrap.createEl('textarea', { cls: 'mq-ad-modal-input', attr: { rows: '3' } });
 		notes.value = item.notes || ''; notes.placeholder = '背景 / 备注';
 
 		// 阶段输入框：仅渲染「启用输入框」的阶段，标题与阶段名一致联动
 		const stageInputs: Array<{ label: string; area: HTMLTextAreaElement }> = [];
 		for (const s of this.host.plugin.settings.boardStages) {
 			if (!s.hasInput) continue;
-			wrap.createDiv({ cls: 'op-detail__stage-label', text: s.label });
-			const area = wrap.createEl('textarea', { cls: 'ad-modal-input', attr: { rows: '2', placeholder: '填写该阶段相关记录…' } });
+			wrap.createDiv({ cls: 'mq-op-detail__stage-label', text: s.label });
+			const area = wrap.createEl('textarea', { cls: 'mq-ad-modal-input', attr: { rows: '2', placeholder: '填写该阶段相关记录…' } });
 			area.value = (item.stageNotes || {})[s.label] || '';
 			stageInputs.push({ label: s.label, area });
 		}
 
-		const linkInput = wrap.createEl('input', { cls: 'ad-modal-input', attr: { type: 'text' } });
+		const linkInput = wrap.createEl('input', { cls: 'mq-ad-modal-input', attr: { type: 'text' } });
 		linkInput.value = item.link || ''; linkInput.placeholder = '链接双链，如 [[xxx-详情]]';
 
-		const rmRow = wrap.createDiv({ cls: 'op-detail__row' });
+		const rmRow = wrap.createDiv({ cls: 'mq-op-detail__row' });
 		const rmChk = rmRow.createEl('input', { attr: { type: 'checkbox' } });
 		rmChk.checked = item.starred;
 		rmRow.createSpan({ text: ' 星标（重要/待跟进）' });
 
-		const openBtn = wrap.createEl('button', { cls: 'op-detail__btn op-detail__btn--ghost', text: '打开链接' });
+		const openBtn = wrap.createEl('button', { cls: 'mq-op-detail__btn mq-op-detail__btn--ghost', text: '打开链接' });
 		openBtn.addEventListener('click', () => void this.openLink({ ...item, link: linkInput.value }));
 
-		const btnRow = wrap.createDiv({ cls: 'op-detail__actions' });
-		const saveBtn = btnRow.createEl('button', { cls: 'op-detail__btn op-detail__btn--primary', text: UI_TEXT.save });
-		const delBtn = btnRow.createEl('button', { cls: 'op-detail__btn op-detail__btn--danger', text: UI_TEXT.delete });
+		const btnRow = wrap.createDiv({ cls: 'mq-op-detail__actions' });
+		const saveBtn = btnRow.createEl('button', { cls: 'mq-op-detail__btn mq-op-detail__btn--primary', text: UI_TEXT.save });
+		const delBtn = btnRow.createEl('button', { cls: 'mq-op-detail__btn mq-op-detail__btn--danger', text: UI_TEXT.delete });
 
 		saveBtn.addEventListener('click', () => {
 			// 汇总阶段输入框：保留「当前不可见阶段」的历史内容，覆盖可见阶段（留空=清空）
@@ -443,9 +499,9 @@ export class OpportunityBoard {
 	}
 
 	private renderList(panel: HTMLElement, items: BoardItem[]): void {
-		const chips = panel.createDiv({ cls: 'op-chips' });
+		const chips = panel.createDiv({ cls: 'mq-op-chips' });
 		const mkChip = (label: string, active: boolean, onClick: () => void) => {
-			const c = chips.createEl('button', { cls: 'op-chip' + (active ? ' is-active' : ''), text: label });
+			const c = chips.createEl('button', { cls: 'mq-op-chip' + (active ? ' is-active' : ''), text: label });
 			c.addEventListener('click', onClick);
 		};
 		mkChip('全部', this.selectedStatus === 'all' && !this.showStarredOnly, () => {
@@ -457,35 +513,95 @@ export class OpportunityBoard {
 			});
 		}
 
-		const table = panel.createEl('table', { cls: 'po-tb2 op-tb' });
+		const tableWrap = panel.createDiv({ cls: 'mq-op-tb-wrap' });
+		const table = tableWrap.createEl('table', { cls: 'mq-po-tb2 mq-op-tb mq-op-tb--resizable' });
 		const thead = table.createEl('thead');
 		const headRow = thead.createEl('tr');
-		const cols: { key: string; label: string }[] = [
-			{ key: 'title', label: '名称' },
-			{ key: 'status', label: '状态' },
-			{ key: 'createDate', label: '创建时间' },
-			{ key: 'starred', label: '星标' },
+		const cols: Array<{ key: string; label: string; sortable?: boolean }> = [
+			{ key: 'title', label: '名称', sortable: true },
+			{ key: 'status', label: '状态', sortable: true },
+			{ key: 'tags', label: '标签' },
+			{ key: 'createDate', label: '创建时间', sortable: true },
+			{ key: 'starred', label: '星标', sortable: true },
+			{ key: 'conversion', label: '任务转化' },
+			{ key: 'actions', label: '操作' },
 		];
+		const colgroup = table.createEl('colgroup');
+		for (const c of cols) {
+			const col = colgroup.createEl('col');
+			col.dataset.key = c.key;
+			col.style.width = this.listColumnWidth(c.key) + 'px';
+		}
 		for (const c of cols) {
 			const th = headRow.createEl('th', { text: c.label });
-			th.addEventListener('click', () => this.sortList(c.key));
+			if (c.sortable) th.addEventListener('click', () => this.sortList(c.key));
+			const resize = th.createDiv({ cls: 'mq-op-tb__resize', attr: { 'aria-label': '调整' + c.label + '列宽度' } });
+			this.setupListColumnResize(table, c.key, resize);
 		}
 		const tbody = table.createEl('tbody');
 		for (const it of this.sortedList(items)) {
 			const tr = tbody.createEl('tr');
-			tr.createEl('td', { text: it.title });
+			tr.createEl('td', { text: it.title, attr: { title: it.title } });
 			const stTd = tr.createEl('td');
-			const chip = stTd.createSpan({ cls: 'op-st' });
+			const chip = stTd.createSpan({ cls: 'mq-op-st' });
 			chip.style.background = this.stageColor(it.status);
 			chip.textContent = it.status;
+			const tagText = it.tags.join(', ');
+			tr.createEl('td', { text: tagText || '-', attr: tagText ? { title: tagText } : {} });
 			tr.createEl('td', { text: it.createDate || '-' });
 			tr.createEl('td', { text: it.starred ? '★' : '-' });
+			const related = this.relatedTasks(it);
+			const conversion = tr.createEl('td');
+			const conversionBtn = conversion.createEl('button', { cls: 'mq-op-conversion-count', text: String(related.length) });
+			conversionBtn.addEventListener('click', (e) => {
+				e.stopPropagation();
+				this.openRelatedTasksModal(it);
+			});
+			const actions = tr.createEl('td');
+			const convertBtn = actions.createEl('button', { cls: 'mq-op-action-btn', text: '转为任务' });
+			convertBtn.addEventListener('click', (e) => {
+				e.stopPropagation();
+				void this.convertToTask(it);
+			});
 			tr.addEventListener('click', () => this.openModal(it));
 		}
 	}
 
+	private listColumnWidth(key: string): number {
+		const configured = this.host.plugin.settings.oppListColumnWidths?.[key];
+		if (typeof configured === 'number') return Math.max(70, Math.min(480, configured));
+		const defaults: Record<string, number> = {
+			title: 240, status: 110, tags: 150, createDate: 120, starred: 76, conversion: 94, actions: 96,
+		};
+		return defaults[key] ?? 120;
+	}
+
+	private setupListColumnResize(table: HTMLTableElement, key: string, handle: HTMLElement): void {
+		handle.addEventListener('mousedown', (e) => {
+			e.preventDefault();
+			e.stopPropagation();
+			const startX = e.clientX;
+			const startWidth = this.listColumnWidth(key);
+			const clamp = (x: number): number => Math.max(70, Math.min(480, Math.round(x)));
+			const col = table.querySelector(`col[data-key="${key}"]`) as HTMLTableColElement | null;
+			const onMove = (move: MouseEvent): void => {
+				if (col) col.style.width = clamp(startWidth + move.clientX - startX) + 'px';
+			};
+			const onUp = (up: MouseEvent): void => {
+				document.removeEventListener('mousemove', onMove);
+				document.removeEventListener('mouseup', onUp);
+				const widths = { ...(this.host.plugin.settings.oppListColumnWidths || {}) };
+				widths[key] = clamp(startWidth + up.clientX - startX);
+				this.host.plugin.settings.oppListColumnWidths = widths;
+				void this.host.plugin.saveSettings();
+			};
+			document.addEventListener('mousemove', onMove);
+			document.addEventListener('mouseup', onUp);
+		});
+	}
+
 	private rerenderSidebarAndPanels(): void {
-		const sidebar = this.host.boardEl?.querySelector('.op-sidebar') as HTMLElement | undefined;
+		const sidebar = this.host.boardEl?.querySelector('.mq-op-sidebar') as HTMLElement | undefined;
 		if (sidebar) this.renderSidebar(sidebar);
 		this.renderPanels();
 	}
@@ -493,7 +609,7 @@ export class OpportunityBoard {
 	private sortList(key: string): void {
 		if (this.sortCol === key) this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
 		else { this.sortCol = key; this.sortDir = 'asc'; }
-		const panel = this.mainEl?.querySelector('.po-panel[data-view="list"]') as HTMLElement | undefined;
+		const panel = this.mainEl?.querySelector('.mq-po-panel[data-view="list"]') as HTMLElement | undefined;
 		if (panel) this.renderPanel('list', panel, this.filteredItems());
 	}
 
@@ -521,8 +637,65 @@ export class OpportunityBoard {
 			boardFile: this.boardPath(),
 			editData: item,
 			onSave: (data: BoardFormData) => { void this.onSave(data, item); },
+			onConvertToTask: item ? () => void this.convertToTask(item) : undefined,
 		});
 		modal.open();
+	}
+
+	private relatedTasks(item: BoardItem): TaskItem[] {
+		const recordedIds = new Set(item.taskIds || []);
+		return this.currentTasks.filter((task) =>
+			recordedIds.has(task.id) || (task.opportunityIds || []).includes(item.id),
+		);
+	}
+
+	private async convertToTask(item: BoardItem): Promise<void> {
+		await this.host.openTaskModal(undefined, {
+			defaultTitle: item.title,
+			opportunityId: item.id,
+			onCreated: (taskId) => { void this.linkTask(item, taskId); },
+		});
+	}
+
+	private async linkTask(item: BoardItem, taskId: string): Promise<void> {
+		const taskIds = Array.from(new Set([...(item.taskIds || []), taskId]));
+		await updateOpportunity(this.host.app, this.boardPath(), item.id, { taskIds }, this.boardTitle());
+		const index = this.currentItems.findIndex((candidate) => candidate.id === item.id);
+		if (index >= 0 && this.currentItems[index]) {
+			this.currentItems[index] = { ...this.currentItems[index], taskIds };
+		}
+		this.cache = { at: Date.now(), items: this.currentItems };
+		this.host.showToast('已创建关联任务');
+		void this.refreshBoard();
+	}
+
+	private openRelatedTasksModal(item: BoardItem): void {
+		const tasks = this.relatedTasks(item);
+		const host = this.host;
+		const boardTitle = this.boardTitle();
+		class RelatedTasksModal extends Modal {
+			onOpen(): void {
+				this.contentEl.addClass('mq-ad-task-modal', 'mq-op-related-modal');
+				this.contentEl.createEl('h3', { cls: 'mq-ad-modal-title', text: boardTitle + '关联任务' });
+				if (!tasks.length) {
+					this.contentEl.createDiv({ cls: 'mq-op-related-empty', text: '暂未转化为任务' });
+					return;
+				}
+				const list = this.contentEl.createDiv({ cls: 'mq-op-related-list' });
+				for (const task of tasks) {
+					const row = list.createEl('button', { cls: 'mq-op-related-task', text: task.content });
+					row.addEventListener('click', () => {
+						this.close();
+						host.openTaskEditModal(task);
+					});
+				}
+			}
+
+			onClose(): void {
+				this.contentEl.empty();
+			}
+		}
+		new RelatedTasksModal(this.host.app).open();
 	}
 
 	private async openLink(it: BoardItem): Promise<void> {
@@ -597,10 +770,11 @@ export class OpportunityBoard {
 
 	private async refreshBoard(): Promise<void> {
 		if (this.host.currentPage !== 'opportunity') return;
-		const items = await this.loadItems();
+		const [items, tasks] = await Promise.all([this.loadItems(), this.host.taskStore.scanAllTasks()]);
 		if (this.host.currentPage !== 'opportunity' || !this.host.boardEl) return;
 		this.currentItems = items;
-		const sidebar = this.host.boardEl?.querySelector('.op-sidebar') as HTMLElement | undefined;
+		this.currentTasks = tasks;
+		const sidebar = this.host.boardEl?.querySelector('.mq-op-sidebar') as HTMLElement | undefined;
 		if (sidebar) this.renderSidebar(sidebar);
 		this.renderPanels();
 	}

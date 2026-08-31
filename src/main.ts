@@ -19,14 +19,18 @@ export default class Dashboard extends Plugin {
 
 		this.registerView(VIEW_TYPE, (leaf) => new DashboardView(leaf, this));
 		this.registerView(KNOWLEDGE_WORKBENCH_VIEW_TYPE, (leaf) => new KnowledgeWorkbenchView(leaf, this));
+		this.app.workspace.onLayoutReady(() => {
+			void this.migrateLegacyDashboardViews();
+			this.removeRetiredLocalWebAppLeaves();
+		});
 
-		this.addRibbonIcon('layout-dashboard', 'Dashboard', () => {
+		this.addRibbonIcon('house', '工作台', () => {
 			void this.activateView();
 		});
 
 		this.addCommand({
 			id: 'open-dashboard',
-			name: 'Open dashboard',
+			name: '打开工作台',
 			callback: () => {
 				void this.activateView();
 			},
@@ -55,6 +59,7 @@ export default class Dashboard extends Plugin {
 		const storedLayoutVersion = typeof loaded.homeLayoutVersion === 'number' ? loaded.homeLayoutVersion : 0;
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded);
 		this.settings.banner = { ...DEFAULT_SETTINGS.banner, ...(loaded.banner ?? {}) };
+		this.settings.pomodoro = { ...DEFAULT_SETTINGS.pomodoro, ...(loaded.pomodoro ?? {}) };
 		this.settings.knowledgeWorkbench = {
 			...DEFAULT_SETTINGS.knowledgeWorkbench,
 			...(loaded.knowledgeWorkbench ?? {}),
@@ -215,6 +220,32 @@ export default class Dashboard extends Plugin {
 	}
 
 	/**
+	 * This plugin used to share `dashboard-view` with Xove. Migrate only the
+	 * pre-existing local view once, then persist the marker so future Xove views
+	 * with that legacy type remain untouched.
+	 */
+	private async migrateLegacyDashboardViews(): Promise<void> {
+		if (this.settings.legacyDashboardViewMigrated) return;
+		const legacyLeaves = this.app.workspace.getLeavesOfType('dashboard-view');
+		for (const leaf of legacyLeaves) {
+			await leaf.setViewState({ type: VIEW_TYPE, active: leaf === this.app.workspace.activeLeaf });
+		}
+		this.settings.legacyDashboardViewMigrated = true;
+		await this.saveSettings();
+	}
+
+
+	/** Remove inactive tabs left behind by the retired local-web-app experiment. */
+	private removeRetiredLocalWebAppLeaves(): void {
+		const retiredTypes = new Set(['mq-sag-knowledge-view', 'mq-deepseek-view']);
+		const leaves: import('obsidian').WorkspaceLeaf[] = [];
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			if (retiredTypes.has(leaf.getViewState().type)) leaves.push(leaf);
+		});
+		leaves.forEach((leaf) => leaf.detach());
+	}
+
+	/**
 	 * Switch Obsidian's own light/dark appearance.
 	 *
 	 * `vault.setConfig('theme', ...)` is an internal (undocumented) API — it is the
@@ -289,6 +320,14 @@ export default class Dashboard extends Plugin {
 		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
 			const view = leaf.view;
 			if (view instanceof DashboardView) view.refreshNav();
+		}
+	}
+
+	/** Apply the performance setting without requiring a workspace reload. */
+	refreshNoiseOverlays(): void {
+		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+			const view = leaf.view;
+			if (view instanceof DashboardView) view.refreshNoiseOverlay();
 		}
 	}
 

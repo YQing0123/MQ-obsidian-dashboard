@@ -20,37 +20,37 @@ export class CountdownModal extends Modal {
 
 	onOpen(): void {
 		const { contentEl } = this;
-		contentEl.addClass('ad-modal');
+		contentEl.addClass('mq-ad-modal');
 
-		contentEl.createEl('h3', { cls: 'ad-modal-title', text: '编辑倒计时事件' });
+		contentEl.createEl('h3', { cls: 'mq-ad-modal-title', text: '编辑倒计时事件' });
 
 		// 事件名称
-		const nameField = contentEl.createDiv({ cls: 'ad-modal-field' });
-		nameField.createEl('label', { cls: 'ad-modal-label', text: '事件名称' });
+		const nameField = contentEl.createDiv({ cls: 'mq-ad-modal-field' });
+		nameField.createEl('label', { cls: 'mq-ad-modal-label', text: '事件名称' });
 		const nameInput = nameField.createEl('input', {
-			cls: 'ad-modal-input',
+			cls: 'mq-ad-modal-input',
 			type: 'text',
 			value: this.eventName,
 		});
 		nameInput.placeholder = '如：高考';
 
 		// 目标日期
-		const dateField = contentEl.createDiv({ cls: 'ad-modal-field' });
-		dateField.createEl('label', { cls: 'ad-modal-label', text: '目标日期' });
+		const dateField = contentEl.createDiv({ cls: 'mq-ad-modal-field' });
+		dateField.createEl('label', { cls: 'mq-ad-modal-label', text: '目标日期' });
 		const dateInput = dateField.createEl('input', {
-			cls: 'ad-modal-input',
+			cls: 'mq-ad-modal-input',
 			type: 'date',
 			value: this.targetDate,
 		});
 
 		contentEl.createDiv({
-			cls: 'ad-modal-hint',
+			cls: 'mq-ad-modal-hint',
 			text: '卡片显示「距离 {名称} 还有」及剩余天数，进度条随目标日期动态变化。',
 		});
 
-		const btns = contentEl.createDiv({ cls: 'ad-modal-btns' });
-		const cancelBtn = btns.createEl('button', { cls: 'ad-modal-btn', text: UI_TEXT.cancel });
-		const confirmBtn = btns.createEl('button', { cls: 'ad-modal-btn ad-modal-btn--primary', text: '保存' });
+		const btns = contentEl.createDiv({ cls: 'mq-ad-modal-btns' });
+		const cancelBtn = btns.createEl('button', { cls: 'mq-ad-modal-btn', text: UI_TEXT.cancel });
+		const confirmBtn = btns.createEl('button', { cls: 'mq-ad-modal-btn mq-ad-modal-btn--primary', text: '保存' });
 
 		cancelBtn.addEventListener('click', () => this.close());
 		confirmBtn.addEventListener('click', () => {
