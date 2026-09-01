@@ -5,7 +5,7 @@ import {
 	parseFrontmatter, STATUS_LIST, LONG_TERM_STAGES, isLongTermProject,
 } from '../data/taskParser';
 import type { TaskStore } from '../data/taskStore';
-import { fmtDate } from '../data/taskLogic';
+import { fmtDate, nowFmt } from '../data/taskLogic';
 import { computeWindow, filterWithOrig } from '../data/virtualList';
 import { UI_TEXT } from '../constants';
 import { t, tArr } from '../i18n';
@@ -30,7 +30,7 @@ export interface ProjectHost {
 		saveSettings(): Promise<void>;
 	};
 	boardEl: HTMLElement | null;
-	currentPage: 'home' | 'project' | 'opportunity';
+	currentPage: 'home' | 'project' | 'opportunity' | 'daily-report';
 	exitEditMode(): void;
 	selectedProject: string | null;
 	showToast(message: string, kind?: 'success' | 'error'): void;
@@ -72,7 +72,7 @@ export class ProjectBoard {
 	private get plugin() { return this.host.plugin; }
 	private get boardEl() { return this.host.boardEl; }
 	private get currentPage() { return this.host.currentPage; }
-	private set currentPage(v: 'home' | 'project' | 'opportunity') { this.host.currentPage = v; }
+	private set currentPage(v: 'home' | 'project' | 'opportunity' | 'daily-report') { this.host.currentPage = v; }
 	private get selectedProject() { return this.host.selectedProject; }
 	private set selectedProject(v: string | null) { this.host.selectedProject = v; }
 	private get showToast() { return this.host.showToast.bind(this.host); }
@@ -141,6 +141,7 @@ export class ProjectBoard {
 		this.boardEl.addClass('mq-po-board');
 		this.boardEl.removeClass('mq-ad-board');
 		this.boardEl.removeClass('mq-op-board');
+		this.boardEl.removeClass('mq-dr-board');
 		this.currentPage = 'project';
 
 		this.currentProjects = projects;
@@ -2266,8 +2267,14 @@ export class ProjectBoard {
 		const file = this.app.vault.getAbstractFileByPath(task.sourceFile);
 		if (!(file instanceof TFile)) return;
 
-		await this.writeFrontmatter(file, { '\u72B6\u6001': newStatus });
+		const wasComplete = task.status === '\u5DF2\u5B8C\u6210';
+		const updates: Record<string, string | null> = { '\u72B6\u6001': newStatus };
+		if (newStatus === '\u5DF2\u5B8C\u6210' && !wasComplete) updates['\u5B8C\u6210\u65F6\u95F4'] = nowFmt();
+		if (newStatus !== '\u5DF2\u5B8C\u6210' && wasComplete) updates['\u5B8C\u6210\u65F6\u95F4'] = null;
+		await this.writeFrontmatter(file, updates);
 		task.status = newStatus;
+		if (newStatus === '\u5DF2\u5B8C\u6210' && !wasComplete) task.completeTime = updates['\u5B8C\u6210\u65F6\u95F4'] ?? null;
+		if (newStatus !== '\u5DF2\u5B8C\u6210' && wasComplete) task.completeTime = null;
 		this.showToast('\u2728 \u4EFB\u52A1\u72B6\u6001\u5DF2\u66F4\u65B0: ' + newStatus);
 		await this.refresh();
 	}

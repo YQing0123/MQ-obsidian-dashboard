@@ -20,6 +20,10 @@ export class TaskStore {
 	 *  再对每个项目把任务文件重读一遍 —— 每文件 2 次 IO；pulse 与首页卡片
 	 *  又是两条路径，容易连续全量重扫。现在全部共享这一次遍历。 */
 	private scanCache: { at: number; projects: ProjectInfo[]; tasks: TaskItem[] } | null = null;
+	/** 共享正在进行中的扫描，避免多个页面/统计模块同时重复遍历 Vault。 */
+	private scanInFlight: Promise<{ projects: ProjectInfo[]; tasks: TaskItem[] }> | null = null;
+	/** 最近一次成功快照，用于判断任务完成日期是否被撤销。 */
+	private lastTasks: TaskItem[] = [];
 	private warnedProjectsFallback = false;
 
 	constructor(
@@ -62,6 +66,10 @@ export class TaskStore {
 		return (await this.scanAllWithTasks()).tasks;
 	}
 
+	getTaskByPath(path: string): TaskItem | undefined {
+		return this.lastTasks.find((task) => task.sourceFile === path || task.id === path);
+	}
+
 	/**
 	 * 单次遍历同时产出项目与任务；任务文件并发读取（cachedRead 走 Obsidian
 	 * 缓存，Promise.all 并发安全），替代此前「逐文件串行 await」的实现。
@@ -69,6 +77,17 @@ export class TaskStore {
 	private async scanAllWithTasks(): Promise<{ projects: ProjectInfo[]; tasks: TaskItem[] }> {
 		const now = Date.now();
 		if (this.scanCache && now - this.scanCache.at < 300) return this.scanCache;
+		if (this.scanInFlight) return this.scanInFlight;
+
+		const run = this.scanAllWithTasksUncached(now);
+		this.scanInFlight = run;
+		run.finally(() => {
+			if (this.scanInFlight === run) this.scanInFlight = null;
+		}).catch(() => { /* 原始 Promise 负责向调用方传播错误 */ });
+		return run;
+	}
+
+	private async scanAllWithTasksUncached(now: number): Promise<{ projects: ProjectInfo[]; tasks: TaskItem[] }> {
 		clearParseIssues();
 
 		const rootPath = this.getSettings().projectsFolder;
@@ -92,6 +111,7 @@ export class TaskStore {
 
 		if (root) await this.scanProjectsInFolder(root, projects, allTasks);
 		this.scanCache = { at: now, projects, tasks: allTasks };
+		this.lastTasks = allTasks;
 		return this.scanCache;
 	}
 

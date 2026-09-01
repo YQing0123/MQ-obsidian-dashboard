@@ -289,10 +289,10 @@ var ProjectModal_exports = {};
 __export(ProjectModal_exports, {
   ProjectModal: () => ProjectModal
 });
-var import_obsidian17, COLORS, getToday, _a, ProjectModal;
+var import_obsidian19, COLORS, getToday, _a, ProjectModal;
 var init_ProjectModal = __esm({
   "src/views/ProjectModal.ts"() {
-    import_obsidian17 = require("obsidian");
+    import_obsidian19 = require("obsidian");
     init_taskParser();
     init_constants();
     COLORS = [
@@ -311,7 +311,7 @@ var init_ProjectModal = __esm({
       const d = /* @__PURE__ */ new Date();
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     };
-    ProjectModal = class extends import_obsidian17.Modal {
+    ProjectModal = class extends import_obsidian19.Modal {
       constructor(opts) {
         var _a2, _b;
         super(opts.app);
@@ -442,10 +442,10 @@ var TaskModal_exports = {};
 __export(TaskModal_exports, {
   TaskModal: () => TaskModal
 });
-var import_obsidian18, PRIORITIES, STATUSES, TYPES, REPEAT_FREQS, WEEKDAYS, REMINDER_OPTIONS, getToday2, dateToDow, TaskModal;
+var import_obsidian20, PRIORITIES, STATUSES, TYPES, REPEAT_FREQS, WEEKDAYS2, REMINDER_OPTIONS, getToday2, dateToDow, TaskModal;
 var init_TaskModal = __esm({
   "src/views/TaskModal.ts"() {
-    import_obsidian18 = require("obsidian");
+    import_obsidian20 = require("obsidian");
     init_constants();
     PRIORITIES = [
       { value: "\u91CD\u8981\u4E14\u7D27\u6025", label: "\u{1F534} \u91CD\u8981\u4E14\u7D27\u6025" },
@@ -471,7 +471,7 @@ var init_TaskModal = __esm({
       { value: "weekly", label: "\u6BCF\u5468" },
       { value: "monthly", label: "\u6BCF\u6708" }
     ];
-    WEEKDAYS = [
+    WEEKDAYS2 = [
       { value: 1, label: "\u5468\u4E00" },
       { value: 2, label: "\u5468\u4E8C" },
       { value: 3, label: "\u5468\u4E09" },
@@ -495,7 +495,7 @@ var init_TaskModal = __esm({
       if (isNaN(d.getTime())) return 1;
       return (d.getDay() + 6) % 7 + 1;
     };
-    TaskModal = class extends import_obsidian18.Modal {
+    TaskModal = class extends import_obsidian20.Modal {
       constructor(opts) {
         super(opts.app);
         __publicField(this, "opts");
@@ -601,7 +601,7 @@ var init_TaskModal = __esm({
             this.label(c, "\u91CD\u590D\u661F\u671F\uFF08\u53EF\u591A\u9009\uFF09");
             const wdRow = c.createDiv({ cls: "mq-ad-repeat-weekdays" });
             const startDow = dateToDow(startInput.value);
-            for (const wd of WEEKDAYS) {
+            for (const wd of WEEKDAYS2) {
               const lbl = wdRow.createEl("label", { cls: "mq-ad-rem-item" });
               const cb = lbl.createEl("input", { cls: "mq-ad-repeat-weekday", attr: { type: "checkbox", value: String(wd.value) } });
               if (wd.value === startDow) cb.checked = true;
@@ -751,7 +751,7 @@ __export(main_exports, {
   default: () => Dashboard
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian21 = require("obsidian");
+var import_obsidian23 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian = require("obsidian");
@@ -1202,7 +1202,7 @@ var DashboardSettingTab = class extends import_obsidian.PluginSettingTab {
 };
 
 // src/views/DashboardView.ts
-var import_obsidian19 = require("obsidian");
+var import_obsidian21 = require("obsidian");
 
 // src/data/mockData.ts
 var MOCK_DATA = {
@@ -2953,6 +2953,10 @@ var TaskStore = class {
      *  再对每个项目把任务文件重读一遍 —— 每文件 2 次 IO；pulse 与首页卡片
      *  又是两条路径，容易连续全量重扫。现在全部共享这一次遍历。 */
     __publicField(this, "scanCache", null);
+    /** 共享正在进行中的扫描，避免多个页面/统计模块同时重复遍历 Vault。 */
+    __publicField(this, "scanInFlight", null);
+    /** 最近一次成功快照，用于判断任务完成日期是否被撤销。 */
+    __publicField(this, "lastTasks", []);
     __publicField(this, "warnedProjectsFallback", false);
   }
   /** Clear the scan cache on relevant vault events, so a burst of
@@ -2984,14 +2988,27 @@ var TaskStore = class {
   async scanAllTasks() {
     return (await this.scanAllWithTasks()).tasks;
   }
+  getTaskByPath(path) {
+    return this.lastTasks.find((task) => task.sourceFile === path || task.id === path);
+  }
   /**
    * 单次遍历同时产出项目与任务；任务文件并发读取（cachedRead 走 Obsidian
    * 缓存，Promise.all 并发安全），替代此前「逐文件串行 await」的实现。
    */
   async scanAllWithTasks() {
-    var _a2;
     const now = Date.now();
     if (this.scanCache && now - this.scanCache.at < 300) return this.scanCache;
+    if (this.scanInFlight) return this.scanInFlight;
+    const run = this.scanAllWithTasksUncached(now);
+    this.scanInFlight = run;
+    run.finally(() => {
+      if (this.scanInFlight === run) this.scanInFlight = null;
+    }).catch(() => {
+    });
+    return run;
+  }
+  async scanAllWithTasksUncached(now) {
+    var _a2;
     clearParseIssues();
     const rootPath = this.getSettings().projectsFolder;
     const projects = [];
@@ -3010,6 +3027,7 @@ var TaskStore = class {
     }
     if (root) await this.scanProjectsInFolder(root, projects, allTasks);
     this.scanCache = { at: now, projects, tasks: allTasks };
+    this.lastTasks = allTasks;
     return this.scanCache;
   }
   /** Scan a folder and its children for project-{name}.md;
@@ -3668,6 +3686,7 @@ var OpportunityBoard = class {
     this.host.boardEl.empty();
     this.host.boardEl.removeClass("mq-ad-board");
     this.host.boardEl.removeClass("mq-po-board");
+    this.host.boardEl.removeClass("mq-dr-board");
     this.host.boardEl.addClass("mq-op-board");
     this.host.currentPage = "opportunity";
     this.currentItems = items;
@@ -4678,6 +4697,7 @@ var ProjectBoard = class {
     this.boardEl.addClass("mq-po-board");
     this.boardEl.removeClass("mq-ad-board");
     this.boardEl.removeClass("mq-op-board");
+    this.boardEl.removeClass("mq-dr-board");
     this.currentPage = "project";
     this.currentProjects = projects;
     this.currentTasks = allTasks;
@@ -6599,11 +6619,18 @@ var ProjectBoard = class {
   }
   /** Update task status in source file (unified writer) */
   async updateTaskStatus(task, newStatus) {
+    var _a2;
     if (!task.sourceFile) return;
     const file = this.app.vault.getAbstractFileByPath(task.sourceFile);
     if (!(file instanceof import_obsidian16.TFile)) return;
-    await this.writeFrontmatter(file, { "\u72B6\u6001": newStatus });
+    const wasComplete = task.status === "\u5DF2\u5B8C\u6210";
+    const updates = { "\u72B6\u6001": newStatus };
+    if (newStatus === "\u5DF2\u5B8C\u6210" && !wasComplete) updates["\u5B8C\u6210\u65F6\u95F4"] = nowFmt2();
+    if (newStatus !== "\u5DF2\u5B8C\u6210" && wasComplete) updates["\u5B8C\u6210\u65F6\u95F4"] = null;
+    await this.writeFrontmatter(file, updates);
     task.status = newStatus;
+    if (newStatus === "\u5DF2\u5B8C\u6210" && !wasComplete) task.completeTime = (_a2 = updates["\u5B8C\u6210\u65F6\u95F4"]) != null ? _a2 : null;
+    if (newStatus !== "\u5DF2\u5B8C\u6210" && wasComplete) task.completeTime = null;
     this.showToast("\u2728 \u4EFB\u52A1\u72B6\u6001\u5DF2\u66F4\u65B0: " + newStatus);
     await this.refresh();
   }
@@ -6616,6 +6643,506 @@ var ProjectBoard = class {
     task.priority = newPriority;
     this.showToast("\u2728 \u4F18\u5148\u7EA7\u5DF2\u66F4\u65B0: " + newPriority);
     await this.refresh();
+  }
+};
+
+// src/views/DailyReportBoard.ts
+var import_obsidian18 = require("obsidian");
+
+// src/data/dailyReport.ts
+var import_obsidian17 = require("obsidian");
+
+// src/data/dailyReportCore.ts
+function dateFromString(value) {
+  return /* @__PURE__ */ new Date(value + "T00:00:00");
+}
+function weekRange(date) {
+  const start = dateFromString(date);
+  const day = start.getDay() || 7;
+  start.setDate(start.getDate() - day + 1);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  const format = (value) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+  return { start: format(start), end: format(end) };
+}
+function lineForTask(task) {
+  return `${task.content}\u3002\uFF08${task.projectId || "\u672A\u5F52\u5C5E\u9879\u76EE"}\uFF09`;
+}
+function doneDates(task) {
+  const dates = /* @__PURE__ */ new Set();
+  if (/^\d{4}-\d{2}-\d{2}/.test(task.completeTime || "")) dates.add((task.completeTime || "").slice(0, 10));
+  for (const [date, node] of Object.entries(task.dailyNodes || {})) {
+    if (node.s === "done" && /^\d{4}-\d{2}-\d{2}$/.test(date)) dates.add(date);
+  }
+  return [...dates];
+}
+function buildDailyReport(date, tasks) {
+  const summary = tasks.filter((task) => doneDates(task).includes(date)).sort((a, b) => a.projectId.localeCompare(b.projectId, "zh-CN") || a.content.localeCompare(b.content, "zh-CN")).map(lineForTask);
+  const range = weekRange(date);
+  const plan = tasks.filter((task) => task.status !== "\u5DF2\u5B8C\u6210" && task.status !== "\u5DF2\u53D6\u6D88").filter((task) => !!task.dueDate && task.dueDate >= range.start && task.dueDate <= range.end).sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || "") || a.content.localeCompare(b.content, "zh-CN")).map(lineForTask);
+  return { date, summary, plan };
+}
+function renderDailyReport(record) {
+  const list = (items, empty) => items.length ? items.map((item, index) => `${index + 1}\u3001${item}`).join("\n") : empty;
+  return [
+    `# ${record.date}`,
+    "**\u4ECA\u65E5\u603B\u7ED3\uFF1A**",
+    list(record.summary, "---"),
+    "",
+    "**\u660E\u65E5\u8BA1\u5212\uFF1A**",
+    list(record.plan, "---")
+  ].join("\n");
+}
+function renderMonthlyReports(records) {
+  return [...records].sort((a, b) => b.date.localeCompare(a.date)).map(renderDailyReport).join("\n\n") + (records.length ? "\n" : "");
+}
+function parseMonthlyReports(content) {
+  var _a2, _b;
+  const headers = [];
+  const pattern = /^# (\d{4}-\d{2}-\d{2})\s*$/gm;
+  let match;
+  while ((match = pattern.exec(content)) !== null) headers.push({ date: match[1], index: match.index, length: match[0].length });
+  const records = [];
+  for (let index = 0; index < headers.length; index++) {
+    const header = headers[index];
+    const bodyStart = header.index + header.length;
+    const bodyEnd = (_b = (_a2 = headers[index + 1]) == null ? void 0 : _a2.index) != null ? _b : content.length;
+    const body = content.slice(bodyStart, bodyEnd);
+    const section = (label) => {
+      const found = body.match(new RegExp(`\\*\\*${label}\uFF1A\\*\\*\\s*\\n([\\s\\S]*?)(?=\\n\\s*\\*\\*(?:\u4ECA\u65E5\u603B\u7ED3|\u660E\u65E5\u8BA1\u5212)\uFF1A\\*\\*|$)`));
+      if (!(found == null ? void 0 : found[1])) return [];
+      return found[1].split(/\r?\n/).map((line) => line.trim()).filter(Boolean).filter((line) => line !== "---" && !line.startsWith("\u6682\u65E0")).map((line) => line.replace(/^\d+、/, ""));
+    };
+    records.push({ date: header.date, summary: section("\u4ECA\u65E5\u603B\u7ED3"), plan: section("\u660E\u65E5\u8BA1\u5212") });
+  }
+  return records.sort((a, b) => b.date.localeCompare(a.date));
+}
+function csvCell(value) {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+function dailyReportsToCsv(records) {
+  const rows = ["\u65E5\u62A5\u65F6\u95F4,\u65E5\u62A5\u5185\u5BB9"];
+  for (const record of records) {
+    const content = `\u4ECA\u65E5\u603B\u7ED3\uFF1A
+${record.summary.map((item, index) => `${index + 1}\u3001${item}`).join("\n") || "---"}
+
+\u660E\u65E5\u8BA1\u5212\uFF1A
+${record.plan.map((item, index) => `${index + 1}\u3001${item}`).join("\n") || "---"}`;
+    rows.push([record.date, content].map(csvCell).join(","));
+  }
+  return "\uFEFF" + rows.join("\n") + "\n";
+}
+function dailyReportsToMarkdownTable(records) {
+  const rows = ["| \u65E5\u62A5\u65F6\u95F4 | \u65E5\u62A5\u5185\u5BB9 |", "| --- | --- |"];
+  for (const record of records) {
+    const content = `**\u4ECA\u65E5\u603B\u7ED3\uFF1A**<br>${record.summary.map((item, index) => `${index + 1}\u3001${item}`).join("<br>") || "---"}<br><br>**\u660E\u65E5\u8BA1\u5212\uFF1A**<br>${record.plan.map((item, index) => `${index + 1}\u3001${item}`).join("<br>") || "---"}`;
+    rows.push(`| ${record.date} | ${content.replace(/\|/g, "\\|")} |`);
+  }
+  return rows.join("\n") + "\n";
+}
+
+// src/data/dailyReport.ts
+var DAILY_REPORT_FOLDER = "\u65E5\u62A5";
+function monthKey(date) {
+  return date.slice(0, 7);
+}
+function monthKeys(start, end) {
+  if (!start || !end) return [];
+  const cursor = /* @__PURE__ */ new Date(start + "T00:00:00");
+  const last = /* @__PURE__ */ new Date(end + "T00:00:00");
+  const keys = [];
+  while (cursor <= last) {
+    keys.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`);
+    cursor.setMonth(cursor.getMonth() + 1, 1);
+  }
+  return [...new Set(keys)];
+}
+var DailyReportStore = class {
+  constructor(app) {
+    this.app = app;
+    __publicField(this, "writeQueues", /* @__PURE__ */ new Map());
+  }
+  filePath(month) {
+    return `${DAILY_REPORT_FOLDER}/${month}\u65E5\u62A5.md`;
+  }
+  async listRange(start, end) {
+    const months = new Set(monthKeys(start, end));
+    const files = this.app.vault.getFiles().filter((file) => {
+      const match = file.path.match(new RegExp(`^${DAILY_REPORT_FOLDER}/(\\d{4}-\\d{2})\u65E5\u62A5\\.md$`));
+      return !!match && months.has(match[1]);
+    });
+    const records = await Promise.all(files.map(async (file) => parseMonthlyReports(await this.app.vault.cachedRead(file))));
+    return records.flat().filter((record) => record.date >= start && record.date <= end).sort((a, b) => b.date.localeCompare(a.date));
+  }
+  async syncTask(task, allTasks, previousTask) {
+    const dates = /* @__PURE__ */ new Set([...doneDates(previousTask != null ? previousTask : task), ...doneDates(task)]);
+    for (const date of dates) await this.upsert(buildDailyReport(date, allTasks));
+  }
+  async upsert(record) {
+    var _a2;
+    const path = this.filePath(monthKey(record.date));
+    const previous = (_a2 = this.writeQueues.get(path)) != null ? _a2 : Promise.resolve();
+    const operation = previous.catch(() => void 0).then(async () => {
+      await this.ensureFolder();
+      const existing = this.app.vault.getAbstractFileByPath(path);
+      const records = existing instanceof import_obsidian17.TFile ? parseMonthlyReports(await this.app.vault.cachedRead(existing)) : [];
+      const index = records.findIndex((item) => item.date === record.date);
+      if (index >= 0) records[index] = record;
+      else records.push(record);
+      const content = renderMonthlyReports(records);
+      if (existing instanceof import_obsidian17.TFile) await this.app.vault.modify(existing, content);
+      else await this.app.vault.create(path, content);
+    });
+    this.writeQueues.set(path, operation);
+    try {
+      await operation;
+    } finally {
+      if (this.writeQueues.get(path) === operation) this.writeQueues.delete(path);
+    }
+  }
+  async writeExport(extension, content) {
+    await this.ensureFolder();
+    const now = /* @__PURE__ */ new Date();
+    const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
+    const path = `${DAILY_REPORT_FOLDER}/\u65E5\u62A5\u5BFC\u51FA-${stamp}.${extension}`;
+    await this.app.vault.create(path, content);
+    return path;
+  }
+  async ensureFolder() {
+    if (this.app.vault.getAbstractFileByPath(DAILY_REPORT_FOLDER) instanceof import_obsidian17.TFolder) return;
+    await this.app.vault.createFolder(DAILY_REPORT_FOLDER);
+  }
+};
+
+// src/views/DailyReportBoard.ts
+var WEEKDAYS = ["\u65E5", "\u4E00", "\u4E8C", "\u4E09", "\u56DB", "\u4E94", "\u516D"];
+function dayString(year, month, day) {
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+function todayString() {
+  const now = /* @__PURE__ */ new Date();
+  return dayString(now.getFullYear(), now.getMonth(), now.getDate());
+}
+function reportText(record, section) {
+  if (!section) return renderDailyReport(record);
+  const title = section === "summary" ? "\u4ECA\u65E5\u603B\u7ED3\uFF1A" : "\u660E\u65E5\u8BA1\u5212\uFF1A";
+  const empty = "---";
+  const values = record[section];
+  return `${title}
+${values.length ? values.map((item, index) => `${index + 1}\u3001${item}`).join("\n") : empty}`;
+}
+var DailyReportBoard = class {
+  constructor(host) {
+    __publicField(this, "host");
+    __publicField(this, "store");
+    __publicField(this, "records", []);
+    __publicField(this, "year", (/* @__PURE__ */ new Date()).getFullYear());
+    __publicField(this, "month", (/* @__PURE__ */ new Date()).getMonth());
+    __publicField(this, "startDate", "");
+    __publicField(this, "endDate", "");
+    __publicField(this, "page", 1);
+    __publicField(this, "pageSize", 50);
+    __publicField(this, "refreshTimer", null);
+    __publicField(this, "taskSyncTimer", null);
+    __publicField(this, "pendingTaskPaths", /* @__PURE__ */ new Set());
+    __publicField(this, "pendingPreviousTasks", /* @__PURE__ */ new Map());
+    __publicField(this, "taskSyncInFlight", false);
+    this.host = host;
+    this.store = new DailyReportStore(host.app);
+  }
+  dispose() {
+    if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer);
+    if (this.taskSyncTimer !== null) window.clearTimeout(this.taskSyncTimer);
+    this.refreshTimer = null;
+    this.taskSyncTimer = null;
+    this.pendingTaskPaths.clear();
+    this.pendingPreviousTasks.clear();
+  }
+  scheduleRefresh() {
+    if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer);
+    this.refreshTimer = window.setTimeout(() => {
+      this.refreshTimer = null;
+      void this.refresh();
+    }, 180);
+  }
+  async show() {
+    if (!this.host.boardEl) return;
+    this.host.exitEditMode();
+    this.host.boardEl.empty();
+    this.host.boardEl.removeClass("mq-ad-board");
+    this.host.boardEl.removeClass("mq-po-board");
+    this.host.boardEl.removeClass("mq-op-board");
+    this.host.boardEl.addClass("mq-dr-board");
+    this.host.currentPage = "daily-report";
+    this.startDate = "";
+    this.endDate = "";
+    await this.rebuildTodayReport();
+    await this.loadRecords();
+    this.render();
+  }
+  async refresh() {
+    await this.loadRecords();
+    if (this.host.currentPage === "daily-report") this.render();
+  }
+  /** 合并短时间内的任务写入，单次扫描即可更新所有受影响日期。 */
+  scheduleTaskSync(path, previousTask) {
+    this.pendingTaskPaths.add(path);
+    this.pendingPreviousTasks.set(path, previousTask);
+    if (this.taskSyncTimer !== null) window.clearTimeout(this.taskSyncTimer);
+    this.taskSyncTimer = window.setTimeout(() => {
+      this.taskSyncTimer = null;
+      void this.flushTaskSync(previousTask);
+    }, 220);
+  }
+  async flushTaskSync(previousTask) {
+    var _a2;
+    if (this.taskSyncInFlight) return;
+    this.taskSyncInFlight = true;
+    const paths = [...this.pendingTaskPaths];
+    this.pendingTaskPaths.clear();
+    try {
+      const tasks = await this.host.taskStore.scanAllTasks();
+      for (const path of paths) {
+        const task = tasks.find((candidate) => candidate.sourceFile === path || candidate.id === path);
+        if (task) await this.store.syncTask(task, tasks, (_a2 = this.pendingPreviousTasks.get(path)) != null ? _a2 : path === paths[0] ? previousTask : void 0);
+      }
+      paths.forEach((path) => this.pendingPreviousTasks.delete(path));
+      await this.loadRecords();
+      if (this.host.currentPage === "daily-report") this.render();
+    } finally {
+      this.taskSyncInFlight = false;
+      if (this.pendingTaskPaths.size) void this.flushTaskSync();
+    }
+  }
+  /** 重新按当前任务快照写入今天的日报，即使今日没有完成任务也保留一条记录。 */
+  async rebuildTodayReport() {
+    this.host.taskStore.invalidate();
+    const tasks = await this.host.taskStore.scanAllTasks();
+    await this.store.upsert(buildDailyReport(todayString(), tasks));
+  }
+  currentRange() {
+    if (this.startDate || this.endDate) {
+      const start2 = this.startDate || this.endDate;
+      const end2 = this.endDate || this.startDate;
+      return { start: start2, end: end2 };
+    }
+    const start = dayString(this.year, this.month, 1);
+    const end = dayString(this.year, this.month, new Date(this.year, this.month + 1, 0).getDate());
+    return { start, end };
+  }
+  async loadRecords() {
+    const { start, end } = this.currentRange();
+    this.records = start <= end ? await this.store.listRange(start, end) : [];
+    const maxPage = Math.max(1, Math.ceil(this.records.length / this.pageSize));
+    this.page = Math.min(this.page, maxPage);
+  }
+  setDateRange(start, end) {
+    if (start && end && start > end) {
+      this.host.showToast("\u5F00\u59CB\u65E5\u671F\u4E0D\u80FD\u665A\u4E8E\u7ED3\u675F\u65E5\u671F", "error");
+      return;
+    }
+    if (start && end) {
+      const span = (Date.parse(end) - Date.parse(start)) / 864e5;
+      if (!Number.isFinite(span) || span > 366) {
+        this.host.showToast("\u65E5\u62A5\u7B5B\u9009\u6700\u957F\u652F\u6301\u4E00\u5E74", "error");
+        return;
+      }
+    }
+    this.startDate = start;
+    this.endDate = end;
+    this.page = 1;
+    void this.loadRecords().then(() => this.render());
+  }
+  async refreshTodayReport() {
+    await this.rebuildTodayReport();
+    await this.loadRecords();
+    if (this.host.currentPage === "daily-report") this.render();
+    this.host.showToast("\u4ECA\u65E5\u65E5\u62A5\u5DF2\u5237\u65B0");
+  }
+  render() {
+    const root = this.host.boardEl;
+    if (!root || this.host.currentPage !== "daily-report") return;
+    root.empty();
+    const container = root.createDiv({ cls: "mq-dr-container" });
+    this.renderCalendar(container);
+    this.renderList(container);
+  }
+  renderCalendar(container) {
+    const section = container.createDiv({ cls: "mq-dr-calendar" });
+    const top = section.createDiv({ cls: "mq-dr-calendar__top" });
+    top.createEl("h2", { cls: "mq-dr-calendar__title", text: "\u65E5\u62A5\u5468\u62A5" });
+    const controls = top.createDiv({ cls: "mq-dr-calendar__controls" });
+    const prev = controls.createEl("button", { cls: "mq-dr-icon-btn", attr: { "aria-label": "\u4E0A\u4E2A\u6708", title: "\u4E0A\u4E2A\u6708" } });
+    (0, import_obsidian18.setIcon)(prev, "chevron-left");
+    prev.addEventListener("click", () => this.shiftMonth(-1));
+    const years = /* @__PURE__ */ new Set([this.year, (/* @__PURE__ */ new Date()).getFullYear()]);
+    for (const record of this.records) years.add(Number(record.date.slice(0, 4)));
+    for (let offset = -3; offset <= 3; offset++) years.add((/* @__PURE__ */ new Date()).getFullYear() + offset);
+    const yearSelect = controls.createEl("select", { cls: "mq-dr-select", attr: { "aria-label": "\u9009\u62E9\u5E74\u4EFD" } });
+    [...years].sort((a, b) => a - b).forEach((year) => yearSelect.createEl("option", { value: String(year), text: `${year}\u5E74` }));
+    yearSelect.value = String(this.year);
+    yearSelect.addEventListener("change", () => {
+      this.year = Number(yearSelect.value);
+      this.render();
+    });
+    const monthSelect = controls.createEl("select", { cls: "mq-dr-select", attr: { "aria-label": "\u9009\u62E9\u6708\u4EFD" } });
+    for (let month = 0; month < 12; month++) monthSelect.createEl("option", { value: String(month), text: `${month + 1}\u6708` });
+    monthSelect.value = String(this.month);
+    monthSelect.addEventListener("change", () => {
+      this.month = Number(monthSelect.value);
+      this.render();
+    });
+    const todayButton = controls.createEl("button", { cls: "mq-dr-text-btn", text: "\u4ECA\u5929" });
+    todayButton.addEventListener("click", () => {
+      const now = /* @__PURE__ */ new Date();
+      this.year = now.getFullYear();
+      this.month = now.getMonth();
+      this.render();
+    });
+    const next = controls.createEl("button", { cls: "mq-dr-icon-btn", attr: { "aria-label": "\u4E0B\u4E2A\u6708", title: "\u4E0B\u4E2A\u6708" } });
+    (0, import_obsidian18.setIcon)(next, "chevron-right");
+    next.addEventListener("click", () => this.shiftMonth(1));
+    const week = section.createDiv({ cls: "mq-dr-calendar__week" });
+    for (const name of WEEKDAYS) week.createSpan({ text: `\u5468${name}` });
+    const grid = section.createDiv({ cls: "mq-dr-calendar__grid" });
+    const first = new Date(this.year, this.month, 1);
+    const firstOffset = first.getDay();
+    const days = new Date(this.year, this.month + 1, 0).getDate();
+    const cellCount = Math.ceil((firstOffset + days) / 7) * 7;
+    const reportDates = new Set(this.records.map((record) => record.date));
+    const completedDates = new Set(this.records.filter((record) => record.summary.length > 0).map((record) => record.date));
+    const todayDate = todayString();
+    for (let cell = 0; cell < cellCount; cell++) {
+      const day = cell - firstOffset + 1;
+      const dateCell = grid.createEl("button", { cls: "mq-dr-day" + (day < 1 || day > days ? " is-empty" : "") });
+      if (day < 1 || day > days) {
+        dateCell.disabled = true;
+        continue;
+      }
+      const date = dayString(this.year, this.month, day);
+      dateCell.createSpan({ cls: "mq-dr-day__num", text: String(day) });
+      const tags = dateCell.createDiv({ cls: "mq-dr-day__tags" });
+      const weekday = (firstOffset + day - 1) % 7;
+      if (weekday === 0 || weekday === 6) tags.createSpan({ cls: "mq-dr-day__tag mq-dr-day__tag--rest", text: "\u4F11" });
+      if (date === todayDate) tags.createSpan({ cls: "mq-dr-day__tag mq-dr-day__tag--today", text: "\u4ECA" });
+      if (reportDates.has(date)) {
+        dateCell.addClass("has-record");
+      }
+      if (completedDates.has(date)) {
+        tags.createSpan({ cls: "mq-dr-day__tag mq-dr-day__tag--report", text: "\u65E5" });
+      }
+      dateCell.title = reportDates.has(date) ? `${date} \u6709\u65E5\u62A5\uFF0C\u70B9\u51FB\u67E5\u770B` : date;
+      dateCell.addEventListener("click", () => {
+        if (!reportDates.has(date)) return;
+        this.setDateRange(date, date);
+      });
+    }
+  }
+  renderList(container) {
+    const section = container.createDiv({ cls: "mq-dr-list" });
+    const toolbar = section.createDiv({ cls: "mq-dr-list__toolbar" });
+    toolbar.createEl("h3", { text: "\u65E5\u62A5\u8BB0\u5F55" });
+    const filters = toolbar.createDiv({ cls: "mq-dr-list__filters" });
+    const start = filters.createEl("input", { cls: "mq-ad-modal-input mq-dr-date-input", attr: { type: "date", "aria-label": "\u5F00\u59CB\u65E5\u671F" } });
+    start.value = this.startDate;
+    start.addEventListener("change", () => this.setDateRange(start.value, this.endDate));
+    const end = filters.createEl("input", { cls: "mq-ad-modal-input mq-dr-date-input", attr: { type: "date", "aria-label": "\u7ED3\u675F\u65E5\u671F" } });
+    end.value = this.endDate;
+    end.addEventListener("change", () => this.setDateRange(this.startDate, end.value));
+    const reset = filters.createEl("button", { cls: "mq-dr-text-btn", text: "\u6E05\u9664\u7B5B\u9009" });
+    reset.addEventListener("click", () => this.setDateRange("", ""));
+    const exportCsv = filters.createEl("button", { cls: "mq-dr-text-btn", text: "\u5BFC\u51FA\u8868\u683C" });
+    exportCsv.addEventListener("click", () => void this.export("csv"));
+    const exportMd = filters.createEl("button", { cls: "mq-dr-text-btn", text: "\u5BFC\u51FA MD \u8868\u683C" });
+    exportMd.addEventListener("click", () => void this.export("md"));
+    const refreshToday = filters.createEl("button", { cls: "mq-dr-text-btn", text: "\u5237\u65B0\u4ECA\u65E5\u65E5\u62A5" });
+    refreshToday.addEventListener("click", () => void this.refreshTodayReport());
+    const tableWrap = section.createDiv({ cls: "mq-dr-table-wrap" });
+    const table = tableWrap.createEl("table", { cls: "mq-po-tb2 mq-dr-table" });
+    const head = table.createEl("thead").createEl("tr");
+    ["\u65E5\u62A5\u65F6\u95F4", "\u65E5\u62A5\u5185\u5BB9", "\u64CD\u4F5C"].forEach((label) => head.createEl("th", { text: label }));
+    const body = table.createEl("tbody");
+    const filtered = this.filteredRecords();
+    const totalPages = Math.max(1, Math.ceil(filtered.length / this.pageSize));
+    const records = filtered.slice((this.page - 1) * this.pageSize, this.page * this.pageSize);
+    if (!records.length) {
+      const row = body.createEl("tr");
+      row.createEl("td", { attr: { colspan: "3" }, cls: "mq-dr-empty", text: this.records.length ? "\u6CA1\u6709\u7B26\u5408\u65F6\u95F4\u6761\u4EF6\u7684\u65E5\u62A5" : "\u6682\u65E0\u65E5\u62A5\u3002\u5B8C\u6210\u4EFB\u52A1\u540E\u4F1A\u81EA\u52A8\u751F\u6210\u5F53\u65E5\u8BB0\u5F55\u3002" });
+      this.renderPagination(section, filtered.length, totalPages);
+      return;
+    }
+    for (const record of records) {
+      const row = body.createEl("tr");
+      row.createEl("td", { cls: "mq-dr-date", text: record.date });
+      const content = row.createEl("td", { cls: "mq-dr-content" });
+      this.renderSection(content, "\u4ECA\u65E5\u603B\u7ED3", record.summary, "---");
+      this.renderSection(content, "\u660E\u65E5\u8BA1\u5212", record.plan, "---");
+      const actionsCell = row.createEl("td", { cls: "mq-dr-actions-cell" });
+      const actions = actionsCell.createDiv({ cls: "mq-dr-actions" });
+      this.copyButton(actions, "\u4E00\u952E\u590D\u5236", () => reportText(record));
+      this.copyButton(actions, "\u590D\u5236\u4ECA\u65E5\u603B\u7ED3", () => reportText(record, "summary"));
+      this.copyButton(actions, "\u590D\u5236\u660E\u65E5\u8BA1\u5212", () => reportText(record, "plan"));
+    }
+    this.renderPagination(section, filtered.length, totalPages);
+  }
+  renderPagination(section, total, totalPages) {
+    if (total <= this.pageSize) return;
+    const footer = section.createDiv({ cls: "mq-dr-pagination" });
+    const prev = footer.createEl("button", { cls: "mq-dr-text-btn", text: "\u4E0A\u4E00\u9875" });
+    prev.disabled = this.page <= 1;
+    prev.addEventListener("click", () => {
+      this.page -= 1;
+      this.render();
+    });
+    footer.createSpan({ text: `${this.page} / ${totalPages}\uFF08\u5171 ${total} \u6761\uFF09` });
+    const next = footer.createEl("button", { cls: "mq-dr-text-btn", text: "\u4E0B\u4E00\u9875" });
+    next.disabled = this.page >= totalPages;
+    next.addEventListener("click", () => {
+      this.page += 1;
+      this.render();
+    });
+  }
+  renderSection(parent, title, items, empty) {
+    const section = parent.createDiv({ cls: "mq-dr-content__section" });
+    section.createEl("strong", { text: `${title}\uFF1A` });
+    const list = section.createEl("ol");
+    if (!items.length) list.createEl("li", { cls: "mq-dr-content__empty", text: empty });
+    else items.forEach((item) => list.createEl("li", { text: item }));
+  }
+  copyButton(parent, label, getText) {
+    const button = parent.createEl("button", { cls: "mq-dr-copy-btn", text: label });
+    button.addEventListener("click", () => void this.copy(getText()));
+  }
+  filteredRecords() {
+    return this.records.filter((record) => (!this.startDate || record.date >= this.startDate) && (!this.endDate || record.date <= this.endDate));
+  }
+  shiftMonth(delta) {
+    const next = new Date(this.year, this.month + delta, 1);
+    this.year = next.getFullYear();
+    this.month = next.getMonth();
+    if (!this.startDate && !this.endDate) void this.loadRecords().then(() => this.render());
+    else this.render();
+  }
+  async export(type) {
+    const content = type === "csv" ? dailyReportsToCsv(this.filteredRecords()) : dailyReportsToMarkdownTable(this.filteredRecords());
+    const path = await this.store.writeExport(type, content);
+    this.host.showToast(`\u5DF2\u5BFC\u51FA ${this.filteredRecords().length} \u6761\u65E5\u62A5\uFF1A${path}`);
+  }
+  async copy(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      this.host.showToast("\u65E5\u62A5\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F");
+    } catch (e) {
+      const area = document.body.createEl("textarea");
+      area.value = text;
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      area.remove();
+      this.host.showToast("\u65E5\u62A5\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F");
+    }
   }
 };
 
@@ -6753,7 +7280,7 @@ function getLunarDate(d) {
     return "";
   }
 }
-var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
+var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     __publicField(this, "plugin");
@@ -6835,6 +7362,7 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
     __publicField(this, "storeUnsub", null);
     __publicField(this, "oppBoard");
     __publicField(this, "projectBoard");
+    __publicField(this, "dailyReportBoard");
     __publicField(this, "pomodoroService", null);
     __publicField(this, "calendarCardDate", /* @__PURE__ */ new Date());
     this.plugin = plugin;
@@ -6843,6 +7371,7 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
     this.dashboardStore = new DashboardStore(this.taskStore);
     this.oppBoard = new OpportunityBoard(this);
     this.projectBoard = new ProjectBoard(this);
+    this.dailyReportBoard = new DailyReportBoard(this);
   }
   /** Theme actually in effect for the dashboard right now. */
   effectiveTheme() {
@@ -6888,11 +7417,12 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
       this.renderActions(this.dashboardEl);
       this.renderBoard(this.dashboardEl, d);
       const refreshAll = (file) => {
-        if (!(file instanceof import_obsidian19.TFile) || file.extension !== "md") return;
+        if (!(file instanceof import_obsidian21.TFile) || file.extension !== "md") return;
         this.scheduleBannerStatsRefresh();
         const taskRelevant = this.taskStore.isTaskRelevantPath(file.path);
         const opportunityRelevant = file.path === this.plugin.settings.opportunityFile;
-        if (!taskRelevant && !opportunityRelevant) return;
+        const reportRelevant = file.path.startsWith(`${DAILY_REPORT_FOLDER}/`);
+        if (!taskRelevant && !opportunityRelevant && !reportRelevant) return;
         if (taskRelevant) this.taskStore.invalidate();
         if (this.currentPage === "project" && taskRelevant) {
           void this.updatePulse();
@@ -6900,6 +7430,8 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
         } else if (this.currentPage === "opportunity" && opportunityRelevant) {
           void this.updatePulse();
           this.oppBoard.scheduleRefresh();
+        } else if (this.currentPage === "daily-report" && (taskRelevant || reportRelevant)) {
+          this.dailyReportBoard.scheduleRefresh();
         } else if (this.currentPage === "home" && taskRelevant) {
           void this.updatePulse();
           this.scheduleHeatmapRefresh();
@@ -6910,12 +7442,17 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
       this.registerEvent(this.app.vault.on("delete", refreshAll));
       this.registerEvent(this.app.vault.on("rename", refreshAll));
       this.registerEvent(this.app.vault.on("modify", (file) => {
-        if (!(file instanceof import_obsidian19.TFile) || file.extension !== "md") return;
+        if (!(file instanceof import_obsidian21.TFile) || file.extension !== "md") return;
         this.scheduleBannerStatsRefresh();
         const taskRelevant = this.taskStore.isTaskRelevantPath(file.path);
+        const reportRelevant = file.path.startsWith(`${DAILY_REPORT_FOLDER}/`);
+        if (taskRelevant) {
+          const previousTask = this.taskStore.getTaskByPath(file.path);
+          this.taskStore.invalidate();
+          this.dailyReportBoard.scheduleTaskSync(file.path, previousTask);
+        }
         if (this.currentPage === "project") {
           if (!taskRelevant || file.name.startsWith("project-")) return;
-          this.taskStore.invalidate();
           void this.updatePulse();
           void this.projectBoard.refresh();
         } else if (this.currentPage === "opportunity" && this.plugin.settings.boardEnabled) {
@@ -6924,9 +7461,10 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
             void this.updatePulse();
             this.oppBoard.scheduleRefresh();
           }
+        } else if (this.currentPage === "daily-report") {
+          if (taskRelevant || reportRelevant) this.dailyReportBoard.scheduleRefresh();
         } else {
           if (!taskRelevant) return;
-          this.taskStore.invalidate();
           void this.updatePulse();
           this.dashboardStore.requestRefresh();
         }
@@ -6976,6 +7514,7 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
       this.adLimitTimer = null;
     }
     this.oppBoard.dispose();
+    this.dailyReportBoard.dispose();
     if (this.storeUnsub) {
       this.storeUnsub();
       this.storeUnsub = null;
@@ -7348,6 +7887,7 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
     if (this.plugin.settings.boardEnabled) {
       navItems.push({ glyph: "\u25C8", label: this.plugin.settings.boardTitle || "\u770B\u677F", action: "opportunity", svg: ICON_opportunity });
     }
+    navItems.push({ glyph: "", label: "\u65E5\u62A5\u5468\u62A5", action: "daily-report", icon: "calendar-days" });
     const actionItems = [
       { glyph: "+", label: "\u65B0\u5EFA\u65E5\u8BB0", action: "diary", svg: ICON_newDiary },
       { glyph: "\u25A1", label: "\u65B0\u5EFA\u4EFB\u52A1", action: "task", svg: ICON_newTask },
@@ -7360,7 +7900,7 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
       const btn = nav.createEl("button", { cls: "mq-ad-toolbar__btn" + (extraCls ? " " + extraCls : "") });
       const glyphEl = btn.createSpan({ cls: "mq-ad-glyph" });
       if (it.svg) injectSvg(glyphEl, it.svg);
-      else if (it.icon) (0, import_obsidian19.setIcon)(glyphEl, it.icon);
+      else if (it.icon) (0, import_obsidian21.setIcon)(glyphEl, it.icon);
       else glyphEl.textContent = it.glyph;
       btn.createSpan({ text: it.label });
       btn.addEventListener("click", () => {
@@ -7374,6 +7914,7 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
           if (it.action === "opportunity-create") this.oppBoard.openCreateModal();
           if (it.action === "all") void this.projectBoard.show();
           if (it.action === "opportunity") void this.oppBoard.show();
+          if (it.action === "daily-report") void this.dailyReportBoard.show();
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           this.showToast("\u6253\u5F00\u5931\u8D25\uFF1A" + msg, "error");
@@ -7429,7 +7970,7 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
   }
   async openFileByPath(path) {
     const f = this.app.vault.getAbstractFileByPath(path);
-    if (f instanceof import_obsidian19.TFile) {
+    if (f instanceof import_obsidian21.TFile) {
       const leaf = this.app.workspace.getLeaf(true);
       await leaf.openFile(f);
     } else {
@@ -7547,7 +8088,7 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
     if (qc.templateFile) {
       const tplPath = this.resolveTemplatePath(qc.templateFile);
       const tplFile = this.app.vault.getAbstractFileByPath(tplPath);
-      if (tplFile instanceof import_obsidian19.TFile) {
+      if (tplFile instanceof import_obsidian21.TFile) {
         const tpl = await this.app.vault.read(tplFile);
         fileContent = this.applyTemplate(tpl, content, filename, now);
       }
@@ -7570,7 +8111,7 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
     if (dc.templateFile) {
       const tplPath = this.resolveTemplatePath(dc.templateFile);
       const tplFile = this.app.vault.getAbstractFileByPath(tplPath);
-      if (tplFile instanceof import_obsidian19.TFile) {
+      if (tplFile instanceof import_obsidian21.TFile) {
         const tpl = await this.app.vault.read(tplFile);
         content = this.applyTemplate(tpl, "", filename, now);
       }
@@ -7578,7 +8119,7 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
     await this.app.vault.create(filepath, content);
     this.showToast(`\u2728 \u65E5\u8BB0\u5DF2\u521B\u5EFA\uFF1A${filename}`);
     const file = this.app.vault.getAbstractFileByPath(filepath);
-    if (file instanceof import_obsidian19.TFile) {
+    if (file instanceof import_obsidian21.TFile) {
       await this.app.workspace.openLinkText(file.path, "", true);
     }
   }
@@ -7631,7 +8172,7 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
   /** Toggle task status in source file's Chinese frontmatter */
   async toggleTask(task, row) {
     const file = this.app.vault.getAbstractFileByPath(task.sourceFile);
-    if (!(file instanceof import_obsidian19.TFile)) return;
+    if (!(file instanceof import_obsidian21.TFile)) return;
     if (task.type === "\u91CD\u590D" && task.status !== "\u5DF2\u5B8C\u6210") {
       const nextDate = calcNextRemindDate(task);
       if (nextDate) {
@@ -7664,7 +8205,7 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
     var _a2, _b, _c, _d, _e, _f, _g, _h;
     if (!task.sourceFile) return;
     const file = this.app.vault.getAbstractFileByPath(task.sourceFile);
-    if (!(file instanceof import_obsidian19.TFile)) return;
+    if (!(file instanceof import_obsidian21.TFile)) return;
     const raw = await this.app.vault.read(file);
     const lines = raw.split(/\r?\n/);
     const eol = raw.includes("\r\n") ? "\r\n" : "\n";
@@ -7717,7 +8258,7 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
   async writeTaskField(task, fieldKey, value) {
     if (!task.sourceFile) return;
     const file = this.app.vault.getAbstractFileByPath(task.sourceFile);
-    if (!(file instanceof import_obsidian19.TFile)) return;
+    if (!(file instanceof import_obsidian21.TFile)) return;
     await this.writeFrontmatter(file, { [fieldKey]: value });
   }
   /** Postpone task by one day (spec section VIII.3) */
@@ -7780,7 +8321,7 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
     const folderName = proj.path.split("/").pop() || proj.name;
     const projectFilePath = `${proj.path}/project-${folderName}.md`;
     const file = this.app.vault.getAbstractFileByPath(projectFilePath);
-    if (!(file instanceof import_obsidian19.TFile)) return;
+    if (!(file instanceof import_obsidian21.TFile)) return;
     const typeLabel = isLongTermProject(data.type) ? "\u957F\u671F\u9879\u76EE" : "\u9636\u6BB5\u9879\u76EE";
     await this.writeFrontmatter(file, {
       "\u9879\u76EE\u540D\u79F0": data.name,
@@ -7800,6 +8341,7 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
     this.boardEl.empty();
     this.boardEl.removeClass("mq-po-board");
     this.boardEl.removeClass("mq-op-board");
+    this.boardEl.removeClass("mq-dr-board");
     this.boardEl.addClass("mq-ad-board");
     this.currentPage = "home";
     await this.renderEnabledModules(this.boardEl);
@@ -7810,7 +8352,7 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
     const confirmed = confirm(`\u786E\u5B9A\u5220\u9664\u4EFB\u52A1 "${task.content}"\uFF1F`);
     if (!confirmed) return;
     const file = this.app.vault.getAbstractFileByPath(task.sourceFile);
-    if (file instanceof import_obsidian19.TFile) {
+    if (file instanceof import_obsidian21.TFile) {
       await this.app.fileManager.trashFile(file);
       this.showToast("\u274C \u4EFB\u52A1\u5DF2\u5220\u9664: " + task.content);
       void this.refreshRelevant();
@@ -7841,12 +8383,12 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
   async findProjectFolder(projectName) {
     const rootPath = this.plugin.settings.projectsFolder;
     const root = this.app.vault.getAbstractFileByPath(rootPath);
-    if (!(root instanceof import_obsidian19.TFolder)) return null;
+    if (!(root instanceof import_obsidian21.TFolder)) return null;
     return this.findProjectFolderRecursive(root, projectName);
   }
   findProjectFolderRecursive(folder, projectName) {
     for (const child of folder.children) {
-      if (child instanceof import_obsidian19.TFolder) {
+      if (child instanceof import_obsidian21.TFolder) {
         if (child.name === projectName) return child;
         const found = this.findProjectFolderRecursive(child, projectName);
         if (found) return found;
@@ -8331,7 +8873,7 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
     const modId = (_a2 = card.getAttribute("data-mod")) != null ? _a2 : "";
     if (!this.countdownIdFromModuleId(modId)) return;
     e.preventDefault();
-    const menu = new import_obsidian19.Menu();
+    const menu = new import_obsidian21.Menu();
     menu.addItem((item) => item.setTitle("\u7F16\u8F91").setIcon("pencil").onClick(() => this.openCountdownEdit(modId)));
     menu.showAtMouseEvent(e);
   }
@@ -8937,6 +9479,8 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
       void this.projectBoard.refresh();
     } else if (this.currentPage === "opportunity") {
       this.oppBoard.scheduleRefresh();
+    } else if (this.currentPage === "daily-report") {
+      this.dailyReportBoard.scheduleRefresh();
     } else {
       void this.dashboardStore.refresh();
     }
@@ -8999,7 +9543,7 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
         row.createSpan({ cls: "mq-ad-todo__tag", text: prioLabel, attr: { "data-prio": task.priority || "" } });
         row.addEventListener("contextmenu", (e) => {
           e.preventDefault();
-          const menu = new import_obsidian19.Menu();
+          const menu = new import_obsidian21.Menu();
           menu.addItem((item) => {
             item.setTitle("\u7F16\u8F91\u4EFB\u52A1").setIcon("pencil").onClick(() => this.openTaskEditModal(task));
           });
@@ -9244,7 +9788,7 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
     li.addEventListener("click", () => this.openTaskEditModal(task));
     li.addEventListener("contextmenu", (e) => {
       e.preventDefault();
-      const menu = new import_obsidian19.Menu();
+      const menu = new import_obsidian21.Menu();
       menu.addItem((item) => {
         item.setTitle("\u7F16\u8F91\u4EFB\u52A1").setIcon("pencil").onClick(() => this.openTaskEditModal(task));
       });
@@ -9281,16 +9825,20 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
       if (nextDate) {
         await this.writeTaskField(task, "\u63D0\u9192\u65E5\u671F", nextDate);
         task.remindDate = nextDate;
-        const now = nowFmt2();
-        await this.writeTaskField(task, "\u5B8C\u6210\u65F6\u95F4", now);
-        task.completeTime = now;
+        const now2 = nowFmt2();
+        await this.writeTaskField(task, "\u5B8C\u6210\u65F6\u95F4", now2);
+        task.completeTime = now2;
         this.showToast("\u2728 \u91CD\u590D\u4EFB\u52A1\uFF0C\u4E0B\u6B21\u63D0\u9192: " + nextDate);
         void this.refreshRelevant();
         return;
       }
     }
-    await this.writeTaskField(task, "\u72B6\u6001", "\u5DF2\u5B8C\u6210");
+    const now = nowFmt2();
+    const file = task.sourceFile ? this.app.vault.getAbstractFileByPath(task.sourceFile) : null;
+    if (!(file instanceof import_obsidian21.TFile)) return;
+    await writeFrontmatter(this.app, file, { "\u72B6\u6001": "\u5DF2\u5B8C\u6210", "\u5B8C\u6210\u65F6\u95F4": now });
     task.status = "\u5DF2\u5B8C\u6210";
+    task.completeTime = now;
     this.showToast("\u2705 \u4EFB\u52A1\u5DF2\u5B8C\u6210");
     void this.refreshRelevant();
   }
@@ -9371,7 +9919,7 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
       row.createDiv({ cls: "mq-ad-proj__chev", text: "\u203A" });
       row.addEventListener("contextmenu", (e) => {
         e.preventDefault();
-        const menu = new import_obsidian19.Menu();
+        const menu = new import_obsidian21.Menu();
         menu.addItem((item) => {
           item.setTitle("\u7F16\u8F91\u9879\u76EE").setIcon("pencil").onClick(() => void this.editProject(p));
         });
@@ -9611,7 +10159,7 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
     const today = top.createSpan({ cls: "mq-ad-pomo-today" });
     this.renderPomodoroActivitySelector(top, service);
     const stats = top.createEl("button", { cls: "mq-ad-pomo-stats-btn", attr: { type: "button", "aria-label": "\u4E13\u6CE8\u7EDF\u8BA1", title: "\u4E13\u6CE8\u7EDF\u8BA1" } });
-    (0, import_obsidian19.setIcon)(stats, "bar-chart-2");
+    (0, import_obsidian21.setIcon)(stats, "bar-chart-2");
     const openStats = (event) => {
       event == null ? void 0 : event.stopPropagation();
       showPomodoroStats(card.ownerDocument, service);
@@ -9784,9 +10332,9 @@ var DashboardView = class _DashboardView extends import_obsidian19.ItemView {
 };
 
 // src/views/KnowledgeWorkbenchView.ts
-var import_obsidian20 = require("obsidian");
+var import_obsidian22 = require("obsidian");
 var KNOWLEDGE_WORKBENCH_VIEW_TYPE = "mq-knowledge-workbench-view";
-var KnowledgeWorkbenchView = class extends import_obsidian20.ItemView {
+var KnowledgeWorkbenchView = class extends import_obsidian22.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.plugin = plugin;
@@ -10078,7 +10626,7 @@ ${message}`.slice(-1200);
 };
 
 // src/main.ts
-var Dashboard = class extends import_obsidian21.Plugin {
+var Dashboard = class extends import_obsidian23.Plugin {
   constructor() {
     super(...arguments);
     __publicField(this, "settings");

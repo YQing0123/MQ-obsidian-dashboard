@@ -15,6 +15,8 @@ import type { ParseIssue } from '../data/parserDiagnostics';
 import { DashboardStore } from '../data/dashboardStore';
 import { OpportunityBoard } from './OpportunityBoard';
 import { ProjectBoard } from './ProjectBoard';
+import { DailyReportBoard } from './DailyReportBoard';
+import { DAILY_REPORT_FOLDER } from '../data/dailyReport';
 import { fmtDate, todayStr, nowFmt, calcNextRemindDate, getTodayUniverse, getTodayTasks, isDoneToday, isSkipToday, overdueDays, urgencyMeta } from '../data/taskLogic';
 import { t } from '../i18n';
 
@@ -268,13 +270,14 @@ export class DashboardView extends ItemView {
 	public selectedProject: string | null = null;
 
 	// Which top-level page is currently shown (home / project overview / opportunity board)
-	public currentPage: 'home' | 'project' | 'opportunity' = 'home';
+	public currentPage: 'home' | 'project' | 'opportunity' | 'daily-report' = 'home';
 
 	public taskStore: TaskStore;
 	private dashboardStore: DashboardStore;
 	private storeUnsub: (() => void) | null = null;
 	private oppBoard: OpportunityBoard;
 	private projectBoard: ProjectBoard;
+	private dailyReportBoard: DailyReportBoard;
 	private pomodoroService: PomodoroService | null = null;
 	private calendarCardDate = new Date();
 
@@ -286,6 +289,7 @@ export class DashboardView extends ItemView {
 		this.dashboardStore = new DashboardStore(this.taskStore);
 		this.oppBoard = new OpportunityBoard(this);
 		this.projectBoard = new ProjectBoard(this);
+		this.dailyReportBoard = new DailyReportBoard(this);
 	}
 
 	/** Theme actually in effect for the dashboard right now. */
@@ -343,7 +347,8 @@ export class DashboardView extends ItemView {
 
 			const taskRelevant = this.taskStore.isTaskRelevantPath(file.path);
 			const opportunityRelevant = file.path === this.plugin.settings.opportunityFile;
-			if (!taskRelevant && !opportunityRelevant) return;
+			const reportRelevant = file.path.startsWith(`${DAILY_REPORT_FOLDER}/`);
+			if (!taskRelevant && !opportunityRelevant && !reportRelevant) return;
 
 			if (taskRelevant) this.taskStore.invalidate();
 			if (this.currentPage === 'project' && taskRelevant) {
@@ -352,6 +357,8 @@ export class DashboardView extends ItemView {
 			} else if (this.currentPage === 'opportunity' && opportunityRelevant) {
 				void this.updatePulse();
 				this.oppBoard.scheduleRefresh();
+			} else if (this.currentPage === 'daily-report' && (taskRelevant || reportRelevant)) {
+				this.dailyReportBoard.scheduleRefresh();
 			} else if (this.currentPage === 'home' && taskRelevant) {
 				void this.updatePulse();
 				this.scheduleHeatmapRefresh();
@@ -365,11 +372,16 @@ export class DashboardView extends ItemView {
 			if (!(file instanceof TFile) || file.extension !== 'md') return;
 			this.scheduleBannerStatsRefresh();
 			const taskRelevant = this.taskStore.isTaskRelevantPath(file.path);
+			const reportRelevant = file.path.startsWith(`${DAILY_REPORT_FOLDER}/`);
+			if (taskRelevant) {
+				const previousTask = this.taskStore.getTaskByPath(file.path);
+				this.taskStore.invalidate();
+				this.dailyReportBoard.scheduleTaskSync(file.path, previousTask);
+			}
 			if (this.currentPage === 'project') {
 				// Project config files are re-rendered by setProjectStage / updateProjectFile themselves.
 				// Skipping here avoids a stale re-scan clobbering the just-set stage (flash → reset to first stage).
 				if (!taskRelevant || file.name.startsWith('project-')) return;
-				this.taskStore.invalidate();
 				void this.updatePulse();
 				void this.projectBoard.refresh();
 				} else if (this.currentPage === 'opportunity' && this.plugin.settings.boardEnabled) {
@@ -378,12 +390,13 @@ export class DashboardView extends ItemView {
 					void this.updatePulse();
 					this.oppBoard.scheduleRefresh();
 				}
+			} else if (this.currentPage === 'daily-report') {
+				if (taskRelevant || reportRelevant) this.dailyReportBoard.scheduleRefresh();
 			} else {
 				// Home: ignore edits to unrelated files. Only task files (markdown under
 				// the projects folder) affect the home cards, so this saves a full rescan
 				// on every unrelated note edit while still staying fresh for real changes.
 				if (!taskRelevant) return;
-				this.taskStore.invalidate();
 				void this.updatePulse();
 				this.dashboardStore.requestRefresh();
 			}
@@ -416,6 +429,7 @@ export class DashboardView extends ItemView {
 		if (this.adHmObs) { this.adHmObs.disconnect(); this.adHmObs = undefined; this.adHmObsTarget = undefined; }
 		if (this.adLimitTimer !== null) { window.clearTimeout(this.adLimitTimer); this.adLimitTimer = null; }
 		this.oppBoard.dispose();
+		this.dailyReportBoard.dispose();
 		if (this.storeUnsub) { this.storeUnsub(); this.storeUnsub = null; }
 		this.dashboardStore.dispose();
 		this.dashboardEl?.empty();
@@ -819,13 +833,14 @@ export class DashboardView extends ItemView {
 		const nav = root.createEl('nav', { cls: 'mq-ad-toolbar' });
 
 		// 导航组：去哪看（主页 / 全部项目 / 机会点）
-		const navItems: Array<{ glyph: string; label: string; action: string; svg?: string }> = [
+		const navItems: Array<{ glyph: string; label: string; action: string; svg?: string; icon?: string }> = [
 			{ glyph: '\u2302', label: '\u4E3B\u9875', action: 'home', svg: ICON_home },
 			{ glyph: '\u203A', label: '\u5168\u90E8\u9879\u76EE', action: 'all', svg: ICON_allProjects },
 		];
 		if (this.plugin.settings.boardEnabled) {
 			navItems.push({ glyph: '\u25C8', label: this.plugin.settings.boardTitle || '\u770B\u677F', action: 'opportunity', svg: ICON_opportunity });
 		}
+		navItems.push({ glyph: '', label: '日报周报', action: 'daily-report', icon: 'calendar-days' });
 		// 动作组：建什么（新建日记 / 新建任务 / 新建项目）
 		const actionItems: Array<{ glyph: string; label: string; action: string; svg?: string; icon?: string }> = [
 			{ glyph: '+', label: '\u65B0\u5EFA\u65E5\u8BB0', action: 'diary', svg: ICON_newDiary },
@@ -853,6 +868,7 @@ export class DashboardView extends ItemView {
 					if (it.action === 'opportunity-create') this.oppBoard.openCreateModal();
 					if (it.action === 'all') void this.projectBoard.show();
 					if (it.action === 'opportunity') void this.oppBoard.show();
+					if (it.action === 'daily-report') void this.dailyReportBoard.show();
 				} catch (e) {
 					const msg = e instanceof Error ? e.message : String(e);
 					this.showToast('打开失败：' + msg, 'error');
@@ -1351,6 +1367,7 @@ export class DashboardView extends ItemView {
 		this.boardEl.empty();
 		this.boardEl.removeClass('mq-po-board');
 		this.boardEl.removeClass('mq-op-board');
+		this.boardEl.removeClass('mq-dr-board');
 		this.boardEl.addClass('mq-ad-board');
 		this.currentPage = 'home';
 		// 按注册表渲染全部启用模块（顺序/显隐由 settings.homeModules 决定）
@@ -2665,6 +2682,8 @@ export class DashboardView extends ItemView {
 			void this.projectBoard.refresh();
 		} else if (this.currentPage === 'opportunity') {
 			this.oppBoard.scheduleRefresh();
+		} else if (this.currentPage === 'daily-report') {
+			this.dailyReportBoard.scheduleRefresh();
 		} else {
 			void this.dashboardStore.refresh();
 		}
@@ -3089,8 +3108,12 @@ export class DashboardView extends ItemView {
 				return;
 			}
 		}
-		await this.writeTaskField(task, '\u72B6\u6001', '\u5DF2\u5B8C\u6210');
+		const now = nowFmt();
+		const file = task.sourceFile ? this.app.vault.getAbstractFileByPath(task.sourceFile) : null;
+		if (!(file instanceof TFile)) return;
+		await fmWriteFrontmatter(this.app, file, { '\u72B6\u6001': '\u5DF2\u5B8C\u6210', '\u5B8C\u6210\u65F6\u95F4': now });
 		task.status = '\u5DF2\u5B8C\u6210';
+		task.completeTime = now;
 		this.showToast('\u2705 \u4EFB\u52A1\u5DF2\u5B8C\u6210');
 		void this.refreshRelevant();
 	}

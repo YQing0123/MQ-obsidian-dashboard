@@ -27,7 +27,7 @@ export interface OpportunityHost {
 		saveSettings(): Promise<void>;
 	};
 	boardEl: HTMLElement | null;
-	currentPage: 'home' | 'project' | 'opportunity';
+	currentPage: 'home' | 'project' | 'opportunity' | 'daily-report';
 	exitEditMode(): void;
 	showToast(message: string, kind?: 'success' | 'error'): void;
 	taskStore: TaskStore;
@@ -122,6 +122,7 @@ export class OpportunityBoard {
 		this.host.boardEl.empty();
 		this.host.boardEl.removeClass('mq-ad-board');
 		this.host.boardEl.removeClass('mq-po-board');
+		this.host.boardEl.removeClass('mq-dr-board');
 		this.host.boardEl.addClass('mq-op-board');
 		this.host.currentPage = 'opportunity';
 

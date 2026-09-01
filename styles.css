@@ -1498,6 +1498,55 @@ input[type="date"].mq-ad-modal-input { cursor: pointer; }
 /* Project overview in-dashboard */
 .mq-po-board { display: flex !important; flex-direction: column; gap: 0 !important; }
 .mq-op-board { display: flex !important; flex-direction: column; gap: 0 !important; }
+.mq-dr-board { display: flex !important; flex-direction: column; gap: 0 !important; }
+
+/* ============================================================ daily reports */
+.mq-dr-container { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 12px; background: var(--mq-ad-bg); color: var(--mq-ad-text); }
+.mq-dr-calendar, .mq-dr-list { background: var(--mq-ad-s1); border: 1px solid var(--mq-ad-line); border-radius: var(--mq-ad-r3); overflow: hidden; }
+.mq-dr-calendar__top, .mq-dr-list__toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px; border-bottom: 1px solid var(--mq-ad-line); background: var(--mq-ad-s2); }
+.mq-dr-calendar__title, .mq-dr-list h3 { margin: 0; color: var(--mq-ad-text); font-size: 14px; line-height: 26px; font-weight: 650; white-space: nowrap; }
+.mq-dr-calendar__controls, .mq-dr-list__filters { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; min-width: 0; }
+.mq-dr-icon-btn, .mq-dr-text-btn, .mq-dr-copy-btn { min-height: 26px; border: 1px solid var(--mq-ad-line); border-radius: var(--mq-ad-r2); background: var(--mq-ad-s1); color: var(--mq-ad-text); font: inherit; font-size: 12px; cursor: pointer; transition: background .12s ease, border-color .12s ease; }
+.mq-dr-icon-btn { width: 26px; padding: 5px; display: grid; place-items: center; }
+.mq-dr-icon-btn svg { width: 16px; height: 16px; }
+.mq-dr-text-btn { padding: 3px 8px; white-space: nowrap; }
+.mq-dr-icon-btn:hover, .mq-dr-text-btn:hover, .mq-dr-copy-btn:hover { border-color: var(--mq-ad-line-s); background: var(--mq-ad-h1); }
+.mq-dr-icon-btn:focus-visible, .mq-dr-text-btn:focus-visible, .mq-dr-copy-btn:focus-visible, .mq-dr-day:focus-visible { outline: 2px solid var(--mq-ad-accent); outline-offset: -2px; }
+.mq-dr-select, .mq-dr-date-input { height: 26px; box-sizing: border-box; border: 1px solid var(--mq-ad-line); border-radius: var(--mq-ad-r2); background: var(--mq-ad-s1); color: var(--mq-ad-text); font-size: 12px; padding: 0 6px; }
+.mq-dr-date-input { width: 108px; }
+.mq-dr-calendar__week, .mq-dr-calendar__grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.mq-dr-calendar__week { border-bottom: 1px solid var(--mq-ad-line); background: var(--mq-ad-s2); }
+.mq-dr-calendar__week span { min-height: 22px; display: grid; place-items: center; color: var(--mq-ad-text-mute); font-size: 11px; font-weight: 600; }
+.mq-dr-calendar__grid { padding: 4px; gap: 3px; }
+.mq-dr-day { position: relative; min-height: 30px; padding: 4px 5px; border: 1px solid transparent; border-radius: var(--mq-ad-r2); background: var(--mq-ad-s1); color: var(--mq-ad-text); text-align: left; cursor: default; font: inherit; }
+.mq-dr-day:not(.is-empty):hover { background: var(--mq-ad-h1); border-color: var(--mq-ad-line); }
+.mq-dr-day.has-record { cursor: pointer; border-color: var(--mq-ad-line); }
+.mq-dr-day.is-empty { opacity: .42; }
+.mq-dr-day__num { font-size: 12px; line-height: 16px; font-weight: 600; }
+.mq-dr-day__tags { position: absolute; right: 4px; top: 4px; display: flex; gap: 3px; }
+.mq-dr-day__tag { min-width: 16px; height: 16px; display: grid; place-items: center; border-radius: 4px; font-size: 10px; line-height: 1; font-weight: 650; }
+.mq-dr-day__tag--rest { color: var(--mq-ad-text-mute); background: var(--mq-ad-s3); }
+.mq-dr-day__tag--report { color: #fff; background: #16a34a; }
+.mq-dr-day__tag--today { color: var(--mq-ad-accent); background: var(--mq-ad-accent-dim); }
+.mq-dr-table-wrap { overflow-x: auto; }
+.mq-dr-table { min-width: 840px; width: 100%; border-collapse: collapse; border: 1px solid var(--mq-ad-line); }
+.mq-dr-table th:first-child, .mq-dr-table td:first-child { width: 132px; }
+.mq-dr-table th:last-child, .mq-dr-table td:last-child { width: 268px; }
+.mq-dr-table th, .mq-dr-table td { border: 1px solid var(--mq-ad-line); padding: 9px 12px; }
+.mq-dr-table th { white-space: nowrap; background: var(--mq-ad-s2); }
+.mq-dr-table td { vertical-align: middle; }
+.mq-dr-date { color: var(--mq-ad-text-mute); font-family: var(--font-monospace, monospace); font-size: 12px; white-space: nowrap; text-align: center; }
+.mq-dr-content { min-width: 380px; padding: 9px 12px !important; }
+.mq-dr-content__section + .mq-dr-content__section { margin-top: 8px; }
+.mq-dr-content strong { color: var(--mq-ad-text); font-size: 12px; }
+.mq-dr-content ol { margin: 3px 0 0; padding-left: 20px; color: var(--mq-ad-text-mute); font-size: 12px; line-height: 1.55; }
+.mq-dr-content__empty { list-style: none; margin-left: -20px; color: var(--mq-ad-text-dim); }
+.mq-dr-actions-cell { vertical-align: middle !important; }
+.mq-dr-actions { display: flex; flex-wrap: nowrap; align-items: center; justify-content: center; gap: 5px; min-width: 0; }
+.mq-dr-pagination { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--mq-ad-line); color: var(--mq-ad-text-mute); font-size: 12px; }
+.mq-dr-copy-btn { padding: 4px 7px; white-space: nowrap; }
+.mq-dr-empty { padding: 30px 12px !important; text-align: center; color: var(--mq-ad-text-dim); }
+@media (max-width: 700px) { .mq-dr-container { padding: 8px; } .mq-dr-calendar__top { align-items: flex-start; flex-direction: column; } .mq-dr-list__toolbar { overflow-x: auto; } .mq-dr-calendar__controls, .mq-dr-list__filters { width: max-content; } .mq-dr-day { min-height: 30px; padding: 4px; } .mq-dr-day__tags { right: 3px; top: 3px; gap: 2px; } .mq-dr-day__tag { min-width: 14px; height: 14px; font-size: 9px; } .mq-dr-calendar__week span { font-size: 10px; } }
 
 /* ============================================================ opportunity board */
 /* Kanban */
