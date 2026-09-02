@@ -71,6 +71,7 @@ export default class Dashboard extends Plugin {
 		this.settings.aiQa = {
 			...DEFAULT_SETTINGS.aiQa,
 			...(loaded.aiQa ?? {}),
+			webSearch: { ...DEFAULT_SETTINGS.aiQa.webSearch, ...(loaded.aiQa?.webSearch ?? {}) },
 			providers: Array.isArray(loaded.aiQa?.providers) ? loaded.aiQa!.providers : [],
 			mcpServers: Array.isArray(loaded.aiQa?.mcpServers) ? loaded.aiQa!.mcpServers : [],
 			deepResearchRounds: Math.min(5, Math.max(1, Number(loaded.aiQa?.deepResearchRounds) || 3)),
