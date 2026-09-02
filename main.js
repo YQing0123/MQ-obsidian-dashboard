@@ -2,9 +2,13 @@ var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
-var __esm = (fn, res) => function __init() {
-  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+var __esm = (fn, res, err) => function __init() {
+  if (err) throw err[0];
+  try {
+    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+  } catch (e) {
+    throw err = [e], e;
+  }
 };
 var __export = (target, all) => {
   for (var name in all)
@@ -19,7 +23,6 @@ var __copyProps = (to, from, except, desc) => {
   return to;
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 
 // src/constants.ts
 var UI_TEXT;
@@ -87,12 +90,11 @@ function getStringArray(fm, key) {
   return Array.isArray(v) ? v.map(String) : [];
 }
 function bodyOf(content) {
-  var _a2, _b;
   const lines = content.split(/\r?\n/);
-  if (((_a2 = lines[0]) == null ? void 0 : _a2.trim()) !== "---") return content;
+  if (lines[0]?.trim() !== "---") return content;
   let i = 1;
   for (; i < lines.length; i++) {
-    if (((_b = lines[i]) == null ? void 0 : _b.trim()) === "---") {
+    if (lines[i]?.trim() === "---") {
       i++;
       break;
     }
@@ -100,26 +102,25 @@ function bodyOf(content) {
   return lines.slice(i).join("\n");
 }
 function parseDailyNodesFromBody(content) {
-  var _a2, _b, _c, _d;
   const out = {};
   const lines = bodyOf(content).split(/\r?\n/);
   let inBlock = false;
   for (const raw of lines) {
-    const line = raw != null ? raw : "";
+    const line = raw ?? "";
     const h = line.match(/^#{1,6}\s+(.+?)\s*$/);
     if (h) {
-      inBlock = ((_a2 = h[1]) != null ? _a2 : "").trim() === "\u6BCF\u65E5\u8282\u70B9";
+      inBlock = (h[1] ?? "").trim() === "\u6BCF\u65E5\u8282\u70B9";
       continue;
     }
     if (!inBlock) continue;
     const m = line.match(/^\s*-\s*(\d{4}-\d{2}-\d{2})\b(.*)$/);
     if (!m) continue;
-    const date = (_b = m[1]) != null ? _b : "";
-    const rest = (_c = m[2]) != null ? _c : "";
+    const date = m[1] ?? "";
+    const rest = m[2] ?? "";
     const s = /未做|跳过|⏭/.test(rest) ? "skip" : /待办|📝|⏳/.test(rest) ? "todo" : "done";
     let n = "";
     const nm = rest.match(/(?:——|—|--)\s*(.+?)\s*$/);
-    if (nm) n = ((_d = nm[1]) != null ? _d : "").trim();
+    if (nm) n = (nm[1] ?? "").trim();
     out[date] = { s, n };
   }
   return out;
@@ -157,8 +158,7 @@ function localTodayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 function taskFromFm(fm, content, filePath, projectId, projectColor, today = localTodayStr()) {
-  var _a2;
-  const fileName = ((_a2 = filePath.split("/").pop()) == null ? void 0 : _a2.replace(/\.md$/, "")) || filePath;
+  const fileName = filePath.split("/").pop()?.replace(/\.md$/, "") || filePath;
   const dueDate = getString(fm, "\u622A\u6B62\u65E5\u671F");
   const rawStatus = getString(fm, "\u72B6\u6001") || "\u5F85\u529E";
   const status = STATUS_LIST.includes(rawStatus) ? rawStatus : "\u5F85\u529E";
@@ -245,12 +245,11 @@ var init_parserDiagnostics = __esm({
 
 // src/data/taskParser.ts
 function parseFrontmatter(content, filePath) {
-  var _a2, _b;
   const lines = content.split(/\r?\n/);
-  if (((_a2 = lines[0]) == null ? void 0 : _a2.trim()) !== "---") return {};
+  if (lines[0]?.trim() !== "---") return {};
   let end = -1;
   for (let i = 1; i < lines.length; i++) {
-    if (((_b = lines[i]) == null ? void 0 : _b.trim()) === "---") {
+    if (lines[i]?.trim() === "---") {
       end = i;
       break;
     }
@@ -264,7 +263,7 @@ function parseFrontmatter(content, filePath) {
       return parsed;
     }
   } catch (e) {
-    reportParseIssue({ path: filePath != null ? filePath : "(unknown)", kind: "yaml", message: e instanceof Error ? e.message : String(e) });
+    reportParseIssue({ path: filePath ?? "(unknown)", kind: "yaml", message: e instanceof Error ? e.message : String(e) });
   }
   return {};
 }
@@ -289,7 +288,7 @@ var ProjectModal_exports = {};
 __export(ProjectModal_exports, {
   ProjectModal: () => ProjectModal
 });
-var import_obsidian19, COLORS, getToday, _a, ProjectModal;
+var import_obsidian19, COLORS, getToday, ProjectModal;
 var init_ProjectModal = __esm({
   "src/views/ProjectModal.ts"() {
     import_obsidian19 = require("obsidian");
@@ -312,20 +311,19 @@ var init_ProjectModal = __esm({
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     };
     ProjectModal = class extends import_obsidian19.Modal {
+      opts;
+      selectedColor = COLORS[0] ?? "#3b82f6";
+      isEdit;
+      selectedStage = 0;
+      selectedType = "stage";
       constructor(opts) {
-        var _a2, _b;
         super(opts.app);
-        __publicField(this, "opts");
-        __publicField(this, "selectedColor", (_a = COLORS[0]) != null ? _a : "#3b82f6");
-        __publicField(this, "isEdit");
-        __publicField(this, "selectedStage", 0);
-        __publicField(this, "selectedType", "stage");
         this.opts = opts;
         this.isEdit = !!opts.editData;
         if (opts.editData) {
           this.selectedColor = opts.editData.color;
-          this.selectedStage = (_a2 = opts.editData.stage) != null ? _a2 : 0;
-          this.selectedType = opts.editData.type === "nostage" ? "longterm" : (_b = opts.editData.type) != null ? _b : "stage";
+          this.selectedStage = opts.editData.stage ?? 0;
+          this.selectedType = opts.editData.type === "nostage" ? "longterm" : opts.editData.type ?? "stage";
         }
       }
       onOpen() {
@@ -378,11 +376,10 @@ var init_ProjectModal = __esm({
         if (ed) endInput.value = ed.endDate || "";
         for (const input of [startInput, endInput]) {
           input.addEventListener("click", () => {
-            var _a2;
             const picker = input;
             try {
-              (_a2 = picker.showPicker) == null ? void 0 : _a2.call(picker);
-            } catch (e) {
+              picker.showPicker?.();
+            } catch {
             }
           });
         }
@@ -496,15 +493,14 @@ var init_TaskModal = __esm({
       return (d.getDay() + 6) % 7 + 1;
     };
     TaskModal = class extends import_obsidian20.Modal {
+      opts;
+      tags = ["\u4EFB\u52A1"];
+      selectedReminders = [];
       constructor(opts) {
         super(opts.app);
-        __publicField(this, "opts");
-        __publicField(this, "tags", ["\u4EFB\u52A1"]);
-        __publicField(this, "selectedReminders", []);
         this.opts = opts;
       }
       onOpen() {
-        var _a2, _b, _c;
         const { contentEl } = this;
         contentEl.addClass("mq-ad-task-modal");
         contentEl.createEl("h3", { cls: "mq-ad-modal-title", text: "\u65B0\u5EFA\u4EFB\u52A1" });
@@ -519,7 +515,7 @@ var init_TaskModal = __esm({
         for (const p of this.opts.projects) {
           projSel.createEl("option", { text: p.name, attr: { value: p.name } });
         }
-        const initialProject = (_b = this.opts.defaultProject) != null ? _b : (_a2 = this.opts.projects[0]) == null ? void 0 : _a2.name;
+        const initialProject = this.opts.defaultProject ?? this.opts.projects[0]?.name;
         if (initialProject) {
           const match = Array.from(projSel.options).find((o) => o.value === initialProject);
           if (match) match.selected = true;
@@ -669,10 +665,9 @@ var init_TaskModal = __esm({
         const btns = contentEl.createDiv({ cls: "mq-ad-modal-btns" });
         btns.createEl("button", { cls: "mq-ad-modal-btn", text: UI_TEXT.cancel }).addEventListener("click", () => this.close());
         btns.createEl("button", { cls: "mq-ad-modal-btn mq-ad-modal-btn--primary", text: "\u521B\u5EFA\u4EFB\u52A1" }).addEventListener("click", () => {
-          var _a3;
           contentEl.querySelectorAll(".mq-ad-input-error").forEach((el) => el.removeClass("mq-ad-input-error"));
           const titleEl = contentEl.querySelector(".mq-ad-input-title");
-          const title = (_a3 = titleEl == null ? void 0 : titleEl.value) == null ? void 0 : _a3.trim();
+          const title = titleEl?.value?.trim();
           const fields = [
             [titleEl, title || ""],
             [projSel, projSel.value],
@@ -719,7 +714,7 @@ var init_TaskModal = __esm({
           this.opts.onSave(data);
           this.close();
         });
-        (_c = contentEl.querySelector(".mq-ad-input-title")) == null ? void 0 : _c.focus();
+        contentEl.querySelector(".mq-ad-input-title")?.focus();
       }
       label(parent, text) {
         parent.createEl("label", { cls: "mq-ad-modal-label", text });
@@ -873,9 +868,9 @@ function addFolderDropdown(setting, app, current, onChange) {
   });
 }
 var DashboardSettingTab = class extends import_obsidian.PluginSettingTab {
+  plugin;
   constructor(app, plugin) {
     super(app, plugin);
-    __publicField(this, "plugin");
     this.plugin = plugin;
   }
   display() {
@@ -990,31 +985,22 @@ var DashboardSettingTab = class extends import_obsidian.PluginSettingTab {
       const idx = i;
       const st = this.plugin.settings.boardStages[idx];
       new import_obsidian.Setting(boardOptions).setName(`\u9636\u6BB5 ${idx + 1}`).setDesc(`\u81EA\u5B9A\u4E49\u7B2C ${idx + 1} \u4E2A\u9636\u6BB5\u7684\u540D\u79F0\u3001\u989C\u8272\uFF0C\u4EE5\u53CA\u662F\u5426\u5728\u8BE5\u9636\u6BB5\u542F\u7528\u8F93\u5165\u6846`).addText(
-        (t2) => {
-          var _a2;
-          return t2.setPlaceholder(`\u9636\u6BB5 ${idx + 1}`).setValue((_a2 = st == null ? void 0 : st.label) != null ? _a2 : "").onChange(async (v) => {
-            this.plugin.settings.boardStages[idx].label = v;
-            await this.plugin.saveSettings();
-            this.plugin.refreshNav();
-          });
-        }
+        (t2) => t2.setPlaceholder(`\u9636\u6BB5 ${idx + 1}`).setValue(st?.label ?? "").onChange(async (v) => {
+          this.plugin.settings.boardStages[idx].label = v;
+          await this.plugin.saveSettings();
+          this.plugin.refreshNav();
+        })
       ).addText(
-        (t2) => {
-          var _a2;
-          return t2.setPlaceholder("#888780").setValue((_a2 = st == null ? void 0 : st.color) != null ? _a2 : "").onChange(async (v) => {
-            this.plugin.settings.boardStages[idx].color = v.trim() || "#888780";
-            await this.plugin.saveSettings();
-            this.plugin.refreshNav();
-          });
-        }
+        (t2) => t2.setPlaceholder("#888780").setValue(st?.color ?? "").onChange(async (v) => {
+          this.plugin.settings.boardStages[idx].color = v.trim() || "#888780";
+          await this.plugin.saveSettings();
+          this.plugin.refreshNav();
+        })
       ).addToggle(
-        (tg) => {
-          var _a2;
-          return tg.setTooltip("\u542F\u7528\u540E\uFF0C\u5904\u4E8E\u8BE5\u9636\u6BB5\u7684\u6761\u76EE\u5728\u7F16\u8F91\u65F6\u4F1A\u51FA\u73B0\u4E00\u4E2A\u6807\u9898\u4E0E\u8BE5\u9636\u6BB5\u540D\u4E00\u81F4\u7684\u8F93\u5165\u6846").setValue((_a2 = st == null ? void 0 : st.hasInput) != null ? _a2 : false).onChange(async (v) => {
-            this.plugin.settings.boardStages[idx].hasInput = v;
-            await this.plugin.saveSettings();
-          });
-        }
+        (tg) => tg.setTooltip("\u542F\u7528\u540E\uFF0C\u5904\u4E8E\u8BE5\u9636\u6BB5\u7684\u6761\u76EE\u5728\u7F16\u8F91\u65F6\u4F1A\u51FA\u73B0\u4E00\u4E2A\u6807\u9898\u4E0E\u8BE5\u9636\u6BB5\u540D\u4E00\u81F4\u7684\u8F93\u5165\u6846").setValue(st?.hasInput ?? false).onChange(async (v) => {
+          this.plugin.settings.boardStages[idx].hasInput = v;
+          await this.plugin.saveSettings();
+        })
       );
     }
     new import_obsidian.Setting(containerEl).setName("\u65B0\u65E5\u8BB0").setHeading();
@@ -1167,22 +1153,18 @@ var DashboardSettingTab = class extends import_obsidian.PluginSettingTab {
     for (let i = 0; i < this.plugin.settings.npdpStages.length; i++) {
       const idx = i;
       new import_obsidian.Setting(containerEl).setName(`\u9636\u6BB5 ${idx + 1} \u540D\u79F0`).setDesc(`\u81EA\u5B9A\u4E49\u7B2C ${idx + 1} \u4E2A\u9636\u6BB5\u7684\u540D\u79F0`).addText(
-        (t2) => {
-          var _a2;
-          return t2.setPlaceholder(`\u9636\u6BB5 ${idx + 1}`).setValue((_a2 = this.plugin.settings.npdpStages[idx]) != null ? _a2 : "").onChange(async (v) => {
-            this.plugin.settings.npdpStages[idx] = v;
-            await this.plugin.saveSettings();
-          });
-        }
+        (t2) => t2.setPlaceholder(`\u9636\u6BB5 ${idx + 1}`).setValue(this.plugin.settings.npdpStages[idx] ?? "").onChange(async (v) => {
+          this.plugin.settings.npdpStages[idx] = v;
+          await this.plugin.saveSettings();
+        })
       );
     }
     new import_obsidian.Setting(containerEl).setName("\u9879\u76EE\u8FDB\u5EA6\u5361\u7247\u7B5B\u9009").setDesc('\u4E3B\u9875"\u9879\u76EE\u8FDB\u5EA6"\u5361\u7247\u663E\u793A\u4E0D\u8D85\u8FC7\u6240\u9009\u9636\u6BB5\u7684\u9879\u76EE').addDropdown((dropdown) => {
-      var _a2;
       for (let i = 0; i < this.plugin.settings.npdpStages.length; i++) {
         dropdown.addOption(String(i), `\u2264 ${this.plugin.settings.npdpStages[i]}`);
       }
       dropdown.addOption(String(this.plugin.settings.npdpStages.length), "\u663E\u793A\u5168\u90E8");
-      dropdown.setValue(String((_a2 = this.plugin.settings.npdpProgressFilter) != null ? _a2 : this.plugin.settings.npdpStages.length));
+      dropdown.setValue(String(this.plugin.settings.npdpProgressFilter ?? this.plugin.settings.npdpStages.length));
       dropdown.onChange(async (v) => {
         this.plugin.settings.npdpProgressFilter = parseInt(v);
         await this.plugin.saveSettings();
@@ -1193,8 +1175,7 @@ var DashboardSettingTab = class extends import_obsidian.PluginSettingTab {
     const t2 = this.plugin.settings.theme;
     const effective = t2 === "auto" ? document.body.classList.contains("theme-light") ? "light" : "dark" : t2;
     this.app.workspace.getLeavesOfType("mq-dashboard-view").forEach((leaf) => {
-      var _a2, _b, _c;
-      (_c = (_b = (_a2 = leaf.view) == null ? void 0 : _a2.containerEl) == null ? void 0 : _b.querySelector(".mq-dashboard-plugin")) == null ? void 0 : _c.setAttribute("data-theme", effective);
+      leaf.view?.containerEl?.querySelector(".mq-dashboard-plugin")?.setAttribute("data-theme", effective);
     });
     document.querySelectorAll(".mq-dashboard-plugin").forEach((el) => el.setAttribute("data-theme", effective));
     this.plugin.refreshThemeButtons();
@@ -1282,12 +1263,12 @@ var MOCK_DATA = {
 var import_obsidian2 = require("obsidian");
 init_constants();
 var BannerModal = class extends import_obsidian2.Modal {
+  imageDataUrl;
+  offsetY;
+  onConfirm;
+  cleanup = null;
   constructor(app, imageDataUrl, currentOffsetY, onConfirm) {
     super(app);
-    __publicField(this, "imageDataUrl");
-    __publicField(this, "offsetY");
-    __publicField(this, "onConfirm");
-    __publicField(this, "cleanup", null);
     this.imageDataUrl = imageDataUrl;
     this.offsetY = currentOffsetY;
     this.onConfirm = onConfirm;
@@ -1364,8 +1345,7 @@ var BannerModal = class extends import_obsidian2.Modal {
     }, { passive: false });
   }
   onClose() {
-    var _a2;
-    (_a2 = this.cleanup) == null ? void 0 : _a2.call(this);
+    this.cleanup?.();
     this.contentEl.empty();
   }
 };
@@ -1396,7 +1376,7 @@ var LEFT_STAT_OPTIONS = ["totalNotes", "tagsCount", "totalLinks", "newThisMonth"
 var CENTER_STAT_OPTIONS = ["streak", "taskCompletion", "connectivity", "newThisWeek"];
 var RIGHT_STAT_OPTIONS = ["taskCompletion", "overdueRate", "avgLinksPerNote", "connectivity", "orphanRate"];
 function resolveBannerStats(config) {
-  const selected = Array.isArray(config == null ? void 0 : config.rightStats) ? [...config.rightStats] : [...DEFAULT_BANNER_STATS.rightStats];
+  const selected = Array.isArray(config?.rightStats) ? [...config.rightStats] : [...DEFAULT_BANNER_STATS.rightStats];
   return { ...DEFAULT_BANNER_STATS, ...config, rightStats: selected };
 }
 function dayKey(value) {
@@ -1406,7 +1386,6 @@ function startOfDay(value) {
   return new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
 }
 async function computeBannerStats(app, taskStore) {
-  var _a2, _b;
   const files = app.vault.getMarkdownFiles().filter((file) => !file.path.startsWith("."));
   const now = /* @__PURE__ */ new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
@@ -1437,8 +1416,8 @@ async function computeBannerStats(app, taskStore) {
   const tags = /* @__PURE__ */ new Set();
   for (const file of files) {
     const cache = app.metadataCache.getFileCache(file);
-    for (const tag of (_a2 = cache == null ? void 0 : cache.tags) != null ? _a2 : []) tags.add(tag.tag.replace(/^#/, ""));
-    const raw = (_b = cache == null ? void 0 : cache.frontmatter) == null ? void 0 : _b.tags;
+    for (const tag of cache?.tags ?? []) tags.add(tag.tag.replace(/^#/, ""));
+    const raw = cache?.frontmatter?.tags;
     if (Array.isArray(raw)) raw.forEach((tag) => tags.add(String(tag).replace(/^#/, "")));
     else if (raw) tags.add(String(raw).replace(/^#/, ""));
   }
@@ -1475,9 +1454,8 @@ async function computeBannerStats(app, taskStore) {
   };
 }
 function applyBannerStatsBackdrop(banner, config) {
-  var _a2, _b;
-  const darkness = (_a2 = config.darkness) != null ? _a2 : 20;
-  banner.style.setProperty("--banner-blur", `${(_b = config.blur) != null ? _b : 2}px`);
+  const darkness = config.darkness ?? 20;
+  banner.style.setProperty("--banner-blur", `${config.blur ?? 2}px`);
   banner.style.setProperty("--banner-bright", String(Math.max(0.3, 1 - darkness / 100 * 0.7)));
   banner.style.setProperty("--banner-scrim", String(0.25 + darkness / 100 * 0.5));
   banner.style.setProperty("--banner-stat-accent", config.accent || "#bff038");
@@ -1500,8 +1478,7 @@ var labels = {
 };
 var icons = { totalNotes: "file-text", tagsCount: "hash", totalLinks: "link", newThisMonth: "calendar-plus", newThisWeek: "calendar-check", totalTasks: "list-checks", doneTasks: "check-check", pendingTasks: "circle-dashed", streak: "flame", taskCompletion: "list-checks", overdueRate: "clock-alert", connectivity: "network", orphanRate: "circle-slash", avgLinksPerNote: "link" };
 function statValue(stat, r) {
-  var _a2;
-  const value = (_a2 = r[stat]) != null ? _a2 : 0;
+  const value = r[stat] ?? 0;
   if (stat === "taskCompletion" || stat === "overdueRate" || stat === "connectivity" || stat === "orphanRate") return `${value}%`;
   if (stat === "avgLinksPerNote") return value.toFixed(1);
   if (stat === "streak") return `${value}\u5929`;
@@ -1536,7 +1513,7 @@ async function renderBannerStats(parent, config, app, taskStore, dashboardTitle)
   if (resolved.showCenter !== false) {
     const stat = resolved.centerStat || "streak";
     const col = el.createDiv({ cls: "mq-ad-banner-stat-col mq-ad-banner-stat-col--center" });
-    hero(col, stat, statValue(stat, result), stat === "streak" ? (dashboardTitle == null ? void 0 : dashboardTitle.trim()) || void 0 : void 0);
+    hero(col, stat, statValue(stat, result), stat === "streak" ? dashboardTitle?.trim() || void 0 : void 0);
     if (resolved.showDetails !== false) {
       col.createDiv({ cls: "mq-ad-banner-stat-sub", text: stat === "taskCompletion" ? `${result.doneTasks} / ${result.totalTasks} \u4E2A\u4EFB\u52A1\u5DF2\u5B8C\u6210` : `\u672C\u5468\u65B0\u589E ${result.newThisWeek} \xB7 \u672C\u6708\u65B0\u589E ${result.newThisMonth}` });
       const chart = col.createDiv({ cls: "mq-ad-banner-stat-chart" });
@@ -1587,12 +1564,12 @@ var statLabels = {
   avgLinksPerNote: "\u94FE\u63A5/\u7BC7"
 };
 var BannerEditModal = class extends import_obsidian4.Modal {
+  opts;
+  mode;
+  draft;
+  form;
   constructor(opts) {
     super(opts.app);
-    __publicField(this, "opts");
-    __publicField(this, "mode");
-    __publicField(this, "draft");
-    __publicField(this, "form");
     this.opts = opts;
     this.mode = opts.banner.mode === "stats" ? "stats" : "poster";
     this.draft = resolveBannerStats(opts.banner.statsConfig);
@@ -1623,7 +1600,6 @@ var BannerEditModal = class extends import_obsidian4.Modal {
     actions.createEl("button", { cls: "mod-cta", text: "\u4FDD\u5B58" }).addEventListener("click", () => this.save());
   }
   renderBody() {
-    var _a2, _b, _c, _d;
     this.form.empty();
     if (this.mode === "poster") {
       this.form.createDiv({ cls: "mq-ad-banner-modal__section-title", text: "\u6D77\u62A5\u6A21\u5F0F" });
@@ -1641,7 +1617,7 @@ var BannerEditModal = class extends import_obsidian4.Modal {
     for (const stat of RIGHT_STAT_OPTIONS) {
       const label = right.createEl("label", { cls: "mq-ad-banner-modal__check" });
       const input = label.createEl("input", { attr: { type: "checkbox" } });
-      input.checked = (_b = (_a2 = this.draft.rightStats) == null ? void 0 : _a2.includes(stat)) != null ? _b : false;
+      input.checked = this.draft.rightStats?.includes(stat) ?? false;
       input.addEventListener("change", () => {
         const selected = new Set(this.draft.rightStats || []);
         input.checked ? selected.add(stat) : selected.delete(stat);
@@ -1651,8 +1627,8 @@ var BannerEditModal = class extends import_obsidian4.Modal {
     }
     const appearance = this.form.createDiv({ cls: "mq-ad-banner-modal__appearance" });
     appearance.createDiv({ cls: "mq-ad-banner-modal__section-title", text: "\u5916\u89C2" });
-    this.addRange(appearance, "\u80CC\u666F\u6A21\u7CCA", "blur", (_c = this.draft.blur) != null ? _c : 2, 0, 16);
-    this.addRange(appearance, "\u80CC\u666F\u6697\u5EA6", "darkness", (_d = this.draft.darkness) != null ? _d : 20, 0, 100);
+    this.addRange(appearance, "\u80CC\u666F\u6A21\u7CCA", "blur", this.draft.blur ?? 2, 0, 16);
+    this.addRange(appearance, "\u80CC\u666F\u6697\u5EA6", "darkness", this.draft.darkness ?? 20, 0, 100);
     const accent = appearance.createDiv({ cls: "mq-ad-banner-modal__row" });
     accent.createSpan({ text: "\u5F3A\u8C03\u8272" });
     const color = accent.createEl("input", { attr: { type: "color" } });
@@ -1712,11 +1688,11 @@ var BannerEditModal = class extends import_obsidian4.Modal {
 var import_obsidian5 = require("obsidian");
 init_constants();
 var CountdownModal = class extends import_obsidian5.Modal {
+  eventName;
+  targetDate;
+  onConfirm;
   constructor(app, current, onConfirm) {
     super(app);
-    __publicField(this, "eventName");
-    __publicField(this, "targetDate");
-    __publicField(this, "onConfirm");
     this.eventName = current.eventName;
     this.targetDate = current.targetDate;
     this.onConfirm = onConfirm;
@@ -1777,40 +1753,38 @@ var DEFAULTS = {
 var PomodoroService = class {
   constructor(plugin) {
     this.plugin = plugin;
-    __publicField(this, "phase", "work");
-    __publicField(this, "status", "idle");
-    __publicField(this, "startedAt", 0);
-    __publicField(this, "remainingSeconds", 0);
-    __publicField(this, "completedWorkSessions", 0);
-    __publicField(this, "focusedSeconds", 0);
-    __publicField(this, "focusResumedAt", 0);
-    __publicField(this, "interruptions", 0);
-    __publicField(this, "pendingBreak", null);
-    __publicField(this, "tickTimer", null);
-    __publicField(this, "tickCallback", null);
-    __publicField(this, "completeCallback", null);
     this.reset();
   }
+  plugin;
+  phase = "work";
+  status = "idle";
+  startedAt = 0;
+  remainingSeconds = 0;
+  completedWorkSessions = 0;
+  focusedSeconds = 0;
+  focusResumedAt = 0;
+  interruptions = 0;
+  pendingBreak = null;
+  tickTimer = null;
+  tickCallback = null;
+  completeCallback = null;
   get config() {
-    var _a2;
-    return { ...DEFAULTS, ...(_a2 = this.plugin.settings.pomodoro) != null ? _a2 : {} };
+    return { ...DEFAULTS, ...this.plugin.settings.pomodoro ?? {} };
   }
   durationFor(phase) {
     const c = this.config;
     return (phase === "work" ? c.pomodoroWorkMinutes : phase === "short-break" ? c.pomodoroShortBreakMinutes : c.pomodoroLongBreakMinutes) * 60;
   }
   get sessions() {
-    var _a2;
-    return (_a2 = this.plugin.settings.pomodoroSessions) != null ? _a2 : [];
+    return this.plugin.settings.pomodoroSessions ?? [];
   }
   getState() {
     const remaining = this.status === "running" ? Math.max(0, Math.ceil(this.remainingSeconds - (Date.now() - this.startedAt) / 1e3)) : this.remainingSeconds;
     return { phase: this.phase, status: this.status, remainingSeconds: remaining, totalSeconds: this.durationFor(this.phase), completedWorkSessions: this.completedWorkSessions };
   }
   start() {
-    var _a2;
     if (this.status === "running") return;
-    this.remainingSeconds || (this.remainingSeconds = this.durationFor(this.phase));
+    this.remainingSeconds ||= this.durationFor(this.phase);
     this.startedAt = Date.now();
     if (this.phase === "work") {
       if (this.status === "idle") {
@@ -1821,10 +1795,9 @@ var PomodoroService = class {
     }
     this.status = "running";
     this.ensureTickTimer();
-    (_a2 = this.tickCallback) == null ? void 0 : _a2.call(this);
+    this.tickCallback?.();
   }
   pause() {
-    var _a2;
     if (this.status !== "running") return;
     this.remainingSeconds = this.getState().remainingSeconds;
     if (this.phase === "work" && this.focusResumedAt) {
@@ -1834,10 +1807,9 @@ var PomodoroService = class {
     }
     this.status = "paused";
     this.clearTickTimer();
-    (_a2 = this.tickCallback) == null ? void 0 : _a2.call(this);
+    this.tickCallback?.();
   }
   reset() {
-    var _a2;
     this.clearTickTimer();
     this.settlePendingBreak(false);
     this.phase = "work";
@@ -1847,7 +1819,7 @@ var PomodoroService = class {
     this.focusedSeconds = 0;
     this.focusResumedAt = 0;
     this.interruptions = 0;
-    (_a2 = this.tickCallback) == null ? void 0 : _a2.call(this);
+    this.tickCallback?.();
   }
   skip() {
     this.moveToNextPhase();
@@ -1864,8 +1836,7 @@ var PomodoroService = class {
     this.completeCallback = null;
   }
   getActivity() {
-    var _a2;
-    return (_a2 = this.plugin.settings.pomodoroActivity) != null ? _a2 : "";
+    return this.plugin.settings.pomodoroActivity ?? "";
   }
   setActivity(activity) {
     const name = activity.trim();
@@ -1874,8 +1845,7 @@ var PomodoroService = class {
     void this.plugin.saveSettings();
   }
   getTags() {
-    var _a2;
-    return [...(_a2 = this.plugin.settings.pomodoroTags) != null ? _a2 : []].sort((a, b) => a.pinned === b.pinned ? a.name.localeCompare(b.name) : a.pinned ? -1 : 1);
+    return [...this.plugin.settings.pomodoroTags ?? []].sort((a, b) => a.pinned === b.pinned ? a.name.localeCompare(b.name) : a.pinned ? -1 : 1);
   }
   getRecentActivities(limit = 6) {
     const pinned = this.getTags().filter((tag) => tag.pinned).map((tag) => tag.name);
@@ -1884,40 +1854,35 @@ var PomodoroService = class {
     return [...pinned, ...recent].slice(0, limit);
   }
   async setTagPinned(name, pinned) {
-    var _a2;
     this.upsertTag(name);
-    this.plugin.settings.pomodoroTags = ((_a2 = this.plugin.settings.pomodoroTags) != null ? _a2 : []).map((tag) => tag.name === name ? { ...tag, pinned } : tag);
+    this.plugin.settings.pomodoroTags = (this.plugin.settings.pomodoroTags ?? []).map((tag) => tag.name === name ? { ...tag, pinned } : tag);
     await this.plugin.saveSettings();
   }
   async renameTag(oldName, newName) {
-    var _a2;
     const name = newName.trim();
     if (!name || oldName === name || this.getTags().some((tag) => tag.name === name)) return false;
-    this.plugin.settings.pomodoroTags = ((_a2 = this.plugin.settings.pomodoroTags) != null ? _a2 : []).map((tag) => tag.name === oldName ? { ...tag, name } : tag);
+    this.plugin.settings.pomodoroTags = (this.plugin.settings.pomodoroTags ?? []).map((tag) => tag.name === oldName ? { ...tag, name } : tag);
     this.plugin.settings.pomodoroActivity = this.getActivity() === oldName ? name : this.getActivity();
     this.replaceActivity(oldName, name);
     await this.plugin.saveSettings();
     return true;
   }
   async deleteTag(name) {
-    var _a2;
-    this.plugin.settings.pomodoroTags = ((_a2 = this.plugin.settings.pomodoroTags) != null ? _a2 : []).filter((tag) => tag.name !== name);
+    this.plugin.settings.pomodoroTags = (this.plugin.settings.pomodoroTags ?? []).filter((tag) => tag.name !== name);
     this.plugin.settings.pomodoroActivity = this.getActivity() === name ? "" : this.getActivity();
     this.replaceActivity(name, "\u4E13\u6CE8");
     await this.plugin.saveSettings();
   }
   async mergeTags(source, destination) {
-    var _a2;
     if (source === destination || !this.getTags().some((tag) => tag.name === destination)) return false;
-    this.plugin.settings.pomodoroTags = ((_a2 = this.plugin.settings.pomodoroTags) != null ? _a2 : []).filter((tag) => tag.name !== source);
+    this.plugin.settings.pomodoroTags = (this.plugin.settings.pomodoroTags ?? []).filter((tag) => tag.name !== source);
     this.plugin.settings.pomodoroActivity = this.getActivity() === source ? destination : this.getActivity();
     this.replaceActivity(source, destination);
     await this.plugin.saveSettings();
     return true;
   }
   getTodayCount() {
-    var _a2, _b;
-    return (_b = (_a2 = this.sessions.find((s) => s.date === dateKey(/* @__PURE__ */ new Date()))) == null ? void 0 : _a2.completed) != null ? _b : 0;
+    return this.sessions.find((s) => s.date === dateKey(/* @__PURE__ */ new Date()))?.completed ?? 0;
   }
   getTodayGoal() {
     return { completed: this.getTodayCount(), goal: Math.max(1, this.config.pomodoroDailyGoal) };
@@ -1930,18 +1895,12 @@ var PomodoroService = class {
     return session ? sessionMinutes(session, this.config.pomodoroWorkMinutes) : 0;
   }
   getTodayInterruptions() {
-    return this.getRecordsForDate(dateKey(/* @__PURE__ */ new Date())).reduce((sum, record) => {
-      var _a2;
-      return sum + ((_a2 = record.interruptions) != null ? _a2 : 0);
-    }, 0);
+    return this.getRecordsForDate(dateKey(/* @__PURE__ */ new Date())).reduce((sum, record) => sum + (record.interruptions ?? 0), 0);
   }
   getBreakAdherence(days = 30) {
     const from = /* @__PURE__ */ new Date();
     from.setDate(from.getDate() - days);
-    const records = this.sessions.filter((session) => session.date >= dateKey(from)).flatMap((session) => {
-      var _a2;
-      return (_a2 = session.records) != null ? _a2 : [];
-    }).filter((record) => record.breakCompleted !== void 0);
+    const records = this.sessions.filter((session) => session.date >= dateKey(from)).flatMap((session) => session.records ?? []).filter((record) => record.breakCompleted !== void 0);
     return records.length ? Math.round(records.filter((record) => record.breakCompleted).length / records.length * 100) : null;
   }
   getTodayScore() {
@@ -1949,21 +1908,16 @@ var PomodoroService = class {
     return Math.max(0, Math.round(Math.min(1, completed / goal) * 100 - Math.min(40, this.getTodayInterruptions() * 5)));
   }
   getRecentRecords(limit = 60) {
-    return this.sessions.flatMap((s) => {
-      var _a2;
-      return (_a2 = s.records) != null ? _a2 : [];
-    }).sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, limit);
+    return this.sessions.flatMap((s) => s.records ?? []).sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, limit);
   }
   getRecordsForDate(date) {
-    var _a2, _b;
-    return [...(_b = (_a2 = this.sessions.find((session) => session.date === date)) == null ? void 0 : _a2.records) != null ? _b : []].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    return [...this.sessions.find((session) => session.date === date)?.records ?? []].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   }
   getActivityBreakdown(from) {
-    var _a2, _b;
     const result = /* @__PURE__ */ new Map();
     for (const session of this.sessions) {
       if (from && session.date < from) continue;
-      for (const record of (_a2 = session.records) != null ? _a2 : []) result.set(record.activity || "\u9ED8\u8BA4\u4E13\u6CE8", ((_b = result.get(record.activity || "\u9ED8\u8BA4\u4E13\u6CE8")) != null ? _b : 0) + record.duration);
+      for (const record of session.records ?? []) result.set(record.activity || "\u9ED8\u8BA4\u4E13\u6CE8", (result.get(record.activity || "\u9ED8\u8BA4\u4E13\u6CE8") ?? 0) + record.duration);
     }
     return result;
   }
@@ -2008,15 +1962,11 @@ var PomodoroService = class {
     if (this.tickTimer === null) this.tickTimer = window.setInterval(() => this.tick(), 1e3);
   }
   upsertTag(name) {
-    var _a2;
     if (!name || this.getTags().some((tag) => tag.name === name)) return;
-    this.plugin.settings.pomodoroTags = [...(_a2 = this.plugin.settings.pomodoroTags) != null ? _a2 : [], { name, pinned: false }];
+    this.plugin.settings.pomodoroTags = [...this.plugin.settings.pomodoroTags ?? [], { name, pinned: false }];
   }
   replaceActivity(from, to) {
-    this.plugin.settings.pomodoroSessions = this.sessions.map((session) => {
-      var _a2;
-      return { ...session, records: ((_a2 = session.records) != null ? _a2 : []).map((record) => record.activity === from ? { ...record, activity: to } : record) };
-    });
+    this.plugin.settings.pomodoroSessions = this.sessions.map((session) => ({ ...session, records: (session.records ?? []).map((record) => record.activity === from ? { ...record, activity: to } : record) }));
   }
   clearTickTimer() {
     if (this.tickTimer !== null) {
@@ -2025,13 +1975,11 @@ var PomodoroService = class {
     }
   }
   tick() {
-    var _a2;
     if (this.status !== "running") return;
     if (this.getState().remainingSeconds <= 0) this.completePhase();
-    else (_a2 = this.tickCallback) == null ? void 0 : _a2.call(this);
+    else this.tickCallback?.();
   }
   completePhase() {
-    var _a2;
     if (this.phase === "work") {
       this.completedWorkSessions++;
       this.recordCompletedWork();
@@ -2041,11 +1989,10 @@ var PomodoroService = class {
       new import_obsidian6.Notice("\u4F11\u606F\u7ED3\u675F\uFF0C\u51C6\u5907\u4E0B\u4E00\u8F6E\u4E13\u6CE8\u3002");
     }
     this.playSound();
-    (_a2 = this.completeCallback) == null ? void 0 : _a2.call(this);
+    this.completeCallback?.();
     this.moveToNextPhase();
   }
   moveToNextPhase() {
-    var _a2;
     const c = this.config;
     if (this.phase !== "work") this.settlePendingBreak(false);
     if (this.phase === "work") this.phase = this.completedWorkSessions >= c.pomodoroLongBreakInterval ? "long-break" : "short-break";
@@ -2059,17 +2006,14 @@ var PomodoroService = class {
     this.startedAt = this.status === "running" ? Date.now() : 0;
     if (this.status === "running") this.ensureTickTimer();
     else this.clearTickTimer();
-    (_a2 = this.tickCallback) == null ? void 0 : _a2.call(this);
+    this.tickCallback?.();
   }
   recordCompletedWork() {
     const date = dateKey(/* @__PURE__ */ new Date());
     const elapsed = this.focusedSeconds + (this.focusResumedAt ? (Date.now() - this.focusResumedAt) / 1e3 : 0);
     const record = { timestamp: (/* @__PURE__ */ new Date()).toISOString(), activity: this.getActivity() || "\u9ED8\u8BA4\u4E13\u6CE8", duration: Math.max(1, Math.round(elapsed / 60)), interruptions: this.interruptions };
     const found = this.sessions.find((session) => session.date === date);
-    this.plugin.settings.pomodoroSessions = found ? this.sessions.map((session) => {
-      var _a2;
-      return session.date === date ? { ...session, completed: session.completed + 1, records: [...(_a2 = session.records) != null ? _a2 : [], record] } : session;
-    }) : [...this.sessions, { date, completed: 1, records: [record] }];
+    this.plugin.settings.pomodoroSessions = found ? this.sessions.map((session) => session.date === date ? { ...session, completed: session.completed + 1, records: [...session.records ?? [], record] } : session) : [...this.sessions, { date, completed: 1, records: [record] }];
     this.pendingBreak = { record, startedAt: Date.now() };
     void this.plugin.saveSettings();
   }
@@ -2080,10 +2024,7 @@ var PomodoroService = class {
     pending.record.breakCompleted = completed;
     pending.record.breakMinutes = completed ? Math.max(1, Math.round((Date.now() - pending.startedAt) / 6e4)) : 0;
     const date = pending.record.timestamp.slice(0, 10);
-    this.plugin.settings.pomodoroSessions = this.sessions.map((session) => {
-      var _a2;
-      return session.date === date ? { ...session, records: ((_a2 = session.records) != null ? _a2 : []).map((record) => record.timestamp === pending.record.timestamp ? { ...record, ...pending.record } : record) } : session;
-    });
+    this.plugin.settings.pomodoroSessions = this.sessions.map((session) => session.date === date ? { ...session, records: (session.records ?? []).map((record) => record.timestamp === pending.record.timestamp ? { ...record, ...pending.record } : record) } : session);
     void this.plugin.saveSettings();
   }
   playSound() {
@@ -2100,13 +2041,12 @@ var PomodoroService = class {
       oscillator.start();
       oscillator.stop(context.currentTime + 0.5);
       oscillator.onended = () => context.close();
-    } catch (e) {
+    } catch {
     }
   }
 };
 function sessionMinutes(session, fallback) {
-  var _a2;
-  return ((_a2 = session.records) == null ? void 0 : _a2.length) ? session.records.reduce((sum, record) => sum + record.duration, 0) : session.completed * fallback;
+  return session.records?.length ? session.records.reduce((sum, record) => sum + record.duration, 0) : session.completed * fallback;
 }
 function dateKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -2152,14 +2092,14 @@ function openPomodoroTagManager(doc, service, onChange) {
     for (const name of [...names].sort((a, b) => a.localeCompare(b))) {
       const tag = service.getTags().find((item) => item.name === name);
       const row = list.createDiv({ cls: "dashboard-pomodoro-tagmanager-row" });
-      const chip = row.createDiv({ cls: "dashboard-pomodoro-tagmanager-chip" + ((tag == null ? void 0 : tag.pinned) ? " dashboard-pomodoro-tagmanager-chip--pinned" : "") });
+      const chip = row.createDiv({ cls: "dashboard-pomodoro-tagmanager-chip" + (tag?.pinned ? " dashboard-pomodoro-tagmanager-chip--pinned" : "") });
       const dot = chip.createDiv({ cls: "dashboard-pomodoro-donut-legend-dot" });
       dot.style.backgroundColor = activityColor(name);
       chip.createSpan({ cls: "dashboard-pomodoro-tagmanager-chip-name", text: name });
-      if (tag == null ? void 0 : tag.pinned) (0, import_obsidian7.setIcon)(chip.createSpan({ cls: "dashboard-pomodoro-tagmanager-chip-pin" }), "pin");
+      if (tag?.pinned) (0, import_obsidian7.setIcon)(chip.createSpan({ cls: "dashboard-pomodoro-tagmanager-chip-pin" }), "pin");
       chip.addEventListener("click", () => row.toggleClass("dashboard-pomodoro-tagmanager-row--open", !row.hasClass("dashboard-pomodoro-tagmanager-row--open")));
       const actions = row.createDiv({ cls: "dashboard-pomodoro-tagmanager-actions" });
-      action(actions, (tag == null ? void 0 : tag.pinned) ? "pin-off" : "pin", (tag == null ? void 0 : tag.pinned) ? "\u53D6\u6D88\u7F6E\u9876" : "\u7F6E\u9876", () => void service.setTagPinned(name, !(tag == null ? void 0 : tag.pinned)).then(refresh));
+      action(actions, tag?.pinned ? "pin-off" : "pin", tag?.pinned ? "\u53D6\u6D88\u7F6E\u9876" : "\u7F6E\u9876", () => void service.setTagPinned(name, !tag?.pinned).then(refresh));
       action(actions, "pencil", "\u6539\u540D", () => prompt("\u91CD\u547D\u540D\u6D3B\u52A8", name, async (value) => {
         if (!await service.renameTag(name, value)) throw new Error("\u540D\u79F0\u65E0\u6548\u6216\u5DF2\u5B58\u5728");
       }));
@@ -2185,8 +2125,8 @@ function openPomodoroTagManager(doc, service, onChange) {
   function prompt(label, initial, submit, options, danger = false) {
     const panel = modal.createDiv({ cls: "dashboard-pomodoro-tagmanager-prompt" });
     panel.createDiv({ cls: "dashboard-pomodoro-tagmanager-prompt-label", text: label });
-    const input = (options == null ? void 0 : options.length) ? panel.createEl("select", { cls: "dashboard-pomodoro-tagmanager-prompt-select" }) : panel.createEl("input", { cls: "dashboard-pomodoro-tagmanager-prompt-input", attr: { type: "text" } });
-    if ((options == null ? void 0 : options.length) && input instanceof HTMLSelectElement) for (const value of options) input.add(new Option(value, value));
+    const input = options?.length ? panel.createEl("select", { cls: "dashboard-pomodoro-tagmanager-prompt-select" }) : panel.createEl("input", { cls: "dashboard-pomodoro-tagmanager-prompt-input", attr: { type: "text" } });
+    if (options?.length && input instanceof HTMLSelectElement) for (const value of options) input.add(new Option(value, value));
     if (input instanceof HTMLInputElement) input.value = initial;
     const buttons = panel.createDiv({ cls: "dashboard-pomodoro-tagmanager-prompt-btns" });
     buttons.createEl("button", { cls: "dashboard-pomodoro-tagmanager-prompt-cancel", text: "\u53D6\u6D88" }).addEventListener("click", () => panel.remove());
@@ -2401,10 +2341,9 @@ function showPomodoroStats(doc, service) {
     });
   }
   function renderRanking() {
-    var _a2, _b;
     rankingList.empty();
     const data = [...service.getActivityBreakdown(rangeStart()).entries()].sort((a, b) => b[1] - a[1]);
-    const max = (_b = (_a2 = data[0]) == null ? void 0 : _a2[1]) != null ? _b : 1;
+    const max = data[0]?.[1] ?? 1;
     if (!data.length) {
       rankingList.createDiv({ cls: "dashboard-pomodoro-donut-empty", text: "\u6682\u65E0\u4E13\u6CE8\u8BB0\u5F55" });
       return;
@@ -2562,16 +2501,15 @@ function applyFrontmatterUpdates(lines, updates) {
 // src/views/TaskEditModal.ts
 init_constants();
 var TaskEditModal = class extends import_obsidian10.Modal {
+  opts;
+  presetTodayNode;
+  activeState;
   constructor(opts) {
     super(opts.app);
-    __publicField(this, "opts");
-    __publicField(this, "presetTodayNode");
-    __publicField(this, "activeState");
     this.opts = opts;
     this.presetTodayNode = opts.presetTodayNode;
   }
   onOpen() {
-    var _a2;
     const { contentEl } = this;
     const task = this.opts.task;
     contentEl.addClass("mq-ad-task-modal");
@@ -2590,7 +2528,7 @@ var TaskEditModal = class extends import_obsidian10.Modal {
     for (const project of this.opts.projects) {
       projectSel.createEl("option", { value: project.path, text: project.name });
     }
-    projectSel.value = (_a2 = currentProject == null ? void 0 : currentProject.path) != null ? _a2 : "";
+    projectSel.value = currentProject?.path ?? "";
     const typeCol = assignment.createDiv({ cls: "mq-ad-modal-col" });
     typeCol.createEl("label", { cls: "mq-ad-modal-label", text: "\u4EFB\u52A1\u7C7B\u578B" });
     const typeSel = typeCol.createEl("select", { cls: "mq-ad-modal-input" });
@@ -2601,10 +2539,9 @@ var TaskEditModal = class extends import_obsidian10.Modal {
     parentField.createEl("label", { cls: "mq-ad-modal-label", text: "\u7236\u4EFB\u52A1" });
     const parentSel = parentField.createEl("select", { cls: "mq-ad-modal-input" });
     const populateParents = (projectPath) => {
-      var _a3, _b;
       parentSel.empty();
       parentSel.createEl("option", { value: "", text: "\u65E0\u7236\u4EFB\u52A1" });
-      const projectName = (_b = (_a3 = this.opts.projects.find((project) => project.path === projectPath)) == null ? void 0 : _a3.name) != null ? _b : task.projectId;
+      const projectName = this.opts.projects.find((project) => project.path === projectPath)?.name ?? task.projectId;
       for (const candidate of this.opts.allTasks) {
         if (candidate.projectId === projectName && candidate.id !== task.id) {
           parentSel.createEl("option", { value: candidate.content, text: candidate.content });
@@ -2649,14 +2586,12 @@ var TaskEditModal = class extends import_obsidian10.Modal {
     const btns = contentEl.createDiv({ cls: "mq-ad-modal-btns" });
     btns.createEl("button", { cls: "mq-ad-modal-btn", text: UI_TEXT.cancel }).addEventListener("click", () => this.close());
     btns.createEl("button", { cls: "mq-ad-modal-btn mq-ad-modal-btn--primary", text: UI_TEXT.save }).addEventListener("click", () => {
-      var _a3, _b;
       const titleEl = contentEl.querySelector(".mq-ad-edit-title");
       const nodeNoteEl = contentEl.querySelector(".mq-ad-node-note");
-      void this.saveTask(((_a3 = titleEl == null ? void 0 : titleEl.value) == null ? void 0 : _a3.trim()) || task.content, statusSel.value, prioSel.value, startInput.value, endInput.value, notesArea.value, projectSel.value, parentSel.value, typeSel.value, (_b = nodeNoteEl == null ? void 0 : nodeNoteEl.value) != null ? _b : "");
+      void this.saveTask(titleEl?.value?.trim() || task.content, statusSel.value, prioSel.value, startInput.value, endInput.value, notesArea.value, projectSel.value, parentSel.value, typeSel.value, nodeNoteEl?.value ?? "");
     });
   }
   async saveTask(title, status, priority, startDate, endDate, notes, projectPath, parent, type, nodeNote) {
-    var _a2, _b, _c, _d, _e, _f, _g, _h, _i;
     const task = this.opts.task;
     const file = this.app.vault.getAbstractFileByPath(task.sourceFile);
     if (!(file instanceof import_obsidian10.TFile)) return;
@@ -2672,7 +2607,7 @@ var TaskEditModal = class extends import_obsidian10.Modal {
         task.sourceFile = newPath;
       }
     }
-    if (selectedProject && ((_a2 = file.parent) == null ? void 0 : _a2.path) !== selectedProject.path) {
+    if (selectedProject && file.parent?.path !== selectedProject.path) {
       const targetPath = `${selectedProject.path}/${file.name}`;
       if (this.app.vault.getAbstractFileByPath(targetPath)) return;
       await this.app.fileManager.renameFile(file, targetPath);
@@ -2684,11 +2619,8 @@ var TaskEditModal = class extends import_obsidian10.Modal {
       let guard = 0;
       while (cursor) {
         if (cursor === task.content) return;
-        const ancestor = this.opts.allTasks.find((candidate) => {
-          var _a3;
-          return candidate.content === cursor && candidate.projectId === ((_a3 = selectedProject == null ? void 0 : selectedProject.name) != null ? _a3 : task.projectId);
-        });
-        cursor = (_b = ancestor == null ? void 0 : ancestor.parent) != null ? _b : "";
+        const ancestor = this.opts.allTasks.find((candidate) => candidate.content === cursor && candidate.projectId === (selectedProject?.name ?? task.projectId));
+        cursor = ancestor?.parent ?? "";
         if (++guard > 100) return;
       }
     }
@@ -2724,7 +2656,7 @@ var TaskEditModal = class extends import_obsidian10.Modal {
       lines.splice(statusLineIdx + 1, 0, `\u4F18\u5148\u7EA7: ${yamlScalar(priority)}`);
     }
     applyFrontmatterUpdates(lines, {
-      "\u9879\u76EE": (_c = selectedProject == null ? void 0 : selectedProject.name) != null ? _c : task.projectId,
+      "\u9879\u76EE": selectedProject?.name ?? task.projectId,
       "\u7C7B\u578B": type,
       "\u7236\u4EFB\u52A1": parent || null
     });
@@ -2732,12 +2664,12 @@ var TaskEditModal = class extends import_obsidian10.Modal {
     const nodes = { ...task.dailyNodes };
     const noteTrim = nodeNote.trim();
     if (this.activeState || noteTrim) {
-      nodes[today] = { s: (_d = this.activeState) != null ? _d : "todo", n: noteTrim };
+      nodes[today] = { s: this.activeState ?? "todo", n: noteTrim };
     } else {
       delete nodes[today];
     }
     {
-      const ni = lines.findIndex((l) => l == null ? void 0 : l.startsWith("\u6BCF\u65E5\u8282\u70B9:"));
+      const ni = lines.findIndex((l) => l?.startsWith("\u6BCF\u65E5\u8282\u70B9:"));
       if (ni >= 0) lines.splice(ni, 1);
     }
     const wasDone = task.status === "\u5DF2\u5B8C\u6210";
@@ -2761,29 +2693,29 @@ var TaskEditModal = class extends import_obsidian10.Modal {
       }
       if (!found) {
         const si = lines.findIndex((l, idx) => {
-          return (l == null ? void 0 : l.startsWith("\u72B6\u6001:")) && idx <= (statusLineIdx >= 0 ? statusLineIdx + 2 : lines.length);
+          return l?.startsWith("\u72B6\u6001:") && idx <= (statusLineIdx >= 0 ? statusLineIdx + 2 : lines.length);
         });
         if (si >= 0) lines.splice(si + 1, 0, `\u5B8C\u6210\u65F6\u95F4: ${nowFmt()}`);
       }
     } else if (!willDone && wasDone) {
-      const ci = lines.findIndex((l) => l == null ? void 0 : l.startsWith("\u5B8C\u6210\u65F6\u95F4:"));
+      const ci = lines.findIndex((l) => l?.startsWith("\u5B8C\u6210\u65F6\u95F4:"));
       if (ci >= 0) lines.splice(ci, 1);
     }
     {
       let fmEnd = 0;
-      if (((_e = lines[0]) == null ? void 0 : _e.trim()) === "---") {
+      if (lines[0]?.trim() === "---") {
         for (let i = 1; i < lines.length; i++) {
-          if (((_f = lines[i]) == null ? void 0 : _f.trim()) === "---") {
+          if (lines[i]?.trim() === "---") {
             fmEnd = i;
             break;
           }
         }
       }
-      const headIdx = lines.findIndex((l, idx) => idx > fmEnd && /^#{1,6}\s+每日节点\s*$/.test(l != null ? l : ""));
+      const headIdx = lines.findIndex((l, idx) => idx > fmEnd && /^#{1,6}\s+每日节点\s*$/.test(l ?? ""));
       if (headIdx >= 0) {
         let end = headIdx + 1;
         for (; end < lines.length; end++) {
-          const l = ((_g = lines[end]) != null ? _g : "").trim();
+          const l = (lines[end] ?? "").trim();
           if (l === "") continue;
           if (/^-\s*\d{4}-\d{2}-\d{2}/.test(l)) continue;
           break;
@@ -2792,7 +2724,7 @@ var TaskEditModal = class extends import_obsidian10.Modal {
       }
       const block = serializeDailyNodesBlock(nodes);
       if (block) {
-        while (lines.length && ((_h = lines[lines.length - 1]) != null ? _h : "").trim() === "") lines.pop();
+        while (lines.length && (lines[lines.length - 1] ?? "").trim() === "") lines.pop();
         lines.push("", block, "");
       }
     }
@@ -2802,7 +2734,7 @@ var TaskEditModal = class extends import_obsidian10.Modal {
     task.startDate = startDate || null;
     task.dueDate = endDate || null;
     task.notes = notes;
-    task.projectId = (_i = selectedProject == null ? void 0 : selectedProject.name) != null ? _i : task.projectId;
+    task.projectId = selectedProject?.name ?? task.projectId;
     task.parent = parent;
     task.type = type === "\u91CD\u590D" ? "\u91CD\u590D" : "\u666E\u901A";
     task.dailyNodes = nodes;
@@ -2815,7 +2747,6 @@ var TaskEditModal = class extends import_obsidian10.Modal {
     this.close();
   }
   renderNodeAxis(parent, task) {
-    var _a2, _b;
     const today = todayStr();
     const due = task.dueDate;
     const isDone = task.status === "\u5DF2\u5B8C\u6210";
@@ -2834,14 +2765,14 @@ var TaskEditModal = class extends import_obsidian10.Modal {
     for (let i = 0; i < firstDow; i++) grid.createSpan({ cls: "mq-ad-node-cell mq-ad-node-cell--empty" });
     for (const date of dates) {
       let node = task.dailyNodes[date];
-      if (isDone && date === completeDate && (node == null ? void 0 : node.s) !== "done") {
-        node = { s: "done", n: (_a2 = node == null ? void 0 : node.n) != null ? _a2 : "" };
+      if (isDone && date === completeDate && node?.s !== "done") {
+        node = { s: "done", n: node?.n ?? "" };
       }
       const isOverdue = date > due;
       const isCompleteDay = isDone && date === completeDate;
       const cell = grid.createSpan({ cls: "mq-ad-node-cell" + this.cellClass(date, today, node, isOverdue, isCompleteDay) });
       cell.setAttribute("data-date", date);
-      const note = (node == null ? void 0 : node.n) ? node.n : "\uFF08\u65E0\u5907\u6CE8\uFF09";
+      const note = node?.n ? node.n : "\uFF08\u65E0\u5907\u6CE8\uFF09";
       const tag = isOverdue ? "\uFF08\u5EF6\u671F\uFF09" : "";
       cell.setAttribute("title", `${date} ${weekdayLabel(date)}${tag}
 ${note}`);
@@ -2852,7 +2783,7 @@ ${note}`);
     right.createEl("label", { cls: "mq-ad-modal-label", text: `\u4ECA\u65E5\u5907\u6CE8\uFF08${fmtMD(today)}\uFF09` });
     const noteArea = right.createEl("textarea", { cls: "mq-ad-modal-input mq-ad-node-note", attr: { rows: "4" } });
     const existing = task.dailyNodes[today];
-    this.activeState = (_b = this.presetTodayNode) != null ? _b : existing ? existing.s : void 0;
+    this.activeState = this.presetTodayNode ?? (existing ? existing.s : void 0);
     if (existing) noteArea.value = existing.n;
     if (this.presetTodayNode) window.setTimeout(() => noteArea.focus(), 50);
     const refresh = () => {
@@ -2878,7 +2809,7 @@ ${noteArea.value ? noteArea.value : "\uFF08\u65E0\u5907\u6CE8\uFF09"}`);
     refresh();
   }
   cellClass(date, today, node, isOverdue, isCompleteDay) {
-    const s = isCompleteDay ? "done" : node == null ? void 0 : node.s;
+    const s = isCompleteDay ? "done" : node?.s;
     let c = "";
     if (s === "done") {
       c = isOverdue ? " is-done-overdue" : " is-done";
@@ -2918,9 +2849,8 @@ function fmtDate(d) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 function fmtMD(s) {
-  var _a2, _b;
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  return m ? `${parseInt((_a2 = m[2]) != null ? _a2 : "0", 10)}/${parseInt((_b = m[3]) != null ? _b : "0", 10)}` : s;
+  return m ? `${parseInt(m[2] ?? "0", 10)}/${parseInt(m[3] ?? "0", 10)}` : s;
 }
 function eachDate(start, end) {
   const out = [];
@@ -2930,9 +2860,8 @@ function eachDate(start, end) {
   return out;
 }
 function weekdayLabel(date) {
-  var _a2;
   const d = (/* @__PURE__ */ new Date(date + "T00:00:00")).getDay();
-  return (_a2 = ["\u65E5", "\u4E00", "\u4E8C", "\u4E09", "\u56DB", "\u4E94", "\u516D"][d]) != null ? _a2 : "\u65E5";
+  return ["\u65E5", "\u4E00", "\u4E8C", "\u4E09", "\u56DB", "\u4E94", "\u516D"][d] ?? "\u65E5";
 }
 
 // src/views/DashboardView.ts
@@ -2948,17 +2877,20 @@ var TaskStore = class {
     this.app = app;
     this.getSettings = getSettings;
     this.onWarn = onWarn;
-    /** 共享扫描缓存：projects 与 tasks 来自同一次遍历（300ms）。
-     *  此前 scanAllTasks 会先跑一遍 scanAllProjects（内部已读取每个任务文件），
-     *  再对每个项目把任务文件重读一遍 —— 每文件 2 次 IO；pulse 与首页卡片
-     *  又是两条路径，容易连续全量重扫。现在全部共享这一次遍历。 */
-    __publicField(this, "scanCache", null);
-    /** 共享正在进行中的扫描，避免多个页面/统计模块同时重复遍历 Vault。 */
-    __publicField(this, "scanInFlight", null);
-    /** 最近一次成功快照，用于判断任务完成日期是否被撤销。 */
-    __publicField(this, "lastTasks", []);
-    __publicField(this, "warnedProjectsFallback", false);
   }
+  app;
+  getSettings;
+  onWarn;
+  /** 共享扫描缓存：projects 与 tasks 来自同一次遍历（300ms）。
+   *  此前 scanAllTasks 会先跑一遍 scanAllProjects（内部已读取每个任务文件），
+   *  再对每个项目把任务文件重读一遍 —— 每文件 2 次 IO；pulse 与首页卡片
+   *  又是两条路径，容易连续全量重扫。现在全部共享这一次遍历。 */
+  scanCache = null;
+  /** 共享正在进行中的扫描，避免多个页面/统计模块同时重复遍历 Vault。 */
+  scanInFlight = null;
+  /** 最近一次成功快照，用于判断任务完成日期是否被撤销。 */
+  lastTasks = [];
+  warnedProjectsFallback = false;
   /** Clear the scan cache on relevant vault events, so a burst of
    *  back-to-back edits is never served stale data. */
   invalidate() {
@@ -3008,7 +2940,6 @@ var TaskStore = class {
     return run;
   }
   async scanAllWithTasksUncached(now) {
-    var _a2;
     clearParseIssues();
     const rootPath = this.getSettings().projectsFolder;
     const projects = [];
@@ -3020,7 +2951,7 @@ var TaskStore = class {
     } else {
       if (!this.warnedProjectsFallback) {
         this.warnedProjectsFallback = true;
-        (_a2 = this.onWarn) == null ? void 0 : _a2.call(this, "\u672A\u627E\u5230\u9879\u76EE\u6587\u4EF6\u5939\u300C" + rootPath + "\u300D\uFF0C\u8BF7\u5728\u8BBE\u7F6E\u4E2D\u914D\u7F6E\u4EE5\u7F29\u5C0F\u626B\u63CF\u8303\u56F4");
+        this.onWarn?.("\u672A\u627E\u5230\u9879\u76EE\u6587\u4EF6\u5939\u300C" + rootPath + "\u300D\uFF0C\u8BF7\u5728\u8BBE\u7F6E\u4E2D\u914D\u7F6E\u4EE5\u7F29\u5C0F\u626B\u63CF\u8303\u56F4");
         console.warn('[Dashboard] projectsFolder "' + rootPath + '" not found; fell back to scanning the whole vault root.');
       }
       root = this.app.vault.getRoot();
@@ -3033,7 +2964,6 @@ var TaskStore = class {
   /** Scan a folder and its children for project-{name}.md;
    *  each project's tasks are also appended into acc (single traversal). */
   async scanProjectsInFolder(folder, projects, acc) {
-    var _a2, _b;
     for (const child of folder.children) {
       if (child instanceof import_obsidian11.TFolder) {
         const projectFilePath = `${child.path}/project-${child.name}.md`;
@@ -3050,7 +2980,7 @@ var TaskStore = class {
           const taskFiles = await this.scanTasksInFolder(child, meta.name || child.name, projColor);
           acc.push(...taskFiles);
           const activeCount = taskFiles.filter((t2) => t2.status !== "\u5DF2\u5B8C\u6210" && t2.status !== "\u5DF2\u53D6\u6D88").length;
-          const projStage = (_a2 = meta.stage) != null ? _a2 : 0;
+          const projStage = meta.stage ?? 0;
           const stages = isLongTermProject(meta.type) ? LONG_TERM_STAGES : this.getSettings().npdpStages;
           projects.push({
             name: meta.name || child.name,
@@ -3064,7 +2994,7 @@ var TaskStore = class {
             path: child.path,
             stage: Math.min(projStage, stages.length - 1),
             stages,
-            type: (_b = meta.type) != null ? _b : "stage"
+            type: meta.type ?? "stage"
           });
         }
         await this.scanProjectsInFolder(child, projects, acc);
@@ -3101,13 +3031,13 @@ var TaskStore = class {
 
 // src/data/dashboardStore.ts
 var DashboardStore = class {
+  listeners = /* @__PURE__ */ new Set();
+  refreshTimer = null;
+  tasks = null;
+  taskSource;
+  schedule;
+  cancel;
   constructor(taskSource, schedule = (fn, ms) => window.setTimeout(fn, ms), cancel = (id) => window.clearTimeout(id)) {
-    __publicField(this, "listeners", /* @__PURE__ */ new Set());
-    __publicField(this, "refreshTimer", null);
-    __publicField(this, "tasks", null);
-    __publicField(this, "taskSource");
-    __publicField(this, "schedule");
-    __publicField(this, "cancel");
     this.taskSource = taskSource;
     this.schedule = schedule;
     this.cancel = cancel;
@@ -3140,7 +3070,7 @@ var DashboardStore = class {
     this.taskSource.invalidate();
     try {
       this.tasks = await this.taskSource.scanAllTasks();
-    } catch (e) {
+    } catch {
       this.tasks = null;
     }
     this.notify();
@@ -3169,9 +3099,8 @@ function sanitizeWikiName(name) {
   return name.replace(/[\[\]#^|/]/g, " ").replace(/\s+/g, " ").trim();
 }
 function extractWikiName(link) {
-  var _a2, _b;
   const cleaned = link.replace(/^\[\[/, "").replace(/\]\]$/, "").trim();
-  const name = (_b = ((_a2 = cleaned.split("|")[0]) != null ? _a2 : "").split("#")[0]) != null ? _b : "";
+  const name = (cleaned.split("|")[0] ?? "").split("#")[0] ?? "";
   return name.trim();
 }
 var FileSuggest = class extends import_obsidian12.AbstractInputSuggest {
@@ -3191,16 +3120,162 @@ var FileSuggest = class extends import_obsidian12.AbstractInputSuggest {
     this.close();
   }
 };
+var TagPicker = class {
+  root;
+  input;
+  menu;
+  knownTags;
+  selected;
+  onDocumentPointerDown = (event) => {
+    if (!this.root.contains(event.target)) this.hideMenu();
+  };
+  constructor(parent, initial, available) {
+    this.root = parent.createDiv({ cls: "mq-ad-tag-picker" });
+    this.input = this.root.createEl("input", {
+      cls: "mq-ad-tag-picker__input",
+      attr: { type: "text", placeholder: "\u8F93\u5165\u6807\u7B7E\uFF0C\u6A21\u7CCA\u641C\u7D22\u6216\u56DE\u8F66\u521B\u5EFA" }
+    });
+    this.menu = this.root.createDiv({ cls: "mq-ad-tag-picker__menu" });
+    this.menu.addClass("is-hidden");
+    this.selected = this.unique(initial);
+    this.knownTags = this.unique([...available, ...initial]);
+    this.input.addEventListener("focus", () => this.showMenu());
+    this.input.addEventListener("blur", () => this.hideMenu());
+    document.addEventListener("pointerdown", this.onDocumentPointerDown);
+    this.input.addEventListener("input", () => {
+      this.commitDelimitedInput();
+      this.renderMenu();
+    });
+    this.input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        this.commitInput();
+      } else if (event.key === "Escape") {
+        this.hideMenu();
+      } else if (event.key === "Backspace" && !this.input.value && this.selected.length) {
+        this.remove(this.selected[this.selected.length - 1]);
+      }
+    });
+    this.renderChips();
+  }
+  getTags() {
+    this.commitInput();
+    return [...this.selected];
+  }
+  dispose() {
+    document.removeEventListener("pointerdown", this.onDocumentPointerDown);
+  }
+  unique(values) {
+    const seen = /* @__PURE__ */ new Set();
+    return values.map((value) => value.trim()).filter((value) => {
+      if (!value) return false;
+      const key = value.toLocaleLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+  findSelected(value) {
+    const key = value.toLocaleLowerCase();
+    return this.selected.findIndex((tag) => tag.toLocaleLowerCase() === key);
+  }
+  add(value) {
+    const tag = value.trim();
+    if (!tag || this.findSelected(tag) >= 0) return;
+    this.selected.push(tag);
+    if (!this.knownTags.some((candidate) => candidate.toLocaleLowerCase() === tag.toLocaleLowerCase())) {
+      this.knownTags.push(tag);
+    }
+    this.renderChips();
+  }
+  remove(value) {
+    const index = this.findSelected(value);
+    if (index < 0) return;
+    this.selected.splice(index, 1);
+    this.renderChips();
+    this.renderMenu();
+  }
+  commitDelimitedInput() {
+    const parts = this.input.value.split(/[，,、]/);
+    if (parts.length < 2) return;
+    for (const part of parts.slice(0, -1)) this.add(part);
+    this.input.value = parts[parts.length - 1] ?? "";
+  }
+  commitInput() {
+    const query = this.input.value.trim();
+    if (!query) return;
+    const exact = this.knownTags.find((tag) => tag.toLocaleLowerCase() === query.toLocaleLowerCase());
+    this.add(exact ?? query);
+    this.input.value = "";
+    this.renderMenu();
+  }
+  showMenu() {
+    this.menu.removeClass("is-hidden");
+    this.renderMenu();
+  }
+  hideMenu() {
+    this.menu.addClass("is-hidden");
+  }
+  renderChips() {
+    this.root.querySelectorAll(".mq-ad-tag-picker__chip").forEach((el) => el.remove());
+    for (const tag of this.selected) {
+      const chip = this.root.createDiv({ cls: "mq-ad-tag-picker__chip" });
+      chip.createSpan({ text: tag });
+      const remove = chip.createEl("button", {
+        cls: "mq-ad-tag-picker__remove",
+        attr: { type: "button", "aria-label": `\u5220\u9664\u6807\u7B7E ${tag}` }
+      });
+      (0, import_obsidian12.setIcon)(remove, "x");
+      remove.addEventListener("click", () => this.remove(tag));
+    }
+    this.root.appendChild(this.input);
+  }
+  renderMenu() {
+    this.menu.empty();
+    const query = this.input.value.trim().toLocaleLowerCase();
+    const matches = this.knownTags.filter((tag) => !query || tag.toLocaleLowerCase().includes(query)).slice(0, 30);
+    for (const tag of matches) {
+      const row = this.menu.createEl("button", {
+        cls: "mq-ad-tag-picker__option" + (this.findSelected(tag) >= 0 ? " is-selected" : ""),
+        attr: { type: "button" }
+      });
+      const mark = row.createSpan({ cls: "mq-ad-tag-picker__mark" });
+      if (this.findSelected(tag) >= 0) (0, import_obsidian12.setIcon)(mark, "check");
+      row.createSpan({ text: tag });
+      row.addEventListener("mousedown", (event) => event.preventDefault());
+      row.addEventListener("click", () => {
+        if (this.findSelected(tag) >= 0) this.remove(tag);
+        else this.add(tag);
+        this.input.value = "";
+        this.input.focus();
+        this.renderMenu();
+      });
+    }
+    if (query && this.knownTags.findIndex((tag) => tag.toLocaleLowerCase() === query) < 0) {
+      const create = this.menu.createEl("button", {
+        cls: "mq-ad-tag-picker__create",
+        attr: { type: "button" },
+        text: `\u56DE\u8F66\u521B\u5EFA\u201C${this.input.value.trim()}\u201D`
+      });
+      create.addEventListener("mousedown", (event) => event.preventDefault());
+      create.addEventListener("click", () => this.commitInput());
+    }
+    if (!matches.length && !query) {
+      this.menu.createDiv({ cls: "mq-ad-tag-picker__empty", text: "\u6682\u65E0\u5386\u53F2\u6807\u7B7E" });
+    }
+    this.menu.toggleClass("is-hidden", document.activeElement !== this.input);
+  }
+};
 var OpportunityModal = class extends import_obsidian12.Modal {
+  opts;
+  isEdit;
+  selectedStatus = "";
+  starred = false;
+  stageNotes = {};
+  linkSuggest = null;
+  tagPicker = null;
   constructor(opts) {
-    var _a2, _b;
     super(opts.app);
-    __publicField(this, "opts");
-    __publicField(this, "isEdit");
-    __publicField(this, "selectedStatus", "");
-    __publicField(this, "starred", false);
-    __publicField(this, "stageNotes", {});
-    __publicField(this, "linkSuggest", null);
     this.opts = opts;
     this.isEdit = !!opts.editData;
     if (opts.editData) {
@@ -3208,10 +3283,9 @@ var OpportunityModal = class extends import_obsidian12.Modal {
       this.starred = opts.editData.starred;
       this.stageNotes = { ...opts.editData.stageNotes || {} };
     }
-    if (!this.selectedStatus && opts.stages.length) this.selectedStatus = (_b = (_a2 = opts.stages[0]) == null ? void 0 : _a2.label) != null ? _b : "";
+    if (!this.selectedStatus && opts.stages.length) this.selectedStatus = opts.stages[0]?.label ?? "";
   }
   onOpen() {
-    var _a2, _b;
     const { contentEl } = this;
     const ed = this.opts.editData;
     const title = this.opts.title;
@@ -3223,7 +3297,7 @@ var OpportunityModal = class extends import_obsidian12.Modal {
       attr: { type: "text", placeholder: "\u8F93\u5165" + title + "\u540D\u79F0" }
     });
     if (ed) nameInput.value = ed.title;
-    (_a2 = nameInput.focus) == null ? void 0 : _a2.call(nameInput);
+    nameInput.focus?.();
     contentEl.createEl("label", { cls: "mq-ad-modal-label", text: "\u72B6\u6001" });
     const statusSelect = contentEl.createEl("select", { cls: "mq-ad-modal-input" });
     for (const s of this.opts.stages) statusSelect.createEl("option", { value: s.label, text: s.label });
@@ -3231,12 +3305,8 @@ var OpportunityModal = class extends import_obsidian12.Modal {
     statusSelect.addEventListener("change", () => {
       this.selectedStatus = statusSelect.value;
     });
-    contentEl.createEl("label", { cls: "mq-ad-modal-label", text: "\u6807\u7B7E\uFF08\u9017\u53F7\u5206\u9694\uFF09" });
-    const tagInput = contentEl.createEl("input", {
-      cls: "mq-ad-modal-input",
-      attr: { type: "text", placeholder: "\u5982\uFF1A\u589E\u957F, \u6E20\u9053" }
-    });
-    if (ed) tagInput.value = (ed.tags || []).join(", ");
+    contentEl.createEl("label", { cls: "mq-ad-modal-label", text: "\u6807\u7B7E" });
+    this.tagPicker = new TagPicker(contentEl, ed?.tags || [], this.opts.availableTags || []);
     contentEl.createEl("label", { cls: "mq-ad-modal-label", text: "\u80CC\u666F / \u5907\u6CE8" });
     const notesArea = contentEl.createEl("textarea", {
       cls: "mq-ad-modal-input",
@@ -3260,7 +3330,7 @@ var OpportunityModal = class extends import_obsidian12.Modal {
       attr: { type: "text", placeholder: "[[xxx-\u8BE6\u60C5]] \u6216\u7559\u7A7A\uFF08\u8F93\u5165 [ \u81EA\u52A8\u641C\u7D22\u7B14\u8BB0\uFF09" }
     });
     if (ed) linkInput.value = ed.link;
-    (_b = this.linkSuggest) == null ? void 0 : _b.close();
+    this.linkSuggest?.close();
     this.linkSuggest = new FileSuggest(this.app, linkInput);
     const linkBtn = contentEl.createEl("button", {
       cls: "mq-ad-modal-btn mq-ad-modal-btn--ghost",
@@ -3268,13 +3338,12 @@ var OpportunityModal = class extends import_obsidian12.Modal {
     });
     linkBtn.addEventListener("click", () => {
       void (async () => {
-        var _a3;
         const t2 = String(nameInput.value || "").trim();
         if (!t2) {
           nameInput.focus();
           return;
         }
-        const rawLink = ((_a3 = linkInput.value) != null ? _a3 : "").toString().trim();
+        const rawLink = (linkInput.value ?? "").toString().trim();
         const finalLink = rawLink.length ? rawLink : `[[${sanitizeWikiName(t2)}-\u8BE6\u60C5]]`;
         linkInput.value = finalLink;
         await this.ensureAndOpenNote(extractWikiName(finalLink));
@@ -3290,9 +3359,8 @@ var OpportunityModal = class extends import_obsidian12.Modal {
     const btns = contentEl.createDiv({ cls: "mq-ad-modal-btns" });
     if (ed && this.opts.onConvertToTask) {
       btns.createEl("button", { cls: "mq-ad-modal-btn mq-ad-modal-btn--ghost mq-op-modal__convert", text: "\u8F6C\u4E3A\u4EFB\u52A1" }).addEventListener("click", () => {
-        var _a3, _b2;
         this.close();
-        (_b2 = (_a3 = this.opts).onConvertToTask) == null ? void 0 : _b2.call(_a3);
+        this.opts.onConvertToTask?.();
       });
     }
     btns.createEl("button", { cls: "mq-ad-modal-btn", text: UI_TEXT.cancel }).addEventListener("click", () => this.close());
@@ -3302,7 +3370,7 @@ var OpportunityModal = class extends import_obsidian12.Modal {
         nameInput.focus();
         return;
       }
-      const tags = String(tagInput.value || "").split(",").map((s) => s.trim()).filter(Boolean);
+      const tags = this.tagPicker?.getTags() || [];
       const visibleLabels = new Set(this.opts.stages.filter((s) => s.hasInput).map((s) => s.label));
       const sn = {};
       for (const [k, v] of Object.entries(this.stageNotes)) {
@@ -3345,9 +3413,10 @@ ${backlink}
     }
   }
   onClose() {
-    var _a2;
-    (_a2 = this.linkSuggest) == null ? void 0 : _a2.close();
+    this.linkSuggest?.close();
     this.linkSuggest = null;
+    this.tagPicker?.dispose();
+    this.tagPicker = null;
     this.contentEl.empty();
   }
 };
@@ -3366,19 +3435,17 @@ var STATUS_REMAP = {
   "\u5DF2\u5426\u51B3": "\u5DF2\u653E\u5F03"
 };
 function migrateStatus(old) {
-  var _a2;
-  return (_a2 = STATUS_REMAP[old]) != null ? _a2 : old;
+  return STATUS_REMAP[old] ?? old;
 }
 var TABLE_START = "<!-- OPPORTUNITIES_TABLE_START -->";
 var TABLE_END = "<!-- OPPORTUNITIES_TABLE_END -->";
 function sortBoardItems(items, stageLabels) {
   const known = new Set(stageLabels);
   return [...items].sort((a, b) => {
-    var _a2, _b;
     const wa = known.has(a.status) ? stageLabels.indexOf(a.status) : stageLabels.length;
     const wb = known.has(b.status) ? stageLabels.indexOf(b.status) : stageLabels.length;
     if (wa !== wb) return wa - wb;
-    const ow = ((_a2 = a.order) != null ? _a2 : 0) - ((_b = b.order) != null ? _b : 0);
+    const ow = (a.order ?? 0) - (b.order ?? 0);
     if (ow) return ow;
     return (b.createDate || "").localeCompare(a.createDate || "");
   });
@@ -3450,12 +3517,11 @@ function fromFmObject(raw, fallbackId) {
   };
 }
 function stripFrontmatter(content) {
-  var _a2, _b;
   const lines = content.split(/\r?\n/);
-  if (((_a2 = lines[0]) == null ? void 0 : _a2.trim()) !== "---") return content;
+  if (lines[0]?.trim() !== "---") return content;
   let i = 1;
   for (; i < lines.length; i++) {
-    if (((_b = lines[i]) == null ? void 0 : _b.trim()) === "---") {
+    if (lines[i]?.trim() === "---") {
       i++;
       break;
     }
@@ -3475,11 +3541,10 @@ function buildDetails(items, title) {
   if (!items.length) return `_\u6682\u65E0\u6761\u76EE\uFF0C\u70B9\u51FB\u63D2\u4EF6\u300C\u25C8 ${title} \u2192 + \u65B0\u5EFA\u300D\u5F00\u59CB\u8BB0\u5F55\u3002_`;
   const lines = ["## \u660E\u7EC6"];
   items.forEach((it, i) => {
-    var _a2;
     lines.push(`### ${i + 1}. ${it.title}`);
     lines.push(`- **\u72B6\u6001**\uFF1A${it.status} **\u661F\u6807**\uFF1A${it.starred ? "\u2605" : "-"}`);
     lines.push(`- **\u6807\u7B7E**\uFF1A${it.tags && it.tags.length ? it.tags.join("\u3001") : "-"}`);
-    lines.push(`- **\u4EFB\u52A1\u8F6C\u5316**\uFF1A${((_a2 = it.taskIds) == null ? void 0 : _a2.length) || 0}`);
+    lines.push(`- **\u4EFB\u52A1\u8F6C\u5316**\uFF1A${it.taskIds?.length || 0}`);
     lines.push(`- **\u80CC\u666F / \u5907\u6CE8**\uFF1A${it.notes || "-"}`);
     const sn = it.stageNotes || {};
     for (const [k, v] of Object.entries(sn)) {
@@ -3611,25 +3676,25 @@ async function deleteOpportunity(app, path, id, title) {
 // src/views/OpportunityBoard.ts
 init_constants();
 var OpportunityBoard = class {
+  host;
+  // Board state
+  currentItems = [];
+  selectedStatus = "all";
+  showStarredOnly = false;
+  selectedDetailId = null;
+  draggedId = null;
+  mainEl = null;
+  sortCol = "";
+  sortDir = "asc";
+  refreshTimer = null;
+  cache = null;
+  currentTasks = [];
   constructor(host) {
-    __publicField(this, "host");
-    // Board state
-    __publicField(this, "currentItems", []);
-    __publicField(this, "selectedStatus", "all");
-    __publicField(this, "showStarredOnly", false);
-    __publicField(this, "selectedDetailId", null);
-    __publicField(this, "draggedId", null);
-    __publicField(this, "mainEl", null);
-    __publicField(this, "sortCol", "");
-    __publicField(this, "sortDir", "asc");
-    __publicField(this, "refreshTimer", null);
-    __publicField(this, "cache", null);
-    __publicField(this, "currentTasks", []);
     this.host = host;
   }
   /** 供顶部导航直接打开灵感新建弹窗。 */
   openCreateModal() {
-    this.openModal();
+    void this.openModal();
   }
   /** Debounced refresh of the board (250ms) to coalesce rapid vault events. */
   scheduleRefresh() {
@@ -3829,7 +3894,6 @@ var OpportunityBoard = class {
     return text.length > 6 ? text.slice(0, 6) + "\u2026" : text;
   }
   renderKanban(panel, items) {
-    var _a2, _b;
     const singleMode = this.selectedStatus !== "all" && !this.showStarredOnly;
     const stages = singleMode ? this.activeStages().filter((s) => s.label === this.selectedStatus) : this.activeStages();
     const board = panel.createDiv({ cls: "mq-po-kanban mq-op-kanban" + (singleMode ? " mq-op-kanban--single" : "") });
@@ -3837,7 +3901,7 @@ var OpportunityBoard = class {
     if (singleMode) {
       const ordered = sortBoardItems(items, this.stageLabels());
       if (!this.selectedDetailId || !items.some((i) => i.id === this.selectedDetailId)) {
-        this.selectedDetailId = ordered.length ? (_b = (_a2 = ordered[0]) == null ? void 0 : _a2.id) != null ? _b : null : null;
+        this.selectedDetailId = ordered.length ? ordered[0]?.id ?? null : null;
       }
     }
     for (const st of stages) {
@@ -3846,10 +3910,7 @@ var OpportunityBoard = class {
       this.setupOpportunityKanbanResize(board, colEl.createDiv({ cls: "mq-op-kanban__resize", attr: { "aria-label": "\u8C03\u6574\u770B\u677F\u5217\u5BBD\u5EA6" } }));
       const hd = colEl.createDiv({ cls: "mq-po-kanban__hd" });
       hd.createSpan({ text: st.label });
-      const ct = items.filter((i) => i.status === st.label).sort((a, b) => {
-        var _a3, _b2;
-        return ((_a3 = a.order) != null ? _a3 : 0) - ((_b2 = b.order) != null ? _b2 : 0);
-      });
+      const ct = items.filter((i) => i.status === st.label).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
       hd.createSpan({ cls: "mq-po-kanban__count", text: String(ct.length) });
       if (ct.length === 0) colEl.createDiv({ cls: "mq-op-empty-col" });
       ct.forEach((it) => {
@@ -3901,9 +3962,8 @@ var OpportunityBoard = class {
           menu.showAtMouseEvent(e);
         });
         card.addEventListener("dragstart", (e) => {
-          var _a3;
           this.draggedId = it.id;
-          (_a3 = e.dataTransfer) == null ? void 0 : _a3.setData("text/opp-id", it.id);
+          e.dataTransfer?.setData("text/opp-id", it.id);
           if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
           card.addClass("mq-po-kanban__card--dragging");
         });
@@ -3918,11 +3978,10 @@ var OpportunityBoard = class {
         });
         card.addEventListener("dragleave", () => card.removeClass("mq-op-card--drag-over"));
         card.addEventListener("drop", (e) => {
-          var _a3, _b2;
           e.preventDefault();
           e.stopPropagation();
           card.removeClass("mq-op-card--drag-over");
-          const id = (_b2 = this.draggedId) != null ? _b2 : (_a3 = e.dataTransfer) == null ? void 0 : _a3.getData("text/opp-id");
+          const id = this.draggedId ?? e.dataTransfer?.getData("text/opp-id");
           this.draggedId = null;
           if (!id) return;
           void this.reorder(id, st.label, it.id);
@@ -3934,10 +3993,9 @@ var OpportunityBoard = class {
       });
       colEl.addEventListener("dragleave", () => colEl.removeClass("mq-po-kanban__col--drag-over"));
       colEl.addEventListener("drop", (e) => {
-        var _a3, _b2;
         e.preventDefault();
         colEl.removeClass("mq-po-kanban__col--drag-over");
-        const id = (_b2 = this.draggedId) != null ? _b2 : (_a3 = e.dataTransfer) == null ? void 0 : _a3.getData("text/opp-id");
+        const id = this.draggedId ?? e.dataTransfer?.getData("text/opp-id");
         this.draggedId = null;
         if (!id) return;
         void this.reorder(id, st.label);
@@ -3956,10 +4014,7 @@ var OpportunityBoard = class {
     const items = this.currentItems;
     const dragged = items.find((i) => i.id === draggedId);
     if (!dragged) return;
-    const colItems = items.filter((i) => i.status === targetStatus && i.id !== draggedId).sort((a, b) => {
-      var _a2, _b;
-      return ((_a2 = a.order) != null ? _a2 : 0) - ((_b = b.order) != null ? _b : 0);
-    });
+    const colItems = items.filter((i) => i.status === targetStatus && i.id !== draggedId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     let insertIdx = colItems.length;
     if (beforeId) {
       const bi = colItems.findIndex((i) => i.id === beforeId);
@@ -3978,10 +4033,7 @@ var OpportunityBoard = class {
       }
     }
     const map = new Map(reordered.map((i) => [i.id, i]));
-    const next = items.map((i) => {
-      var _a2;
-      return (_a2 = map.get(i.id)) != null ? _a2 : i;
-    });
+    const next = items.map((i) => map.get(i.id) ?? i);
     this.currentItems = sortBoardItems(next, this.stageLabels());
     await this.saveItems(this.currentItems);
     void this.refreshBoard();
@@ -4140,8 +4192,7 @@ var OpportunityBoard = class {
     }
   }
   listColumnWidth(key) {
-    var _a2, _b;
-    const configured = (_a2 = this.host.plugin.settings.oppListColumnWidths) == null ? void 0 : _a2[key];
+    const configured = this.host.plugin.settings.oppListColumnWidths?.[key];
     if (typeof configured === "number") return Math.max(70, Math.min(480, configured));
     const defaults = {
       title: 240,
@@ -4152,7 +4203,7 @@ var OpportunityBoard = class {
       conversion: 94,
       actions: 96
     };
-    return (_b = defaults[key]) != null ? _b : 120;
+    return defaults[key] ?? 120;
   }
   setupListColumnResize(table, key, handle) {
     handle.addEventListener("mousedown", (e) => {
@@ -4178,19 +4229,17 @@ var OpportunityBoard = class {
     });
   }
   rerenderSidebarAndPanels() {
-    var _a2;
-    const sidebar = (_a2 = this.host.boardEl) == null ? void 0 : _a2.querySelector(".mq-op-sidebar");
+    const sidebar = this.host.boardEl?.querySelector(".mq-op-sidebar");
     if (sidebar) this.renderSidebar(sidebar);
     this.renderPanels();
   }
   sortList(key) {
-    var _a2;
     if (this.sortCol === key) this.sortDir = this.sortDir === "asc" ? "desc" : "asc";
     else {
       this.sortCol = key;
       this.sortDir = "asc";
     }
-    const panel = (_a2 = this.mainEl) == null ? void 0 : _a2.querySelector('.mq-po-panel[data-view="list"]');
+    const panel = this.mainEl?.querySelector('.mq-po-panel[data-view="list"]');
     if (panel) this.renderPanel("list", panel, this.filteredItems());
   }
   sortedList(items) {
@@ -4202,20 +4251,21 @@ var OpportunityBoard = class {
       return "";
     };
     return [...items].sort((a, b) => {
-      var _a2, _b;
       let av;
       let bv;
       if (col === "starred") {
         av = a.starred ? "1" : "0";
         bv = b.starred ? "1" : "0";
       } else {
-        av = cellStr((_a2 = a[col]) != null ? _a2 : "");
-        bv = cellStr((_b = b[col]) != null ? _b : "");
+        av = cellStr(a[col] ?? "");
+        bv = cellStr(b[col] ?? "");
       }
       return av.localeCompare(bv, "zh-CN") * dir;
     });
   }
-  openModal(item) {
+  async openModal(item) {
+    const items = this.currentItems.length ? this.currentItems : await this.loadItems();
+    const availableTags = [...new Set(items.flatMap((candidate) => candidate.tags || []))];
     const modal = new OpportunityModal({
       app: this.host.app,
       stages: this.host.plugin.settings.boardStages,
@@ -4225,7 +4275,8 @@ var OpportunityBoard = class {
       onSave: (data) => {
         void this.onSave(data, item);
       },
-      onConvertToTask: item ? () => void this.convertToTask(item) : void 0
+      onConvertToTask: item ? () => void this.convertToTask(item) : void 0,
+      availableTags
     });
     modal.open();
   }
@@ -4355,13 +4406,12 @@ var OpportunityBoard = class {
     void this.refreshBoard();
   }
   async refreshBoard() {
-    var _a2;
     if (this.host.currentPage !== "opportunity") return;
     const [items, tasks] = await Promise.all([this.loadItems(), this.host.taskStore.scanAllTasks()]);
     if (this.host.currentPage !== "opportunity" || !this.host.boardEl) return;
     this.currentItems = items;
     this.currentTasks = tasks;
-    const sidebar = (_a2 = this.host.boardEl) == null ? void 0 : _a2.querySelector(".mq-op-sidebar");
+    const sidebar = this.host.boardEl?.querySelector(".mq-op-sidebar");
     if (sidebar) this.renderSidebar(sidebar);
     this.renderPanels();
   }
@@ -4383,7 +4433,6 @@ function nowFmt2(today = /* @__PURE__ */ new Date()) {
   return `${today.getFullYear()}-${p(today.getMonth() + 1)}-${p(today.getDate())} ${p(today.getHours())}:${p(today.getMinutes())}`;
 }
 function calcNextRemindDate(task, today = /* @__PURE__ */ new Date()) {
-  var _a2;
   const rule = task.repeatRule;
   if (!rule) return null;
   const freq = rule["\u9891\u7387"] || "";
@@ -4404,7 +4453,7 @@ function calcNextRemindDate(task, today = /* @__PURE__ */ new Date()) {
       if (nextDay) {
         next.setDate(next.getDate() + (nextDay - todayDow));
       } else {
-        next.setDate(next.getDate() + (7 - todayDow + ((_a2 = sorted[0]) != null ? _a2 : 1)));
+        next.setDate(next.getDate() + (7 - todayDow + (sorted[0] ?? 1)));
       }
     } else {
       next.setDate(next.getDate() + 7);
@@ -4447,16 +4496,15 @@ function getTodayUniverse(tasks, today = todayStr3()) {
 }
 function getTodayTasks(tasks, today = todayStr3(), keepDone = false) {
   return getTodayUniverse(tasks, today).filter((t2) => {
-    var _a2, _b, _c, _d;
-    const node = (_a2 = t2.dailyNodes) == null ? void 0 : _a2[today];
-    if ((node == null ? void 0 : node.s) === "skip") return false;
+    const node = t2.dailyNodes?.[today];
+    if (node?.s === "skip") return false;
     if (keepDone) {
-      if (t2.status === "\u5DF2\u5B8C\u6210") return !!((_b = t2.completeTime) == null ? void 0 : _b.startsWith(today));
-      if (((_c = t2.completeTime) == null ? void 0 : _c.startsWith(today)) || (node == null ? void 0 : node.s) === "done") return true;
+      if (t2.status === "\u5DF2\u5B8C\u6210") return !!t2.completeTime?.startsWith(today);
+      if (t2.completeTime?.startsWith(today) || node?.s === "done") return true;
     }
     if (t2.status === "\u5DF2\u5B8C\u6210") return false;
-    if ((_d = t2.completeTime) == null ? void 0 : _d.startsWith(today)) return false;
-    if ((node == null ? void 0 : node.s) === "done") return false;
+    if (t2.completeTime?.startsWith(today)) return false;
+    if (node?.s === "done") return false;
     return true;
   });
 }
@@ -4494,11 +4542,10 @@ function urgencyMeta(priority) {
 
 // src/data/virtualList.ts
 function computeWindow(opts) {
-  var _a2;
   const total = Math.max(0, Math.floor(opts.total));
   if (total === 0) return { start: 0, end: 0 };
   const rowHeight = opts.rowHeight > 0 ? opts.rowHeight : 1;
-  const overscan = Math.max(0, (_a2 = opts.overscan) != null ? _a2 : 10);
+  const overscan = Math.max(0, opts.overscan ?? 10);
   const viewportHeight = Math.max(0, opts.viewportHeight);
   const visible = Math.max(1, Math.ceil(viewportHeight / rowHeight));
   const first = Math.max(0, Math.floor(opts.scrollTop / rowHeight) - overscan);
@@ -4547,16 +4594,14 @@ var ARRAYS = {
   "status.months": ["1\u6708", "2\u6708", "3\u6708", "4\u6708", "5\u6708", "6\u6708", "7\u6708", "8\u6708", "9\u6708", "10\u6708", "11\u6708", "12\u6708"]
 };
 function t(path, params) {
-  var _a2;
-  let value = (_a2 = STRINGS[path]) != null ? _a2 : path;
-  for (const [key, param] of Object.entries(params != null ? params : {})) {
+  let value = STRINGS[path] ?? path;
+  for (const [key, param] of Object.entries(params ?? {})) {
     value = value.replace(new RegExp("\\{" + key + "\\}", "g"), String(param));
   }
   return value;
 }
 function tArr(path) {
-  var _a2;
-  return (_a2 = ARRAYS[path]) != null ? _a2 : [];
+  return ARRAYS[path] ?? [];
 }
 
 // src/icons.ts
@@ -4578,27 +4623,24 @@ var ICON_kanban = `<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" x
 
 // src/views/ProjectBoard.ts
 var ProjectBoard = class {
-  constructor(host) {
-    __publicField(this, "host");
-    // Project overview state
-    __publicField(this, "currentProjects", []);
-    __publicField(this, "currentTasks", []);
-    __publicField(this, "currentView", "gantt");
-    __publicField(this, "poMainEl", null);
-    __publicField(this, "calYear", (/* @__PURE__ */ new Date()).getFullYear());
-    __publicField(this, "calMonth", (/* @__PURE__ */ new Date()).getMonth());
-    __publicField(this, "calView", "month");
-    __publicField(this, "calSel", "");
-    __publicField(this, "sortCol", "");
-    __publicField(this, "sortDir", "asc");
-    __publicField(this, "taskListFilter", "all");
-    __publicField(this, "collapsedParents", /* @__PURE__ */ new Set());
-    __publicField(this, "highlightedBar", null);
-    __publicField(this, "highlightedRow", null);
-    __publicField(this, "ganttZoom", "week");
-    __publicField(this, "ganttStatusFilter", []);
-    this.host = host;
-  }
+  host;
+  // Project overview state
+  currentProjects = [];
+  currentTasks = [];
+  currentView = "gantt";
+  poMainEl = null;
+  calYear = (/* @__PURE__ */ new Date()).getFullYear();
+  calMonth = (/* @__PURE__ */ new Date()).getMonth();
+  calView = "month";
+  calSel = "";
+  sortCol = "";
+  sortDir = "asc";
+  taskListFilter = "all";
+  collapsedParents = /* @__PURE__ */ new Set();
+  highlightedBar = null;
+  highlightedRow = null;
+  ganttZoom = "week";
+  ganttStatusFilter = [];
   // ---- host 依赖别名（保持搬移方法体原样） ----
   get app() {
     return this.host.app;
@@ -4651,6 +4693,9 @@ var ProjectBoard = class {
   get setDailyNode() {
     return this.host.setDailyNode.bind(this.host);
   }
+  constructor(host) {
+    this.host = host;
+  }
   /** 从首页卡片进入：定位到某项目并切换到甘特视图。 */
   async openProjectGantt(proj) {
     this.host.selectedProject = proj.name;
@@ -4659,26 +4704,26 @@ var ProjectBoard = class {
   }
   /** Open the same project-management calendar in a centered popup. */
   async openCalendarModal() {
-    var _a2;
     const [projects, tasks] = await Promise.all([this.taskStore.scanAllProjects(), this.taskStore.scanAllTasks()]);
     this.currentProjects = projects;
     this.currentTasks = tasks;
-    const configuredTheme = (_a2 = this.plugin.settings.theme) != null ? _a2 : "auto";
+    const configuredTheme = this.plugin.settings.theme ?? "auto";
     const effectiveTheme = configuredTheme === "auto" ? document.body.classList.contains("theme-light") ? "light" : "dark" : configuredTheme;
     const modal = new class extends import_obsidian16.Modal {
       constructor(app, renderer) {
         super(app);
         this.renderer = renderer;
-        __publicField(this, "onOpen", () => {
-          this.contentEl.addClass("mq-ad-project-calendar-modal");
-          this.contentEl.setAttribute("data-theme", effectiveTheme);
-          const panel = this.contentEl.createDiv({ cls: "mq-po-panel is-active" });
-          this.renderer(panel);
-        });
-        __publicField(this, "onClose", () => {
-          this.contentEl.empty();
-        });
       }
+      renderer;
+      onOpen = () => {
+        this.contentEl.addClass("mq-ad-project-calendar-modal");
+        this.contentEl.setAttribute("data-theme", effectiveTheme);
+        const panel = this.contentEl.createDiv({ cls: "mq-po-panel is-active" });
+        this.renderer(panel);
+      };
+      onClose = () => {
+        this.contentEl.empty();
+      };
     }(this.app, (panel) => this.renderCalendarPanel(panel, tasks, projects));
     modal.open();
   }
@@ -4768,11 +4813,10 @@ var ProjectBoard = class {
   }
   /** Render NPDP stage pipeline for selected project — compact card-style dots (like home page project card) */
   renderStagePipeline(container) {
-    var _a2, _b;
     const proj = this.currentProjects.find((p) => p.name === this.selectedProject);
     if (!proj) return;
-    const stages = (_a2 = proj.stages) != null ? _a2 : isLongTermProject(proj.type) ? LONG_TERM_STAGES : this.plugin.settings.npdpStages;
-    const currentStage = (_b = proj.stage) != null ? _b : 0;
+    const stages = proj.stages ?? (isLongTermProject(proj.type) ? LONG_TERM_STAGES : this.plugin.settings.npdpStages);
+    const currentStage = proj.stage ?? 0;
     const bar = container.createDiv({ cls: "mq-ad-proj__stages mq-po-stage-compact" });
     const stageMinW = Math.max(20, Math.min(36, Math.floor(160 / stages.length)));
     bar.style.gap = `${Math.max(1, Math.floor(4 / (stages.length / 4)))}px`;
@@ -4788,7 +4832,6 @@ var ProjectBoard = class {
   }
   /** Set project stage and persist to project-{name}.md frontmatter */
   async setProjectStage(proj, stage) {
-    var _a2, _b, _c;
     proj.stage = stage;
     const folderName = proj.path.split("/").pop() || proj.name;
     const projectFilePath = `${proj.path}/project-${folderName}.md`;
@@ -4797,10 +4840,10 @@ var ProjectBoard = class {
       await this.writeFrontmatter(file, { "\u9636\u6BB5": String(stage) });
     }
     this.renderPanels();
-    const sidebar = (_a2 = this.boardEl) == null ? void 0 : _a2.querySelector(".mq-po-sidebar");
+    const sidebar = this.boardEl?.querySelector(".mq-po-sidebar");
     if (sidebar) this.renderSidebar(sidebar);
-    const stages = (_b = proj.stages) != null ? _b : isLongTermProject(proj.type) ? LONG_TERM_STAGES : this.plugin.settings.npdpStages;
-    this.showToast(`\u2728 ${proj.name} \u9636\u6BB5\u5DF2\u66F4\u65B0\u4E3A "${(_c = stages[stage]) != null ? _c : stages[0]}"`);
+    const stages = proj.stages ?? (isLongTermProject(proj.type) ? LONG_TERM_STAGES : this.plugin.settings.npdpStages);
+    this.showToast(`\u2728 ${proj.name} \u9636\u6BB5\u5DF2\u66F4\u65B0\u4E3A "${stages[stage] ?? stages[0]}"`);
   }
   /** Render the project sidebar with filtering */
   renderSidebar(sidebar) {
@@ -4845,8 +4888,7 @@ var ProjectBoard = class {
       item.draggable = true;
       item.dataset.projIdx = String(this.currentProjects.indexOf(p));
       item.addEventListener("dragstart", (e) => {
-        var _a2;
-        (_a2 = e.dataTransfer) == null ? void 0 : _a2.setData("text/proj-idx", String(this.currentProjects.indexOf(p)));
+        e.dataTransfer?.setData("text/proj-idx", String(this.currentProjects.indexOf(p)));
         item.addClass("mq-po-sidebar__item--dragging");
       });
       item.addEventListener("dragend", () => item.removeClass("mq-po-sidebar__item--dragging"));
@@ -4856,15 +4898,14 @@ var ProjectBoard = class {
       });
       item.addEventListener("dragleave", () => item.removeClass("mq-po-sidebar__item--drag-over"));
       item.addEventListener("drop", (e) => {
-        var _a2, _b;
         e.preventDefault();
         item.removeClass("mq-po-sidebar__item--drag-over");
-        const taskId = (_a2 = e.dataTransfer) == null ? void 0 : _a2.getData("text/task-id");
+        const taskId = e.dataTransfer?.getData("text/task-id");
         if (taskId) {
           void this.moveTaskToProject(taskId, p.name, sidebar);
           return;
         }
-        const fromIdx = parseInt(((_b = e.dataTransfer) == null ? void 0 : _b.getData("text/proj-idx")) || "-1");
+        const fromIdx = parseInt(e.dataTransfer?.getData("text/proj-idx") || "-1");
         const toIdx = this.currentProjects.indexOf(p);
         if (fromIdx < 0 || fromIdx === toIdx) return;
         const moved = this.currentProjects.splice(fromIdx, 1)[0];
@@ -4948,7 +4989,6 @@ var ProjectBoard = class {
   }
   /** Refresh project overview data and re-render */
   async refresh() {
-    var _a2;
     if (this.currentPage !== "project") return;
     const projects = await this.taskStore.scanAllProjects();
     const allTasks = await this.taskStore.scanAllTasks();
@@ -4956,13 +4996,12 @@ var ProjectBoard = class {
     this.currentProjects = projects;
     this.currentTasks = allTasks;
     this.applyProjectOrder();
-    const sidebar = (_a2 = this.boardEl) == null ? void 0 : _a2.querySelector(".mq-po-sidebar");
+    const sidebar = this.boardEl?.querySelector(".mq-po-sidebar");
     if (sidebar) this.renderSidebar(sidebar);
     this.renderPanels();
   }
   /* ---- Gantt Panel (ported architecture: SVG axis + left labels / right scroll) ---- */
   renderGanttPanel(panel, tasks, projects) {
-    var _a2, _b;
     if (this.ganttStatusFilter.length > 0) {
       tasks = tasks.filter((t2) => this.ganttStatusFilter.includes(t2.status));
     }
@@ -5019,9 +5058,8 @@ var ProjectBoard = class {
     const manualIdx = /* @__PURE__ */ new Map();
     manualOrder.forEach((id, i) => manualIdx.set(id, i));
     const groupSort = (a, b) => {
-      var _a3, _b2;
-      const ia = manualIdx.has(a.id) ? (_a3 = manualIdx.get(a.id)) != null ? _a3 : Number.MAX_SAFE_INTEGER : Number.MAX_SAFE_INTEGER;
-      const ib = manualIdx.has(b.id) ? (_b2 = manualIdx.get(b.id)) != null ? _b2 : Number.MAX_SAFE_INTEGER : Number.MAX_SAFE_INTEGER;
+      const ia = manualIdx.has(a.id) ? manualIdx.get(a.id) ?? Number.MAX_SAFE_INTEGER : Number.MAX_SAFE_INTEGER;
+      const ib = manualIdx.has(b.id) ? manualIdx.get(b.id) ?? Number.MAX_SAFE_INTEGER : Number.MAX_SAFE_INTEGER;
       if (ia !== ib) return ia - ib;
       return timeSort(a, b);
     };
@@ -5050,7 +5088,7 @@ var ProjectBoard = class {
     const granularity = this.ganttZoom || "week";
     const DAY_WIDTH = { day: 36, week: 16, month: 7, quarter: 4 };
     const MIN_DAYS = { day: 30, week: 90, month: 365, quarter: 365 };
-    const dayWidth = (_a2 = DAY_WIDTH[granularity]) != null ? _a2 : 16;
+    const dayWidth = DAY_WIDTH[granularity] ?? 16;
     const HEADER_HEIGHT = 56;
     const ROW_HEIGHT = 34;
     const today = /* @__PURE__ */ new Date();
@@ -5071,7 +5109,7 @@ var ProjectBoard = class {
     if (today > maxD) maxD = new Date(today);
     minD.setDate(minD.getDate() - 7);
     maxD.setDate(maxD.getDate() + 14);
-    const minDaysForZoom = (_b = MIN_DAYS[granularity]) != null ? _b : 30;
+    const minDaysForZoom = MIN_DAYS[granularity] ?? 30;
     let spanDays = Math.round((maxD.getTime() - minD.getTime()) / 864e5);
     if (spanDays < minDaysForZoom) {
       const extra = Math.ceil((minDaysForZoom - spanDays) / 2);
@@ -5306,8 +5344,7 @@ var ProjectBoard = class {
     const bars = [];
     const labelRows = [];
     orderedTasks.forEach((t2, idx) => {
-      var _a3;
-      const tree = (_a3 = taskTree.get(t2.id)) != null ? _a3 : { level: 0, ancestorHasNext: [], isLast: true };
+      const tree = taskTree.get(t2.id) ?? { level: 0, ancestorHasNext: [], isLast: true };
       const level = tree.level;
       const isParent = childrenOf.has(t2.content);
       const color = colorMap[t2.projectId] || "#3b82f6";
@@ -5366,8 +5403,7 @@ var ProjectBoard = class {
       });
       lr.draggable = true;
       lr.addEventListener("dragstart", (e) => {
-        var _a4;
-        (_a4 = e.dataTransfer) == null ? void 0 : _a4.setData("text/task-id", t2.id);
+        e.dataTransfer?.setData("text/task-id", t2.id);
         lr.addClass("mq-po-row--dragging");
       });
       lr.addEventListener("dragend", () => lr.removeClass("mq-po-row--dragging"));
@@ -5377,10 +5413,9 @@ var ProjectBoard = class {
       });
       lr.addEventListener("dragleave", () => lr.removeClass("mq-po-row--drag-over"));
       lr.addEventListener("drop", (e) => {
-        var _a4;
         e.preventDefault();
         lr.removeClass("mq-po-row--drag-over");
-        const draggedId = (_a4 = e.dataTransfer) == null ? void 0 : _a4.getData("text/task-id");
+        const draggedId = e.dataTransfer?.getData("text/task-id");
         if (!draggedId || draggedId === t2.id) return;
         const rows = Array.from(leftBody.querySelectorAll(".mq-po-gantt__label-row"));
         const ids = rows.map((r) => r.dataset.taskId).filter((id) => !!id);
@@ -5545,7 +5580,7 @@ var ProjectBoard = class {
     const tableResult = this.renderTaskTable(panel, "mq-po-tb1", tasks, projects);
     tableResult.tbody.addEventListener("click", (e) => {
       const tr = e.target.closest("tr");
-      const idxStr = tr == null ? void 0 : tr.dataset.origIndex;
+      const idxStr = tr?.dataset.origIndex;
       if (idxStr === void 0) return;
       const idx = Number(idxStr);
       this.clearHighlights(bars, tableResult.rows);
@@ -5574,7 +5609,7 @@ var ProjectBoard = class {
       this.highlightedRow = null;
     }
     bars.forEach((b) => b.classList.remove("mq-po-bar--highlight"));
-    rows.forEach((r) => r == null ? void 0 : r.removeClass("mq-po-row--highlight"));
+    rows.forEach((r) => r?.removeClass("mq-po-row--highlight"));
   }
   setupResizeHandle(handle, gantt) {
     let startY = 0;
@@ -5740,10 +5775,7 @@ var ProjectBoard = class {
     const OVERSCAN = 10;
     let rowHeight = ROW_HEIGHT_FALLBACK;
     let rowHeightMeasured = false;
-    let visible = filterWithOrig(sortedTasks, (t2) => {
-      var _a2, _b;
-      return (_b = (_a2 = FILTER_KEYS[this.taskListFilter]) == null ? void 0 : _a2.call(FILTER_KEYS, t2.status)) != null ? _b : true;
-    });
+    let visible = filterWithOrig(sortedTasks, (t2) => FILTER_KEYS[this.taskListFilter]?.(t2.status) ?? true);
     const rows = new Array(sortedTasks.length).fill(null);
     let lastRendered = [];
     const renderWindow = () => {
@@ -5801,7 +5833,7 @@ var ProjectBoard = class {
     });
     thead.addEventListener("click", (e) => {
       const th = e.target.closest("th");
-      if (!(th == null ? void 0 : th.dataset.sortKey)) return;
+      if (!th?.dataset.sortKey) return;
       const key = th.dataset.sortKey;
       if (this.sortCol === key) {
         this.sortDir = this.sortDir === "asc" ? "desc" : "asc";
@@ -5816,24 +5848,17 @@ var ProjectBoard = class {
       const arrow = th.querySelector(".mq-po-sort-arrow");
       if (arrow) arrow.textContent = this.sortDir === "asc" ? " \u2191" : " \u2193";
       applySort();
-      visible = filterWithOrig(sortedTasks, (t2) => {
-        var _a2, _b;
-        return (_b = (_a2 = FILTER_KEYS[this.taskListFilter]) == null ? void 0 : _a2.call(FILTER_KEYS, t2.status)) != null ? _b : true;
-      });
+      visible = filterWithOrig(sortedTasks, (t2) => FILTER_KEYS[this.taskListFilter]?.(t2.status) ?? true);
       wrap.scrollTop = 0;
       renderWindow();
     });
     toolbar.addEventListener("click", (e) => {
-      var _a2;
       const chip = e.target.closest(".mq-po-chip");
       if (!chip) return;
       toolbar.querySelectorAll(".mq-po-chip").forEach((c) => c.removeClass("is-active"));
       chip.addClass("is-active");
-      this.taskListFilter = (_a2 = chip.dataset.filter) != null ? _a2 : "all";
-      visible = filterWithOrig(sortedTasks, (t2) => {
-        var _a3, _b;
-        return (_b = (_a3 = FILTER_KEYS[this.taskListFilter]) == null ? void 0 : _a3.call(FILTER_KEYS, t2.status)) != null ? _b : true;
-      });
+      this.taskListFilter = chip.dataset.filter ?? "all";
+      visible = filterWithOrig(sortedTasks, (t2) => FILTER_KEYS[this.taskListFilter]?.(t2.status) ?? true);
       wrap.scrollTop = 0;
       renderWindow();
     });
@@ -5999,17 +6024,14 @@ var ProjectBoard = class {
               const next = node && node.s === "done" ? "todo" : "done";
               void this.setDailyNode(task, d, next);
             });
-            line.createSpan({ cls: "mq-po-cal__daily-note", text: (node == null ? void 0 : node.n) || "" });
+            line.createSpan({ cls: "mq-po-cal__daily-note", text: node?.n || "" });
             d = addDays(d, 1);
           }
           daily.createDiv({ cls: "mq-po-cal__daily-sum", text: t("ui.calProgress", { done: String(done), total: String(total) }) });
           toggle.setText("\u25BE");
         });
       }
-      row.addEventListener("dragstart", (ev) => {
-        var _a2;
-        return (_a2 = ev.dataTransfer) == null ? void 0 : _a2.setData("text/plain", task.id);
-      });
+      row.addEventListener("dragstart", (ev) => ev.dataTransfer?.setData("text/plain", task.id));
     };
     const buildChip = (holder, task) => {
       const isRange = isRangeTask(task);
@@ -6044,10 +6066,9 @@ var ProjectBoard = class {
       });
       el.addEventListener("dragleave", () => el.removeClass("mq-po-cal__day--drag-over"));
       el.addEventListener("drop", (e) => {
-        var _a2;
         e.preventDefault();
         el.removeClass("mq-po-cal__day--drag-over");
-        const taskId = (_a2 = e.dataTransfer) == null ? void 0 : _a2.getData("text/plain");
+        const taskId = e.dataTransfer?.getData("text/plain");
         if (!taskId) return;
         const task = tasks.find((tt) => tt.id === taskId);
         if (!task) return;
@@ -6056,7 +6077,6 @@ var ProjectBoard = class {
       });
     };
     const renderToolbar = () => {
-      var _a2;
       const bar = root.createDiv({ cls: "mq-po-cal__bar" });
       const seg = bar.createDiv({ cls: "mq-po-cal__seg" });
       const views = [
@@ -6074,7 +6094,7 @@ var ProjectBoard = class {
       ttl.style.marginLeft = "auto";
       if (this.calView === "month") {
         const months = tArr("status.months");
-        ttl.setText(t("ui.calMonthFmt", { y: String(this.calYear), m: (_a2 = months[this.calMonth]) != null ? _a2 : String(this.calMonth + 1) }));
+        ttl.setText(t("ui.calMonthFmt", { y: String(this.calYear), m: months[this.calMonth] ?? String(this.calMonth + 1) }));
       } else {
         const mon = mondayOf(this.calSel);
         ttl.setText(rangeTitle(mon));
@@ -6115,7 +6135,7 @@ var ProjectBoard = class {
       });
     };
     const renderMonth = () => {
-      calResizeObserver == null ? void 0 : calResizeObserver.disconnect();
+      calResizeObserver?.disconnect();
       calResizeObserver = null;
       const y = this.calYear, m = this.calMonth;
       const dim = new Date(y, m + 1, 0).getDate();
@@ -6138,7 +6158,6 @@ var ProjectBoard = class {
       const rangeTasks = tasks.filter(isRangeTask);
       const rowSegs = Array.from({ length: rows }, () => []);
       rangeTasks.forEach((task) => {
-        var _a2;
         const s = task.startDate < monthStart ? monthStart : task.startDate;
         const e = task.dueDate > monthEnd ? monthEnd : task.dueDate;
         if (s > e) return;
@@ -6148,7 +6167,7 @@ var ProjectBoard = class {
         const sRow = Math.floor(sIdx / 7), eRow = Math.floor(eIdx / 7);
         const sCol = sIdx % 7, eCol = eIdx % 7;
         for (let r = sRow; r <= eRow; r++) {
-          (_a2 = rowSegs[r]) == null ? void 0 : _a2.push({
+          rowSegs[r]?.push({
             c1: r === sRow ? sCol : 0,
             c2: r === eRow ? eCol : 6,
             task
@@ -6177,13 +6196,12 @@ var ProjectBoard = class {
       const rowOverflowTasks = Array.from({ length: rows }, () => []);
       rowSegs.forEach((segs, r) => {
         segs.forEach((seg) => {
-          var _a2, _b;
           const t2 = gTrackOf.get(seg.task.id);
           if (t2 === void 0) {
-            (_a2 = rowOverflowTasks[r]) == null ? void 0 : _a2.push(seg.task);
+            rowOverflowTasks[r]?.push(seg.task);
             return;
           }
-          (_b = rowPlaced[r]) == null ? void 0 : _b.push({ seg, track: t2 });
+          rowPlaced[r]?.push({ seg, track: t2 });
         });
       });
       const SLOT_MAX = 5;
@@ -6271,10 +6289,9 @@ var ProjectBoard = class {
           render();
         });
         dayEl.addEventListener("dblclick", (ev) => {
-          var _a2;
           ev.stopPropagation();
           this.calSel = ds;
-          void this.openTaskModalWithParent("", (_a2 = this.selectedProject) != null ? _a2 : "");
+          void this.openTaskModalWithParent("", this.selectedProject ?? "");
         });
         bindDrop(dayEl);
       }
@@ -6284,7 +6301,6 @@ var ProjectBoard = class {
         rowTops.push(firstCell ? firstCell.offsetTop : 0);
       }
       function openRowOverflow(r, ds) {
-        var _a2;
         const key = r + "|" + ds;
         const existing = days.querySelector(".mq-po-cal__rowover");
         if (existing) {
@@ -6301,7 +6317,7 @@ var ProjectBoard = class {
           return;
         }
         const panel2 = days.createDiv({ cls: "mq-po-cal__rowover" });
-        panel2.style.top = ((_a2 = rowTops[r + 1]) != null ? _a2 : days.offsetHeight) + 2 + "px";
+        panel2.style.top = (rowTops[r + 1] ?? days.offsetHeight) + 2 + "px";
         panel2.createDiv({ cls: "mq-po-cal__rowover-hd", text: t("ui.calOverflowRow") + "\uFF08" + String(list.length) + "\uFF09" });
         list.forEach((task) => renderTaskRow(panel2, task));
         panel2.addEventListener("click", () => {
@@ -6314,11 +6330,10 @@ var ProjectBoard = class {
       rowPlaced.forEach((placed, r) => {
         if (!placed.length) return;
         placed.forEach(({ seg, track }) => {
-          var _a2;
           const topPx = DATE_OFF + track * TRACK_H;
           const segCount = seg.c2 - seg.c1 + 1;
           const bar = barLayer.createDiv({ cls: "mq-po-cal__mbar" + (seg.task.status === "\u5DF2\u5B8C\u6210" ? " is-done" : ""), text: "" });
-          bar.setAttr("style", "--chip-color:" + projColor(seg.task) + "; top:" + (((_a2 = rowTops[r]) != null ? _a2 : 0) + topPx) + "px; left:calc(" + (seg.c1 * colW).toFixed(4) + "% + 4px); width:calc(" + (segCount * colW).toFixed(4) + "% - 8px);");
+          bar.setAttr("style", "--chip-color:" + projColor(seg.task) + "; top:" + ((rowTops[r] ?? 0) + topPx) + "px; left:calc(" + (seg.c1 * colW).toFixed(4) + "% + 4px); width:calc(" + (segCount * colW).toFixed(4) + "% - 8px);");
           for (let c = seg.c1; c <= seg.c2; c++) {
             const gi = r * 7 + c;
             const segDate = fmtDate2(new Date(y, m, gi - adj + 1));
@@ -6357,8 +6372,7 @@ var ProjectBoard = class {
           tops.push(fc ? fc.offsetTop : 0);
         }
         barRefs.forEach(({ el, r, topPx }) => {
-          var _a2;
-          el.style.top = ((_a2 = tops[r]) != null ? _a2 : 0) + topPx + "px";
+          el.style.top = (tops[r] ?? 0) + topPx + "px";
         });
       };
       requestAnimationFrame(() => repositionBars());
@@ -6447,10 +6461,9 @@ var ProjectBoard = class {
           render();
         });
         col.addEventListener("dblclick", (ev) => {
-          var _a2;
           ev.stopPropagation();
           this.calSel = ds;
-          void this.openTaskModalWithParent("", (_a2 = this.selectedProject) != null ? _a2 : "");
+          void this.openTaskModalWithParent("", this.selectedProject ?? "");
         });
         bindDrop(col);
       }
@@ -6466,8 +6479,7 @@ var ProjectBoard = class {
       dayTasks.forEach((task) => renderTaskRow(det, task));
       const newBtn = det.createDiv({ cls: "mq-po-cal__new", text: t("ui.calNewTask") });
       newBtn.addEventListener("click", () => {
-        var _a2;
-        void this.openTaskModalWithParent("", (_a2 = this.selectedProject) != null ? _a2 : "");
+        void this.openTaskModalWithParent("", this.selectedProject ?? "");
       });
     };
     const render = () => {
@@ -6590,8 +6602,7 @@ var ProjectBoard = class {
           menu.showAtMouseEvent(e);
         });
         card.addEventListener("dragstart", (e) => {
-          var _a2;
-          (_a2 = e.dataTransfer) == null ? void 0 : _a2.setData("text/plain", t2.id);
+          e.dataTransfer?.setData("text/plain", t2.id);
           card.addClass("mq-po-kanban__card--dragging");
         });
         card.addEventListener("dragend", () => {
@@ -6606,10 +6617,9 @@ var ProjectBoard = class {
         colEl.removeClass("mq-po-kanban__col--drag-over");
       });
       colEl.addEventListener("drop", (e) => {
-        var _a2;
         e.preventDefault();
         colEl.removeClass("mq-po-kanban__col--drag-over");
-        const taskId = (_a2 = e.dataTransfer) == null ? void 0 : _a2.getData("text/plain");
+        const taskId = e.dataTransfer?.getData("text/plain");
         if (!taskId) return;
         const task = tasks.find((t2) => t2.id === taskId);
         if (!task || task.status === col.key) return;
@@ -6619,7 +6629,6 @@ var ProjectBoard = class {
   }
   /** Update task status in source file (unified writer) */
   async updateTaskStatus(task, newStatus) {
-    var _a2;
     if (!task.sourceFile) return;
     const file = this.app.vault.getAbstractFileByPath(task.sourceFile);
     if (!(file instanceof import_obsidian16.TFile)) return;
@@ -6629,7 +6638,7 @@ var ProjectBoard = class {
     if (newStatus !== "\u5DF2\u5B8C\u6210" && wasComplete) updates["\u5B8C\u6210\u65F6\u95F4"] = null;
     await this.writeFrontmatter(file, updates);
     task.status = newStatus;
-    if (newStatus === "\u5DF2\u5B8C\u6210" && !wasComplete) task.completeTime = (_a2 = updates["\u5B8C\u6210\u65F6\u95F4"]) != null ? _a2 : null;
+    if (newStatus === "\u5DF2\u5B8C\u6210" && !wasComplete) task.completeTime = updates["\u5B8C\u6210\u65F6\u95F4"] ?? null;
     if (newStatus !== "\u5DF2\u5B8C\u6210" && wasComplete) task.completeTime = null;
     this.showToast("\u2728 \u4EFB\u52A1\u72B6\u6001\u5DF2\u66F4\u65B0: " + newStatus);
     await this.refresh();
@@ -6697,7 +6706,6 @@ function renderMonthlyReports(records) {
   return [...records].sort((a, b) => b.date.localeCompare(a.date)).map(renderDailyReport).join("\n\n") + (records.length ? "\n" : "");
 }
 function parseMonthlyReports(content) {
-  var _a2, _b;
   const headers = [];
   const pattern = /^# (\d{4}-\d{2}-\d{2})\s*$/gm;
   let match;
@@ -6706,11 +6714,11 @@ function parseMonthlyReports(content) {
   for (let index = 0; index < headers.length; index++) {
     const header = headers[index];
     const bodyStart = header.index + header.length;
-    const bodyEnd = (_b = (_a2 = headers[index + 1]) == null ? void 0 : _a2.index) != null ? _b : content.length;
+    const bodyEnd = headers[index + 1]?.index ?? content.length;
     const body = content.slice(bodyStart, bodyEnd);
     const section = (label) => {
       const found = body.match(new RegExp(`\\*\\*${label}\uFF1A\\*\\*\\s*\\n([\\s\\S]*?)(?=\\n\\s*\\*\\*(?:\u4ECA\u65E5\u603B\u7ED3|\u660E\u65E5\u8BA1\u5212)\uFF1A\\*\\*|$)`));
-      if (!(found == null ? void 0 : found[1])) return [];
+      if (!found?.[1]) return [];
       return found[1].split(/\r?\n/).map((line) => line.trim()).filter(Boolean).filter((line) => line !== "---" && !line.startsWith("\u6682\u65E0")).map((line) => line.replace(/^\d+、/, ""));
     };
     records.push({ date: header.date, summary: section("\u4ECA\u65E5\u603B\u7ED3"), plan: section("\u660E\u65E5\u8BA1\u5212") });
@@ -6760,8 +6768,8 @@ function monthKeys(start, end) {
 var DailyReportStore = class {
   constructor(app) {
     this.app = app;
-    __publicField(this, "writeQueues", /* @__PURE__ */ new Map());
   }
+  app;
   filePath(month) {
     return `${DAILY_REPORT_FOLDER}/${month}\u65E5\u62A5.md`;
   }
@@ -6775,13 +6783,13 @@ var DailyReportStore = class {
     return records.flat().filter((record) => record.date >= start && record.date <= end).sort((a, b) => b.date.localeCompare(a.date));
   }
   async syncTask(task, allTasks, previousTask) {
-    const dates = /* @__PURE__ */ new Set([...doneDates(previousTask != null ? previousTask : task), ...doneDates(task)]);
+    const dates = /* @__PURE__ */ new Set([...doneDates(previousTask ?? task), ...doneDates(task)]);
     for (const date of dates) await this.upsert(buildDailyReport(date, allTasks));
   }
+  writeQueues = /* @__PURE__ */ new Map();
   async upsert(record) {
-    var _a2;
     const path = this.filePath(monthKey(record.date));
-    const previous = (_a2 = this.writeQueues.get(path)) != null ? _a2 : Promise.resolve();
+    const previous = this.writeQueues.get(path) ?? Promise.resolve();
     const operation = previous.catch(() => void 0).then(async () => {
       await this.ensureFolder();
       const existing = this.app.vault.getAbstractFileByPath(path);
@@ -6832,21 +6840,23 @@ function reportText(record, section) {
 ${values.length ? values.map((item, index) => `${index + 1}\u3001${item}`).join("\n") : empty}`;
 }
 var DailyReportBoard = class {
+  host;
+  store;
+  records = [];
+  /** 日历始终使用当前月份的完整日报记录，不受列表日期筛选影响。 */
+  calendarRecords = [];
+  year = (/* @__PURE__ */ new Date()).getFullYear();
+  month = (/* @__PURE__ */ new Date()).getMonth();
+  startDate = "";
+  endDate = "";
+  page = 1;
+  pageSize = 50;
+  refreshTimer = null;
+  taskSyncTimer = null;
+  pendingTaskPaths = /* @__PURE__ */ new Set();
+  pendingPreviousTasks = /* @__PURE__ */ new Map();
+  taskSyncInFlight = false;
   constructor(host) {
-    __publicField(this, "host");
-    __publicField(this, "store");
-    __publicField(this, "records", []);
-    __publicField(this, "year", (/* @__PURE__ */ new Date()).getFullYear());
-    __publicField(this, "month", (/* @__PURE__ */ new Date()).getMonth());
-    __publicField(this, "startDate", "");
-    __publicField(this, "endDate", "");
-    __publicField(this, "page", 1);
-    __publicField(this, "pageSize", 50);
-    __publicField(this, "refreshTimer", null);
-    __publicField(this, "taskSyncTimer", null);
-    __publicField(this, "pendingTaskPaths", /* @__PURE__ */ new Set());
-    __publicField(this, "pendingPreviousTasks", /* @__PURE__ */ new Map());
-    __publicField(this, "taskSyncInFlight", false);
     this.host = host;
     this.store = new DailyReportStore(host.app);
   }
@@ -6895,7 +6905,6 @@ var DailyReportBoard = class {
     }, 220);
   }
   async flushTaskSync(previousTask) {
-    var _a2;
     if (this.taskSyncInFlight) return;
     this.taskSyncInFlight = true;
     const paths = [...this.pendingTaskPaths];
@@ -6904,7 +6913,7 @@ var DailyReportBoard = class {
       const tasks = await this.host.taskStore.scanAllTasks();
       for (const path of paths) {
         const task = tasks.find((candidate) => candidate.sourceFile === path || candidate.id === path);
-        if (task) await this.store.syncTask(task, tasks, (_a2 = this.pendingPreviousTasks.get(path)) != null ? _a2 : path === paths[0] ? previousTask : void 0);
+        if (task) await this.store.syncTask(task, tasks, this.pendingPreviousTasks.get(path) ?? (path === paths[0] ? previousTask : void 0));
       }
       paths.forEach((path) => this.pendingPreviousTasks.delete(path));
       await this.loadRecords();
@@ -6931,8 +6940,21 @@ var DailyReportBoard = class {
     return { start, end };
   }
   async loadRecords() {
+    const monthStart = dayString(this.year, this.month, 1);
+    const monthEnd = dayString(this.year, this.month, new Date(this.year, this.month + 1, 0).getDate());
     const { start, end } = this.currentRange();
-    this.records = start <= end ? await this.store.listRange(start, end) : [];
+    if (start === monthStart && end === monthEnd) {
+      const monthRecords = await this.store.listRange(monthStart, monthEnd);
+      this.calendarRecords = monthRecords;
+      this.records = monthRecords;
+    } else {
+      const [monthRecords, filteredRecords] = await Promise.all([
+        this.store.listRange(monthStart, monthEnd),
+        start <= end ? this.store.listRange(start, end) : Promise.resolve([])
+      ]);
+      this.calendarRecords = monthRecords;
+      this.records = filteredRecords;
+    }
     const maxPage = Math.max(1, Math.ceil(this.records.length / this.pageSize));
     this.page = Math.min(this.page, maxPage);
   }
@@ -6976,28 +6998,28 @@ var DailyReportBoard = class {
     (0, import_obsidian18.setIcon)(prev, "chevron-left");
     prev.addEventListener("click", () => this.shiftMonth(-1));
     const years = /* @__PURE__ */ new Set([this.year, (/* @__PURE__ */ new Date()).getFullYear()]);
-    for (const record of this.records) years.add(Number(record.date.slice(0, 4)));
+    for (const record of this.calendarRecords) years.add(Number(record.date.slice(0, 4)));
     for (let offset = -3; offset <= 3; offset++) years.add((/* @__PURE__ */ new Date()).getFullYear() + offset);
     const yearSelect = controls.createEl("select", { cls: "mq-dr-select", attr: { "aria-label": "\u9009\u62E9\u5E74\u4EFD" } });
     [...years].sort((a, b) => a - b).forEach((year) => yearSelect.createEl("option", { value: String(year), text: `${year}\u5E74` }));
     yearSelect.value = String(this.year);
     yearSelect.addEventListener("change", () => {
       this.year = Number(yearSelect.value);
-      this.render();
+      void this.loadRecords().then(() => this.render());
     });
     const monthSelect = controls.createEl("select", { cls: "mq-dr-select", attr: { "aria-label": "\u9009\u62E9\u6708\u4EFD" } });
     for (let month = 0; month < 12; month++) monthSelect.createEl("option", { value: String(month), text: `${month + 1}\u6708` });
     monthSelect.value = String(this.month);
     monthSelect.addEventListener("change", () => {
       this.month = Number(monthSelect.value);
-      this.render();
+      void this.loadRecords().then(() => this.render());
     });
     const todayButton = controls.createEl("button", { cls: "mq-dr-text-btn", text: "\u4ECA\u5929" });
     todayButton.addEventListener("click", () => {
       const now = /* @__PURE__ */ new Date();
       this.year = now.getFullYear();
       this.month = now.getMonth();
-      this.render();
+      void this.loadRecords().then(() => this.render());
     });
     const next = controls.createEl("button", { cls: "mq-dr-icon-btn", attr: { "aria-label": "\u4E0B\u4E2A\u6708", title: "\u4E0B\u4E2A\u6708" } });
     (0, import_obsidian18.setIcon)(next, "chevron-right");
@@ -7009,8 +7031,8 @@ var DailyReportBoard = class {
     const firstOffset = first.getDay();
     const days = new Date(this.year, this.month + 1, 0).getDate();
     const cellCount = Math.ceil((firstOffset + days) / 7) * 7;
-    const reportDates = new Set(this.records.map((record) => record.date));
-    const completedDates = new Set(this.records.filter((record) => record.summary.length > 0).map((record) => record.date));
+    const reportDates = new Set(this.calendarRecords.map((record) => record.date));
+    const completedDates = new Set(this.calendarRecords.filter((record) => record.summary.length > 0).map((record) => record.date));
     const todayDate = todayString();
     for (let cell = 0; cell < cellCount; cell++) {
       const day = cell - firstOffset + 1;
@@ -7120,8 +7142,7 @@ var DailyReportBoard = class {
     const next = new Date(this.year, this.month + delta, 1);
     this.year = next.getFullYear();
     this.month = next.getMonth();
-    if (!this.startDate && !this.endDate) void this.loadRecords().then(() => this.render());
-    else this.render();
+    void this.loadRecords().then(() => this.render());
   }
   async export(type) {
     const content = type === "csv" ? dailyReportsToCsv(this.filteredRecords()) : dailyReportsToMarkdownTable(this.filteredRecords());
@@ -7132,7 +7153,7 @@ var DailyReportBoard = class {
     try {
       await navigator.clipboard.writeText(text);
       this.host.showToast("\u65E5\u62A5\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F");
-    } catch (e) {
+    } catch {
       const area = document.body.createEl("textarea");
       area.value = text;
       area.style.position = "fixed";
@@ -7173,7 +7194,7 @@ var RING_ANIM = {
   easing: (t2) => 1 - Math.pow(1 - t2, 3)
 };
 function clampSpan(v) {
-  const n = typeof v === "number" ? Math.round(v) : parseInt(String(v != null ? v : ""), 10);
+  const n = typeof v === "number" ? Math.round(v) : parseInt(String(v ?? ""), 10);
   if (!Number.isFinite(n) || n < 1) return 1;
   return Math.min(MAX_SPAN, n);
 }
@@ -7202,7 +7223,6 @@ function buildRepeatRule(data) {
   return rule;
 }
 function calcHeatmapStats(data, year, today) {
-  var _a2;
   let total = 0;
   let active = 0;
   const prefix = `${year}-`;
@@ -7216,22 +7236,21 @@ function calcHeatmapStats(data, year, today) {
   const d = new Date(today);
   while (d.getFullYear() === year) {
     const key = fmtDate2(d);
-    if (((_a2 = data.get(key)) != null ? _a2 : 0) > 0) streak++;
+    if ((data.get(key) ?? 0) > 0) streak++;
     else break;
     d.setDate(d.getDate() - 1);
   }
   return { total, active, streak };
 }
 function getLunarDate(d) {
-  var _a2, _b, _c, _d, _e, _f;
   try {
     const parts = new Intl.DateTimeFormat("zh-CN-u-ca-chinese", {
       timeZone: "Asia/Shanghai",
       month: "long",
       day: "numeric"
     }).formatToParts(d);
-    const monthStr = (_b = (_a2 = parts.find((p) => p.type === "month")) == null ? void 0 : _a2.value) != null ? _b : "";
-    const dayStr = (_d = (_c = parts.find((p) => p.type === "day")) == null ? void 0 : _c.value) != null ? _d : "";
+    const monthStr = parts.find((p) => p.type === "month")?.value ?? "";
+    const dayStr = parts.find((p) => p.type === "day")?.value ?? "";
     if (/[\u4e00-\u9fff]/.test(monthStr)) {
       const dayNum = parseInt(dayStr);
       if (!isNaN(dayNum) && dayNum >= 1 && dayNum <= 30) {
@@ -7267,7 +7286,7 @@ function getLunarDate(d) {
           "\u5EFF\u4E5D",
           "\u4E09\u5341"
         ];
-        return monthStr + ((_e = LUNAR_DAYS[dayNum - 1]) != null ? _e : dayStr);
+        return monthStr + (LUNAR_DAYS[dayNum - 1] ?? dayStr);
       }
       return monthStr + dayStr.replace("\u65E5", "");
     }
@@ -7275,96 +7294,96 @@ function getLunarDate(d) {
     const day = parseInt(dayStr) || 1;
     const MONTHS = ["\u6B63\u6708", "\u4E8C\u6708", "\u4E09\u6708", "\u56DB\u6708", "\u4E94\u6708", "\u516D\u6708", "\u4E03\u6708", "\u516B\u6708", "\u4E5D\u6708", "\u5341\u6708", "\u51AC\u6708", "\u814A\u6708"];
     const DAYS = ["\u521D\u4E00", "\u521D\u4E8C", "\u521D\u4E09", "\u521D\u56DB", "\u521D\u4E94", "\u521D\u516D", "\u521D\u4E03", "\u521D\u516B", "\u521D\u4E5D", "\u521D\u5341", "\u5341\u4E00", "\u5341\u4E8C", "\u5341\u4E09", "\u5341\u56DB", "\u5341\u4E94", "\u5341\u516D", "\u5341\u4E03", "\u5341\u516B", "\u5341\u4E5D", "\u4E8C\u5341", "\u5EFF\u4E00", "\u5EFF\u4E8C", "\u5EFF\u4E09", "\u5EFF\u56DB", "\u5EFF\u4E94", "\u5EFF\u516D", "\u5EFF\u4E03", "\u5EFF\u516B", "\u5EFF\u4E5D", "\u4E09\u5341"];
-    return MONTHS[m - 1] + ((_f = DAYS[day - 1]) != null ? _f : "");
-  } catch (e) {
+    return MONTHS[m - 1] + (DAYS[day - 1] ?? "");
+  } catch {
     return "";
   }
 }
 var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
+  plugin;
+  bannerState;
+  bannerImg = null;
+  bannerPh = null;
+  bannerEl = null;
+  bannerStatsEl = null;
+  boardEl = null;
+  heatmapCard = null;
+  heatmapTimer = null;
+  bannerStatsTimer = null;
+  pulseEls = null;
+  dateEl = null;
+  bannerClockId = null;
+  // NOTE: deliberately NOT named `titleEl` — Obsidian's ItemView has its own
+  // `titleEl` (view-header title). Declaring a field with that name would
+  // overwrite the parent's after super() and break ItemView.load()
+  // ("Cannot read properties of null (reading 'setText')" → blank view).
+  adTitleEl = null;
+  bannerTitleEl = null;
+  weekdayEl = null;
+  parseIssuesEl = null;
+  lunarEl = null;
+  dashboardEl = null;
+  /** Header theme-toggle button. Prefixed to avoid clashing with ItemView fields. */
+  adThemeBtn = null;
+  // 首页编辑态（长按进入，仿手机桌面：拖拽排序 / 拖入垃圾桶删除 / 添加卡片）
+  adEditMode = false;
+  adEditBar = null;
+  adDrag = null;
+  adResize = null;
+  adLongPressTimer = null;
+  adBoardWired = false;
+  /** 监听板面宽度，计算每行最大可容纳列数，并在 flex-wrap 布局下重夹紧卡片比例 */
+  adRowHObs;
+  adLastColCount = 0;
+  // 上次每行最大可容纳列数，用于变化时重夹紧卡片比例
+  /** 监听笔记统计卡宽度，动态调整热力图列间距（格子尺寸固定），宽卡填满、窄卡收紧 */
+  adHmObs;
+  adHmObsTarget;
+  /** 上次热力图采用的布局指纹（周数|列间距|行间距），相同则跳过重排，避免 ResizeObserver 自激循环 */
+  adHmKey = "";
+  /** 热力图每一周所属月份（长度=全年周数），窄卡只显示最近 N 周时据此重建月份标签 */
+  adHmWeekMonths = [];
+  /** 热力图当前渲染的年份（用于底部窗口文案「YYYY 全年 / 近 N 周」） */
+  adHmYear = 0;
+  /** 缩放触达限制时的红色抖动反馈计时器 */
+  adLimitTimer = null;
+  /** 进度圆环：各环当前显示值与进行中的动画句柄（实例级持久化，
+   *  保证相邻刷新从「上次显示值」平滑过渡到新目标值，而非瞬间跳变） */
+  ringAnim = {};
+  /** 编辑态下拦截卡片自身的点击（避免误触下钻），仅拦截卡片内部；比例按钮例外放行 */
+  adClickGuard = (e) => {
+    const t2 = e.target;
+    if (this.adEditMode && t2.closest(".mq-ad-card") && !t2.closest(".mq-ad-card__resize")) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
+  // 首页模块注册表：将 7 张卡的渲染从硬编码顺序统一为「注册表驱动 + settings.homeModules 排序/显隐」
+  homeModules = [
+    { id: "quick-capture", title: "\u5FEB\u901F\u6355\u6349", cardCls: "mq-ad-card mq-ad-b-capture", live: false, render: (b) => this.renderQuickCapture(b) },
+    { id: "todo", title: "TODO", cardCls: "mq-ad-card mq-ad-b-todo", render: (b, t2) => void this.renderTodo(b, t2) },
+    { id: "progress", title: "\u5DE5\u4F5C\u8FDB\u5EA6", cardCls: "mq-ad-card mq-ad-b-progress", render: (b, t2) => void this.renderProgress(b, t2) },
+    { id: "weekly", title: "\u672C\u5468\u5F85\u529E & \u903E\u671F", cardCls: "mq-ad-card mq-ad-b-weekly", render: (b, t2) => void this.renderWeekly(b, t2) },
+    { id: "completed-history", title: "\u5386\u53F2\u5B8C\u6210\u5F85\u529E", cardCls: "mq-ad-card mq-ad-b-completed-history", render: (b, t2) => void this.renderCompletedHistory(b, t2) },
+    { id: "projects", title: "\u9879\u76EE\u60C5\u51B5", cardCls: "mq-ad-card mq-ad-b-project", render: (b) => void this.renderProjects(b) },
+    { id: "heatmap", title: "\u7B14\u8BB0\u7EDF\u8BA1", cardCls: "mq-ad-card mq-ad-b-heatmap", live: false, render: (b) => this.renderHeatmap(b) },
+    { id: "calendar", title: "\u9879\u76EE\u65E5\u5386", cardCls: "mq-ad-card mq-ad-b-calendar", live: true, render: (b, t2) => void this.renderCalendarCard(b, t2 ?? []) },
+    { id: "pomodoro", title: "\u756A\u8304\u8BA1\u65F6", cardCls: "mq-ad-card mq-ad-b-pomodoro", live: false, render: (b) => this.renderPomodoroCard(b) }
+  ];
+  // Project overview state (renderer extracted into ProjectBoard)
+  selectedProject = null;
+  // Which top-level page is currently shown (home / project overview / opportunity board)
+  currentPage = "home";
+  taskStore;
+  dashboardStore;
+  storeUnsub = null;
+  oppBoard;
+  projectBoard;
+  dailyReportBoard;
+  pomodoroService = null;
+  calendarCardDate = /* @__PURE__ */ new Date();
   constructor(leaf, plugin) {
     super(leaf);
-    __publicField(this, "plugin");
-    __publicField(this, "bannerState");
-    __publicField(this, "bannerImg", null);
-    __publicField(this, "bannerPh", null);
-    __publicField(this, "bannerEl", null);
-    __publicField(this, "bannerStatsEl", null);
-    __publicField(this, "boardEl", null);
-    __publicField(this, "heatmapCard", null);
-    __publicField(this, "heatmapTimer", null);
-    __publicField(this, "bannerStatsTimer", null);
-    __publicField(this, "pulseEls", null);
-    __publicField(this, "dateEl", null);
-    __publicField(this, "bannerClockId", null);
-    // NOTE: deliberately NOT named `titleEl` — Obsidian's ItemView has its own
-    // `titleEl` (view-header title). Declaring a field with that name would
-    // overwrite the parent's after super() and break ItemView.load()
-    // ("Cannot read properties of null (reading 'setText')" → blank view).
-    __publicField(this, "adTitleEl", null);
-    __publicField(this, "bannerTitleEl", null);
-    __publicField(this, "weekdayEl", null);
-    __publicField(this, "parseIssuesEl", null);
-    __publicField(this, "lunarEl", null);
-    __publicField(this, "dashboardEl", null);
-    /** Header theme-toggle button. Prefixed to avoid clashing with ItemView fields. */
-    __publicField(this, "adThemeBtn", null);
-    // 首页编辑态（长按进入，仿手机桌面：拖拽排序 / 拖入垃圾桶删除 / 添加卡片）
-    __publicField(this, "adEditMode", false);
-    __publicField(this, "adEditBar", null);
-    __publicField(this, "adDrag", null);
-    __publicField(this, "adResize", null);
-    __publicField(this, "adLongPressTimer", null);
-    __publicField(this, "adBoardWired", false);
-    /** 监听板面宽度，计算每行最大可容纳列数，并在 flex-wrap 布局下重夹紧卡片比例 */
-    __publicField(this, "adRowHObs");
-    __publicField(this, "adLastColCount", 0);
-    // 上次每行最大可容纳列数，用于变化时重夹紧卡片比例
-    /** 监听笔记统计卡宽度，动态调整热力图列间距（格子尺寸固定），宽卡填满、窄卡收紧 */
-    __publicField(this, "adHmObs");
-    __publicField(this, "adHmObsTarget");
-    /** 上次热力图采用的布局指纹（周数|列间距|行间距），相同则跳过重排，避免 ResizeObserver 自激循环 */
-    __publicField(this, "adHmKey", "");
-    /** 热力图每一周所属月份（长度=全年周数），窄卡只显示最近 N 周时据此重建月份标签 */
-    __publicField(this, "adHmWeekMonths", []);
-    /** 热力图当前渲染的年份（用于底部窗口文案「YYYY 全年 / 近 N 周」） */
-    __publicField(this, "adHmYear", 0);
-    /** 缩放触达限制时的红色抖动反馈计时器 */
-    __publicField(this, "adLimitTimer", null);
-    /** 进度圆环：各环当前显示值与进行中的动画句柄（实例级持久化，
-     *  保证相邻刷新从「上次显示值」平滑过渡到新目标值，而非瞬间跳变） */
-    __publicField(this, "ringAnim", {});
-    /** 编辑态下拦截卡片自身的点击（避免误触下钻），仅拦截卡片内部；比例按钮例外放行 */
-    __publicField(this, "adClickGuard", (e) => {
-      const t2 = e.target;
-      if (this.adEditMode && t2.closest(".mq-ad-card") && !t2.closest(".mq-ad-card__resize")) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    });
-    // 首页模块注册表：将 7 张卡的渲染从硬编码顺序统一为「注册表驱动 + settings.homeModules 排序/显隐」
-    __publicField(this, "homeModules", [
-      { id: "quick-capture", title: "\u5FEB\u901F\u6355\u6349", cardCls: "mq-ad-card mq-ad-b-capture", live: false, render: (b) => this.renderQuickCapture(b) },
-      { id: "todo", title: "TODO", cardCls: "mq-ad-card mq-ad-b-todo", render: (b, t2) => void this.renderTodo(b, t2) },
-      { id: "progress", title: "\u5DE5\u4F5C\u8FDB\u5EA6", cardCls: "mq-ad-card mq-ad-b-progress", render: (b, t2) => void this.renderProgress(b, t2) },
-      { id: "weekly", title: "\u672C\u5468\u5F85\u529E & \u903E\u671F", cardCls: "mq-ad-card mq-ad-b-weekly", render: (b, t2) => void this.renderWeekly(b, t2) },
-      { id: "completed-history", title: "\u5386\u53F2\u5B8C\u6210\u5F85\u529E", cardCls: "mq-ad-card mq-ad-b-completed-history", render: (b, t2) => void this.renderCompletedHistory(b, t2) },
-      { id: "projects", title: "\u9879\u76EE\u60C5\u51B5", cardCls: "mq-ad-card mq-ad-b-project", render: (b) => void this.renderProjects(b) },
-      { id: "heatmap", title: "\u7B14\u8BB0\u7EDF\u8BA1", cardCls: "mq-ad-card mq-ad-b-heatmap", live: false, render: (b) => this.renderHeatmap(b) },
-      { id: "calendar", title: "\u9879\u76EE\u65E5\u5386", cardCls: "mq-ad-card mq-ad-b-calendar", live: true, render: (b, t2) => void this.renderCalendarCard(b, t2 != null ? t2 : []) },
-      { id: "pomodoro", title: "\u756A\u8304\u8BA1\u65F6", cardCls: "mq-ad-card mq-ad-b-pomodoro", live: false, render: (b) => this.renderPomodoroCard(b) }
-    ]);
-    // Project overview state (renderer extracted into ProjectBoard)
-    __publicField(this, "selectedProject", null);
-    // Which top-level page is currently shown (home / project overview / opportunity board)
-    __publicField(this, "currentPage", "home");
-    __publicField(this, "taskStore");
-    __publicField(this, "dashboardStore");
-    __publicField(this, "storeUnsub", null);
-    __publicField(this, "oppBoard");
-    __publicField(this, "projectBoard");
-    __publicField(this, "dailyReportBoard");
-    __publicField(this, "pomodoroService", null);
-    __publicField(this, "calendarCardDate", /* @__PURE__ */ new Date());
     this.plugin = plugin;
     this.bannerState = { ...DEFAULT_SETTINGS.banner, ...plugin.settings.banner };
     this.taskStore = new TaskStore(this.app, () => this.plugin.settings, (msg) => this.showToast(msg));
@@ -7380,8 +7399,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     return t2;
   }
   applyTheme() {
-    var _a2;
-    const root = (_a2 = this.dashboardEl) != null ? _a2 : this.containerEl.querySelector(".mq-dashboard-plugin");
+    const root = this.dashboardEl ?? this.containerEl.querySelector(".mq-dashboard-plugin");
     if (root) root.setAttribute("data-theme", this.effectiveTheme());
     this.refreshThemeButton();
   }
@@ -7403,7 +7421,6 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     return "house";
   }
   async onOpen() {
-    var _a2, _b;
     this.containerEl.empty();
     this.dashboardEl = this.containerEl.createDiv({ cls: "mq-dashboard-plugin" });
     this.pomodoroService = new PomodoroService(this.plugin);
@@ -7477,16 +7494,15 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     } catch (err) {
       try {
         const e = err instanceof Error ? err : new Error(String(err));
-        (_a2 = this.dashboardEl) == null ? void 0 : _a2.empty();
-        (_b = this.dashboardEl) == null ? void 0 : _b.createEl("pre", { cls: "mq-ad-error", text: "Dashboard \u6E32\u67D3\u51FA\u9519\uFF1A\n" + (e.stack || e.message) });
-      } catch (e) {
+        this.dashboardEl?.empty();
+        this.dashboardEl?.createEl("pre", { cls: "mq-ad-error", text: "Dashboard \u6E32\u67D3\u51FA\u9519\uFF1A\n" + (e.stack || e.message) });
+      } catch {
       }
       console.error("[Dashboard] render error", err);
     }
   }
   async onClose() {
-    var _a2, _b;
-    (_a2 = this.pomodoroService) == null ? void 0 : _a2.destroy();
+    this.pomodoroService?.destroy();
     this.pomodoroService = null;
     if (this.bannerClockId !== null) {
       window.clearInterval(this.bannerClockId);
@@ -7520,7 +7536,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
       this.storeUnsub = null;
     }
     this.dashboardStore.dispose();
-    (_b = this.dashboardEl) == null ? void 0 : _b.empty();
+    this.dashboardEl?.empty();
   }
   /* ============================================================
      BANNER — image insert via modal, vertical drag only
@@ -7558,13 +7574,11 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
       fileInput.click();
     });
     fileInput.addEventListener("change", () => {
-      var _a2;
-      const file = (_a2 = fileInput.files) == null ? void 0 : _a2[0];
+      const file = fileInput.files?.[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = (ev) => {
-        var _a3;
-        const dataUrl = (_a3 = ev.target) == null ? void 0 : _a3.result;
+        const dataUrl = ev.target?.result;
         this.openBannerModal(dataUrl, 0);
       };
       reader.readAsDataURL(file);
@@ -7606,10 +7620,9 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     });
     const settings = btns.createEl("button", { cls: "mq-ad-header__settings", text: "\u2699 \u8BBE\u7F6E" });
     settings.addEventListener("click", () => {
-      var _a2, _b;
       const app = this.app;
-      (_a2 = app.setting) == null ? void 0 : _a2.open();
-      (_b = app.setting) == null ? void 0 : _b.openTabById(this.plugin.manifest.id);
+      app.setting?.open();
+      app.setting?.openTabById(this.plugin.manifest.id);
     });
     if (this.bannerClockId !== null) window.clearInterval(this.bannerClockId);
     this.bannerClockId = window.setInterval(() => {
@@ -7626,9 +7639,8 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
   }
   /** Replace only the banner so a setting or inline toggle takes effect immediately. */
   refreshBanner() {
-    var _a2;
     const old = this.bannerEl;
-    const parent = (_a2 = old == null ? void 0 : old.parentElement) != null ? _a2 : this.dashboardEl;
+    const parent = old?.parentElement ?? this.dashboardEl;
     if (!parent) return;
     this.bannerState = { ...DEFAULT_SETTINGS.banner, ...this.plugin.settings.banner };
     const holder = document.createElement("div");
@@ -7655,9 +7667,8 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     if (banner.isConnected) this.bannerStatsEl = stats;
   }
   async refreshBannerStats() {
-    var _a2, _b;
-    if (this.bannerState.mode !== "stats" || !((_a2 = this.bannerEl) == null ? void 0 : _a2.isConnected)) return;
-    (_b = this.bannerStatsEl) == null ? void 0 : _b.remove();
+    if (this.bannerState.mode !== "stats" || !this.bannerEl?.isConnected) return;
+    this.bannerStatsEl?.remove();
     this.bannerStatsEl = null;
     await this.renderStatsBanner(this.bannerEl);
   }
@@ -7692,7 +7703,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     };
     img.src = dataUrl;
     img.removeClass("mq-ad-banner__img--hidden");
-    ph == null ? void 0 : ph.addClass("mq-ad-banner__ph--hidden");
+    ph?.addClass("mq-ad-banner__ph--hidden");
   }
   async saveBanner() {
     this.plugin.settings.banner = { ...this.bannerState };
@@ -7700,13 +7711,12 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
   }
   /* ---- Vault note counts by creation date ---- */
   getVaultNoteCounts() {
-    var _a2;
     const counts = /* @__PURE__ */ new Map();
     const files = this.app.vault.getMarkdownFiles();
     for (const file of files) {
       const d = new Date(file.stat.ctime);
       const key = fmtDate2(d);
-      counts.set(key, ((_a2 = counts.get(key)) != null ? _a2 : 0) + 1);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
     }
     return counts;
   }
@@ -7753,26 +7763,24 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
   }
   /** Re-render only the optional background when its setting changes. */
   refreshNoiseOverlay() {
-    var _a2, _b;
-    (_b = (_a2 = this.dashboardEl) == null ? void 0 : _a2.querySelector(".mq-ad-noise")) == null ? void 0 : _b.remove();
+    this.dashboardEl?.querySelector(".mq-ad-noise")?.remove();
     if (this.dashboardEl) this.renderNoise(this.dashboardEl);
   }
   /* ============================================================
      Pulse
      ============================================================ */
   async renderPulse(root, d) {
-    var _a2;
     const bar = root.createDiv({ cls: "mq-ad-pulse" });
     const today = /* @__PURE__ */ new Date();
     const todayKey = todayStr3();
     const noteCounts = this.getVaultNoteCounts();
     const hs = calcHeatmapStats(noteCounts, today.getFullYear(), today);
-    const todayCount = (_a2 = noteCounts.get(todayKey)) != null ? _a2 : 0;
+    const todayCount = noteCounts.get(todayKey) ?? 0;
     let pendingCount = 0;
     try {
       const all = await this.taskStore.scanAllTasks();
       pendingCount = all.filter((t2) => t2.status !== "\u5DF2\u5B8C\u6210" && t2.status !== "\u5DF2\u53D6\u6D88").length;
-    } catch (e) {
+    } catch {
     }
     const totalEl = bar.createSpan({ text: `${hs.total} NOTES` });
     bar.createSpan({ cls: "mq-ad-pulse__sep", text: "\xB7" });
@@ -7791,13 +7799,12 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     this.pulseEls = { total: totalEl, pending: pendingEl, today: todayEl, streak: streakEl };
   }
   async updatePulse() {
-    var _a2;
     if (!this.pulseEls) return;
     const today = /* @__PURE__ */ new Date();
     const todayKey = todayStr3();
     const noteCounts = this.getVaultNoteCounts();
     const hs = calcHeatmapStats(noteCounts, today.getFullYear(), today);
-    const todayCount = (_a2 = noteCounts.get(todayKey)) != null ? _a2 : 0;
+    const todayCount = noteCounts.get(todayKey) ?? 0;
     this.pulseEls.total.textContent = `${hs.total} NOTES`;
     this.pulseEls.today.textContent = `\u0394 TODAY +${todayCount}`;
     this.pulseEls.streak.textContent = `${hs.streak}D STREAK`;
@@ -7805,28 +7812,26 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
       const all = await this.taskStore.scanAllTasks();
       const pending = all.filter((t2) => t2.status !== "\u5DF2\u5B8C\u6210" && t2.status !== "\u5DF2\u53D6\u6D88").length;
       this.pulseEls.pending.textContent = `${pending} PENDING`;
-    } catch (e) {
+    } catch {
     }
   }
   /** Live-update only the dashboard title text (cheap; no full re-render). */
   refreshTitle() {
-    var _a2;
     if (this.adTitleEl) this.adTitleEl.textContent = this.plugin.settings.dashboardTitle || MOCK_DATA.header.title;
     if (this.bannerTitleEl) {
       this.bannerTitleEl.textContent = this.plugin.settings.dashboardTitle || "";
-      this.bannerTitleEl.toggleClass("is-hidden", !((_a2 = this.plugin.settings.dashboardTitle) == null ? void 0 : _a2.trim()));
+      this.bannerTitleEl.toggleClass("is-hidden", !this.plugin.settings.dashboardTitle?.trim());
     }
   }
   /* ============================================================
      Header
      ============================================================ */
   renderHeader(root, d) {
-    var _a2, _b;
     const h = root.createEl("header", { cls: "mq-ad-header" });
     const left = h.createDiv({ cls: "mq-ad-header__left" });
     left.createEl("p", { cls: "mq-ad-eyebrow", text: d.header.eyebrow });
     this.adTitleEl = left.createEl("h1", { cls: "mq-ad-title", text: this.plugin.settings.dashboardTitle || d.header.title });
-    left.createEl("p", { cls: "mq-ad-subtitle", text: "Obsidian \xB7 Personal Dashboard \xB7 v" + ((_b = (_a2 = this.plugin.manifest) == null ? void 0 : _a2.version) != null ? _b : d.header.subtitle.replace(/^.*v/, "v")) });
+    left.createEl("p", { cls: "mq-ad-subtitle", text: "Obsidian \xB7 Personal Dashboard \xB7 v" + (this.plugin.manifest?.version ?? d.header.subtitle.replace(/^.*v/, "v")) });
     const right = h.createDiv({ cls: "mq-ad-header__right" });
     const now = /* @__PURE__ */ new Date();
     const dateStr = now.toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" });
@@ -7854,10 +7859,9 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     const settings = btns.createEl("button", { cls: "mq-ad-header__settings" });
     settings.textContent = "\u2699 \u8BBE\u7F6E";
     settings.addEventListener("click", () => {
-      var _a3, _b2;
       const app = this.app;
-      (_a3 = app.setting) == null ? void 0 : _a3.open();
-      (_b2 = app.setting) == null ? void 0 : _b2.openTabById(this.plugin.manifest.id);
+      app.setting?.open();
+      app.setting?.openTabById(this.plugin.manifest.id);
     });
     this.registerInterval(window.setInterval(() => {
       const n = /* @__PURE__ */ new Date();
@@ -7904,12 +7908,11 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
       else glyphEl.textContent = it.glyph;
       btn.createSpan({ text: it.label });
       btn.addEventListener("click", () => {
-        var _a2;
         btn.addClass("is-active");
         try {
           if (it.action === "home") void this.showDashboard();
           if (it.action === "diary") void this.createDiary();
-          if (it.action === "task") void this.openTaskModal((_a2 = this.selectedProject) != null ? _a2 : void 0);
+          if (it.action === "task") void this.openTaskModal(this.selectedProject ?? void 0);
           if (it.action === "project") void this.createProjectFile();
           if (it.action === "opportunity-create") this.oppBoard.openCreateModal();
           if (it.action === "all") void this.projectBoard.show();
@@ -7995,7 +7998,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
       const projects = await this.taskStore.scanAllProjects();
       const tasks = await this.taskStore.scanAllTasks();
       if (projects.length > 0 || tasks.length > 0) return;
-    } catch (e) {
+    } catch {
       return;
     }
     const card = board.createDiv({ cls: "mq-ad-card mq-ad-card--guide" });
@@ -8007,10 +8010,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
       b.addEventListener("click", fn);
     };
     mk("\uFF0B \u65B0\u5EFA\u9879\u76EE", () => void this.createProjectFile());
-    mk("\uFF0B \u65B0\u5EFA\u4EFB\u52A1", () => {
-      var _a2;
-      return void this.openTaskModal((_a2 = this.selectedProject) != null ? _a2 : void 0);
-    });
+    mk("\uFF0B \u65B0\u5EFA\u4EFB\u52A1", () => void this.openTaskModal(this.selectedProject ?? void 0));
     mk("\uFF0B \u65B0\u5EFA\u65E5\u8BB0", () => void this.createDiary());
   }
   /* ============================================================
@@ -8160,10 +8160,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
       SS: pad(d.getSeconds()),
       A: meridiem
     };
-    const name = pattern.replace(/(dddd|ddd|YYYY|MMM|MM|DD|HH|hh|mm|ss|SS|A)/g, (m) => {
-      var _a2;
-      return (_a2 = map[m]) != null ? _a2 : m;
-    });
+    const name = pattern.replace(/(dddd|ddd|YYYY|MMM|MM|DD|HH|hh|mm|ss|SS|A)/g, (m) => map[m] ?? m);
     return name.replace(/[*"/<>:|?\\]/g, "-");
   }
   /* ============================================================
@@ -8202,7 +8199,6 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
   }
   /** Update one daily-node state while preserving the task note's existing body. */
   async setDailyNode(task, date, state) {
-    var _a2, _b, _c, _d, _e, _f, _g, _h;
     if (!task.sourceFile) return;
     const file = this.app.vault.getAbstractFileByPath(task.sourceFile);
     if (!(file instanceof import_obsidian21.TFile)) return;
@@ -8210,9 +8206,9 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     const lines = raw.split(/\r?\n/);
     const eol = raw.includes("\r\n") ? "\r\n" : "\n";
     let fmEnd = 0;
-    if (((_a2 = lines[0]) == null ? void 0 : _a2.trim()) === "---") {
+    if (lines[0]?.trim() === "---") {
       for (let i = 1; i < lines.length; i++) {
-        if (((_b = lines[i]) == null ? void 0 : _b.trim()) === "---") {
+        if (lines[i]?.trim() === "---") {
           fmEnd = i;
           break;
         }
@@ -8221,11 +8217,11 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     const bodyNodes = parseDailyNodesFromBody(raw);
     const nodes = Object.keys(bodyNodes).length ? bodyNodes : { ...task.dailyNodes };
     if (state === "todo") delete nodes[date];
-    else nodes[date] = { s: state, n: ((_c = nodes[date]) == null ? void 0 : _c.n) || "" };
+    else nodes[date] = { s: state, n: nodes[date]?.n || "" };
     for (let i = fmEnd - 1; i >= 1; i--) {
-      if (!/^\s*每日节点\s*:/.test((_d = lines[i]) != null ? _d : "")) continue;
+      if (!/^\s*每日节点\s*:/.test(lines[i] ?? "")) continue;
       let end = i + 1;
-      while (end < fmEnd && (/^\s+/.test((_e = lines[end]) != null ? _e : "") || ((_f = lines[end]) != null ? _f : "").trim() === "")) end++;
+      while (end < fmEnd && (/^\s+/.test(lines[end] ?? "") || (lines[end] ?? "").trim() === "")) end++;
       lines.splice(i, end - i);
       fmEnd -= end - i;
     }
@@ -8234,7 +8230,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     const bodyLines = [];
     let inDailyNodes = false;
     for (let i = fmEnd + 1; i < lines.length; i++) {
-      const line = (_g = lines[i]) != null ? _g : "";
+      const line = lines[i] ?? "";
       if (/^#{1,6}\s+每日节点\s*$/.test(line.trim())) {
         inDailyNodes = true;
         continue;
@@ -8245,7 +8241,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
       }
       bodyLines.push(line);
     }
-    while (bodyLines.length && ((_h = bodyLines[bodyLines.length - 1]) != null ? _h : "").trim() === "") bodyLines.pop();
+    while (bodyLines.length && (bodyLines[bodyLines.length - 1] ?? "").trim() === "") bodyLines.pop();
     const tail = bodyLines.join(eol).trim();
     let out = fmPart;
     if (tail) out += eol + tail;
@@ -8296,9 +8292,8 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
   }
   /** Edit project via ProjectModal */
   async editProject(proj) {
-    var _a2, _b, _c;
     const { ProjectModal: ProjectModal2 } = await Promise.resolve().then(() => (init_ProjectModal(), ProjectModal_exports));
-    const stages = (_a2 = proj.stages) != null ? _a2 : isLongTermProject(proj.type) ? LONG_TERM_STAGES : this.plugin.settings.npdpStages;
+    const stages = proj.stages ?? (isLongTermProject(proj.type) ? LONG_TERM_STAGES : this.plugin.settings.npdpStages);
     new ProjectModal2({
       app: this.app,
       stages,
@@ -8308,8 +8303,8 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
         startDate: proj.startDate || "",
         endDate: proj.endDate || "",
         description: proj.description,
-        stage: (_b = proj.stage) != null ? _b : 0,
-        type: (_c = proj.type) != null ? _c : "stage"
+        stage: proj.stage ?? 0,
+        type: proj.type ?? "stage"
       },
       onSave: (data) => {
         void this.updateProjectFile(proj, data);
@@ -8514,10 +8509,9 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
       projects: projects.map((p) => ({ name: p.name, path: p.path })),
       allTasks: allTasks.map((t2) => ({ id: t2.id, title: t2.content, projectId: t2.projectId })),
       defaultProject,
-      defaultTitle: options == null ? void 0 : options.defaultTitle,
+      defaultTitle: options?.defaultTitle,
       onSave: (data) => {
         void (async () => {
-          var _a2;
           const taskId = await this.createTaskFile(
             data.title,
             data.project,
@@ -8536,9 +8530,9 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
             data.repeatWeekdays,
             data.repeatMonthDay,
             data.noEndDate,
-            options == null ? void 0 : options.opportunityId
+            options?.opportunityId
           );
-          if (taskId) (_a2 = options == null ? void 0 : options.onCreated) == null ? void 0 : _a2.call(options, taskId);
+          if (taskId) options?.onCreated?.(taskId);
         })();
       }
     }).open();
@@ -8625,10 +8619,9 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
   }
   /** 统一读取静态模块和动态倒计时实例的布局配置。 */
   findCardConfig(modId) {
-    var _a2, _b;
     const countdownId = this.countdownIdFromModuleId(modId);
-    if (countdownId) return (_a2 = this.plugin.settings.countdownCards) == null ? void 0 : _a2.find((card) => card.id === countdownId);
-    return (_b = this.plugin.settings.homeModules) == null ? void 0 : _b.find((card) => card.id === modId);
+    if (countdownId) return this.plugin.settings.countdownCards?.find((card) => card.id === countdownId);
+    return this.plugin.settings.homeModules?.find((card) => card.id === modId);
   }
   /**
    * 按 settings.homeModules 的「启用 + 顺序」驱动首页渲染（注册表化核心）。
@@ -8637,10 +8630,9 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
    * - 一次 vault 扫描的 allTasks 在 todo/progress/weekly 间共享。
    */
   async renderEnabledModules(board, opts) {
-    var _a2, _b, _c, _d;
-    const configs = (_a2 = this.plugin.settings.homeModules) != null ? _a2 : [];
+    const configs = this.plugin.settings.homeModules ?? [];
     const enabled = configs.filter((m) => m.id !== "countdown" && m.enabled && this.homeModules.some((x) => x.id === m.id)).map((cfg) => ({ id: cfg.id, cfg, mod: this.homeModules.find((x) => x.id === cfg.id) }));
-    for (const card of (_b = this.plugin.settings.countdownCards) != null ? _b : []) {
+    for (const card of this.plugin.settings.countdownCards ?? []) {
       if (!card.enabled) continue;
       enabled.push({
         id: this.countdownModuleId(card.id),
@@ -8651,8 +8643,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     enabled.sort((a, b) => a.cfg.order - b.cfg.order);
     const enabledIds = new Set(enabled.map((entry) => entry.id));
     board.querySelectorAll(".mq-ad-card").forEach((el) => {
-      var _a3;
-      if (!enabledIds.has((_a3 = el.getAttribute("data-mod")) != null ? _a3 : "")) el.remove();
+      if (!enabledIds.has(el.getAttribute("data-mod") ?? "")) el.remove();
     });
     const shells = [];
     for (const entry of enabled) {
@@ -8670,14 +8661,14 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
       if (expected !== el) board.insertBefore(el, expected);
       prev = el;
     }
-    const allTasks = (_c = opts == null ? void 0 : opts.allTasks) != null ? _c : await this.taskStore.scanAllTasks();
+    const allTasks = opts?.allTasks ?? await this.taskStore.scanAllTasks();
     for (const entry of enabled) {
       const { id, cfg, mod } = entry;
-      if ((opts == null ? void 0 : opts.onlyLive) && mod.live === false) continue;
+      if (opts?.onlyLive && mod.live === false) continue;
       if (this.currentPage !== "home" || !this.boardEl) return;
       const countdownId = this.countdownIdFromModuleId(id);
       if (countdownId) {
-        const card = (_d = this.plugin.settings.countdownCards) == null ? void 0 : _d.find((item) => item.id === countdownId);
+        const card = this.plugin.settings.countdownCards?.find((item) => item.id === countdownId);
         if (card) this.renderCountdownCard(board, id, card);
       } else {
         await mod.render(board, allTasks);
@@ -8696,8 +8687,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
    *  按模块最低宽度（MIN_COLS）与最低宽高比（MIN_RATIO）夹紧，保证项目情况/笔记统计
    *  等关键卡片既不被压得过窄、也不会被拉成「过窄过高的竖条」。 */
   applyCardSpan(el, cols, rows) {
-    var _a2;
-    const modId = (_a2 = el.getAttribute("data-mod")) != null ? _a2 : "";
+    const modId = el.getAttribute("data-mod") ?? "";
     const { cols: c, rows: r } = this.resolveSpan(modId, clampSpan(cols), clampSpan(rows));
     el.style.setProperty("--cols", String(c));
     el.style.setProperty("--rows", String(r));
@@ -8720,8 +8710,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
   }
   /** 把宽度按「模块最低宽度」与「当前实际列数」双重夹紧：响应式到更窄列数时只填充满，不强行跨列 */
   clampMinCols(modId, cols, colCount) {
-    var _a2;
-    const min = (_a2 = MIN_COLS[modId]) != null ? _a2 : 1;
+    const min = MIN_COLS[modId] ?? 1;
     const c = colCount >= min ? Math.max(min, cols) : cols;
     return Math.max(1, Math.min(colCount, c));
   }
@@ -8808,9 +8797,8 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     const board = this.boardEl;
     if (!board) return;
     board.querySelectorAll(".mq-ad-card").forEach((card) => {
-      var _a2;
       const el = card;
-      const modId = (_a2 = el.getAttribute("data-mod")) != null ? _a2 : "";
+      const modId = el.getAttribute("data-mod") ?? "";
       const m = this.findCardConfig(modId);
       if (!m) return;
       const { cols, rows } = this.resolveSpan(modId, clampSpan(m.cols), clampSpan(m.rows));
@@ -8865,12 +8853,11 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
   }
   /** 编辑态下右键卡片：倒计时卡片先弹出右键菜单选「编辑」，确认后再开编辑弹窗 */
   onBoardContextMenu(e) {
-    var _a2;
     if (this.currentPage !== "home") return;
     if (!this.adEditMode) return;
     const card = e.target.closest(".mq-ad-card");
     if (!card) return;
-    const modId = (_a2 = card.getAttribute("data-mod")) != null ? _a2 : "";
+    const modId = card.getAttribute("data-mod") ?? "";
     if (!this.countdownIdFromModuleId(modId)) return;
     e.preventDefault();
     const menu = new import_obsidian21.Menu();
@@ -8879,11 +8866,10 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
   }
   /** 打开倒计时事件编辑弹窗，保存后回写 settings 并刷新卡片 */
   openCountdownEdit(modId) {
-    var _a2;
     if (!this.boardEl) return;
     const countdownId = this.countdownIdFromModuleId(modId);
     if (!countdownId) return;
-    const cfg = (_a2 = this.plugin.settings.countdownCards) == null ? void 0 : _a2.find((card) => card.id === countdownId);
+    const cfg = this.plugin.settings.countdownCards?.find((card) => card.id === countdownId);
     if (!cfg) return;
     const modal = new CountdownModal(
       this.app,
@@ -8899,7 +8885,6 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
   }
   /** 开始拖拽某张卡片：用占位符保留其在网格中的位置，卡片本身提起跟随指针（手机图标式重排） */
   beginCardDrag(card, e) {
-    var _a2;
     if (this.adDrag) return;
     e.preventDefault();
     const rect = card.getBoundingClientRect();
@@ -8911,7 +8896,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     ph.style.setProperty("--rows", rows);
     ph.style.gridColumn = `span ${cols}`;
     ph.style.gridRow = `span ${rows}`;
-    (_a2 = card.parentNode) == null ? void 0 : _a2.insertBefore(ph, card);
+    card.parentNode?.insertBefore(ph, card);
     card.classList.add("mq-ad-card--dragging");
     card.style.width = rect.width + "px";
     card.style.height = rect.height + "px";
@@ -8948,8 +8933,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
    * 是此前「拖到删除位置却删不掉」的直接原因。外扩 TRASH_PAD 让热区更好命中。
    */
   isOverTrash(x, y) {
-    var _a2;
-    const trash = (_a2 = this.adEditBar) == null ? void 0 : _a2.querySelector(".mq-ad-editbar__trash");
+    const trash = this.adEditBar?.querySelector(".mq-ad-editbar__trash");
     if (!trash) return false;
     const r = trash.getBoundingClientRect();
     if (r.width === 0 && r.height === 0) return false;
@@ -8957,7 +8941,6 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     return x >= r.left - PAD && x <= r.right + PAD && y >= r.top - PAD && y <= r.bottom + PAD;
   }
   onDragMove(ev) {
-    var _a2, _b;
     const ds = this.adDrag;
     if (!ds) return;
     ds.moved = true;
@@ -8967,7 +8950,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     ds.card.style.top = ev.clientY - ds.offsetY + "px";
     const overTrash = this.isOverTrash(ev.clientX, ev.clientY);
     ds.overTrash = overTrash;
-    (_b = (_a2 = this.adEditBar) == null ? void 0 : _a2.querySelector(".mq-ad-editbar__trash")) == null ? void 0 : _b.classList.toggle("is-over", overTrash);
+    this.adEditBar?.querySelector(".mq-ad-editbar__trash")?.classList.toggle("is-over", overTrash);
     ds.card.classList.toggle("is-doomed", overTrash);
     if (overTrash) return;
     if (ds.raf !== null) return;
@@ -9045,7 +9028,6 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     });
   }
   onDragEnd(_ev) {
-    var _a2, _b, _c;
     const ds = this.adDrag;
     if (!ds) return;
     this.adDrag = null;
@@ -9061,31 +9043,30 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     card.style.removeProperty("height");
     card.style.removeProperty("z-index");
     card.style.removeProperty("pointer-events");
-    (_b = (_a2 = this.adEditBar) == null ? void 0 : _a2.querySelector(".mq-ad-editbar__trash")) == null ? void 0 : _b.classList.remove("is-over");
+    this.adEditBar?.querySelector(".mq-ad-editbar__trash")?.classList.remove("is-over");
     const overTrash = ds.overTrash || this.isOverTrash(ds.lastX, ds.lastY);
     if (overTrash && id) {
       ds.placeholder.remove();
       this.removeModule(id);
       return;
     }
-    (_c = ds.placeholder.parentNode) == null ? void 0 : _c.insertBefore(card, ds.placeholder);
+    ds.placeholder.parentNode?.insertBefore(card, ds.placeholder);
     ds.placeholder.remove();
     this.syncOrderFromDom();
   }
   /** 把当前 DOM 中卡片的顺序写回 settings.homeModules 并持久化 */
   syncOrderFromDom() {
-    var _a2, _b, _c;
     if (!this.boardEl) return;
     const order = [];
     this.boardEl.querySelectorAll(".mq-ad-card").forEach((el) => {
       const id = el.getAttribute("data-mod");
       if (id) order.push(id);
     });
-    const hm = (_a2 = this.plugin.settings.homeModules) != null ? _a2 : [];
+    const hm = this.plugin.settings.homeModules ?? [];
     if (order.length === 0) return;
     const map = /* @__PURE__ */ new Map();
     for (const m of hm) if (m.id !== "countdown") map.set(m.id, m);
-    for (const card of (_b = this.plugin.settings.countdownCards) != null ? _b : []) map.set(this.countdownModuleId(card.id), card);
+    for (const card of this.plugin.settings.countdownCards ?? []) map.set(this.countdownModuleId(card.id), card);
     order.forEach((id, i) => {
       const m = map.get(id);
       if (m) m.order = i;
@@ -9094,23 +9075,22 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     for (const m of hm) {
       if (m.id !== "countdown" && !order.includes(m.id)) m.order = next++;
     }
-    for (const card of (_c = this.plugin.settings.countdownCards) != null ? _c : []) {
+    for (const card of this.plugin.settings.countdownCards ?? []) {
       if (!order.includes(this.countdownModuleId(card.id))) card.order = next++;
     }
     void this.plugin.saveSettings();
   }
   /** 移除模块；普通模块仅隐藏，倒计时实例则仅删除该事件卡片。 */
   removeModule(id) {
-    var _a2, _b, _c, _d;
     const countdownId = this.countdownIdFromModuleId(id);
     if (countdownId) {
-      this.plugin.settings.countdownCards = ((_a2 = this.plugin.settings.countdownCards) != null ? _a2 : []).filter((card) => card.id !== countdownId);
+      this.plugin.settings.countdownCards = (this.plugin.settings.countdownCards ?? []).filter((card) => card.id !== countdownId);
     } else {
-      const m = (_b = this.plugin.settings.homeModules) == null ? void 0 : _b.find((x) => x.id === id);
+      const m = this.plugin.settings.homeModules?.find((x) => x.id === id);
       if (m) m.enabled = false;
     }
     void this.plugin.saveSettings();
-    (_d = (_c = this.boardEl) == null ? void 0 : _c.querySelector(`[data-mod="${id}"]`)) == null ? void 0 : _d.remove();
+    this.boardEl?.querySelector(`[data-mod="${id}"]`)?.remove();
     if (this.boardEl && this.boardEl.querySelectorAll(".mq-ad-card").length === 0) {
       this.renderBoardEmptyHint();
     }
@@ -9131,44 +9111,41 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
   }
   /** 重新启用被隐藏的模块并追加到末尾 */
   async addModule(id) {
-    var _a2, _b;
     const hm = this.plugin.settings.homeModules;
-    const m = hm == null ? void 0 : hm.find((x) => x.id === id);
+    const m = hm?.find((x) => x.id === id);
     if (!m) return;
     m.enabled = true;
     const maxOrder = hm && hm.length ? Math.max(...hm.map((x) => x.order)) : -1;
     m.order = maxOrder + 1;
     await this.plugin.saveSettings();
-    (_b = (_a2 = this.boardEl) == null ? void 0 : _a2.querySelector(".mq-ad-empty")) == null ? void 0 : _b.remove();
+    this.boardEl?.querySelector(".mq-ad-empty")?.remove();
     await this.showDashboardKeepEditMode();
   }
   enterEditMode() {
-    var _a2, _b;
     if (this.adEditMode) return;
     this.adEditMode = true;
-    (_a2 = this.dashboardEl) == null ? void 0 : _a2.classList.add("mq-ad-edit");
+    this.dashboardEl?.classList.add("mq-ad-edit");
     this.showEditBar();
     this.injectCardResizeButtons();
-    (_b = this.boardEl) == null ? void 0 : _b.addEventListener("click", this.adClickGuard, true);
+    this.boardEl?.addEventListener("click", this.adClickGuard, true);
     if (this.boardEl && this.boardEl.querySelectorAll(".mq-ad-card").length === 0) {
       this.openAddMenu();
     }
   }
   /** 退出编辑态；同时清理可能残留的比例/添加弹层与编辑条（切页或点「完成」时调用） */
   exitEditMode() {
-    var _a2, _b, _c, _d, _e;
     if (!this.adEditMode) return;
     this.adEditMode = false;
-    (_a2 = this.dashboardEl) == null ? void 0 : _a2.classList.remove("mq-ad-edit");
-    (_b = this.boardEl) == null ? void 0 : _b.querySelectorAll(".mq-ad-card__resize, .mq-ad-card__ratio, .mq-ad-ph").forEach((b) => b.remove());
-    (_c = this.boardEl) == null ? void 0 : _c.querySelectorAll(".mq-ad-card").forEach((c) => {
+    this.dashboardEl?.classList.remove("mq-ad-edit");
+    this.boardEl?.querySelectorAll(".mq-ad-card__resize, .mq-ad-card__ratio, .mq-ad-ph").forEach((b) => b.remove());
+    this.boardEl?.querySelectorAll(".mq-ad-card").forEach((c) => {
       c.classList.remove("mq-ad-card--dragging", "mq-ad-card--resizing", "is-doomed");
       c.style.removeProperty("transform");
       c.style.removeProperty("transition");
     });
-    (_d = this.dashboardEl) == null ? void 0 : _d.querySelectorAll(".mq-ad-addmenu-backdrop, .mq-ad-propmenu-backdrop").forEach((b) => b.remove());
+    this.dashboardEl?.querySelectorAll(".mq-ad-addmenu-backdrop, .mq-ad-propmenu-backdrop").forEach((b) => b.remove());
     this.hideEditBar();
-    (_e = this.boardEl) == null ? void 0 : _e.removeEventListener("click", this.adClickGuard, true);
+    this.boardEl?.removeEventListener("click", this.adClickGuard, true);
   }
   showEditBar() {
     if (this.adEditBar || !this.dashboardEl) return;
@@ -9184,8 +9161,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     this.adEditBar = bar;
   }
   hideEditBar() {
-    var _a2;
-    (_a2 = this.adEditBar) == null ? void 0 : _a2.remove();
+    this.adEditBar?.remove();
     this.adEditBar = null;
   }
   /** 编辑态：给每张卡片追加「⤢ 比例」手柄（重复调用安全：先清后加，重渲染后补回）。
@@ -9194,12 +9170,8 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     if (!this.boardEl) return;
     this.boardEl.querySelectorAll(".mq-ad-card__resize").forEach((b) => b.remove());
     this.boardEl.querySelectorAll(".mq-ad-card").forEach((card) => {
-      var _a2, _b;
       const c = card;
-      const modId = (_b = c.getAttribute("data-mod")) != null ? _b : (_a2 = this.homeModules.find((m) => {
-        var _a3;
-        return c.classList.contains((_a3 = m.cardCls.split(" ")[1]) != null ? _a3 : "");
-      })) == null ? void 0 : _a2.id;
+      const modId = c.getAttribute("data-mod") ?? this.homeModules.find((m) => c.classList.contains(m.cardCls.split(" ")[1] ?? ""))?.id;
       if (!modId) return;
       if (!c.getAttribute("data-mod")) c.setAttribute("data-mod", modId);
       const btn = c.createDiv({ cls: "mq-ad-card__resize", text: "\u2922" });
@@ -9242,8 +9214,8 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     e.preventDefault();
     e.stopPropagation();
     const m = this.findCardConfig(modId);
-    const startCols = clampSpan(m == null ? void 0 : m.cols);
-    const startRows = clampSpan(m == null ? void 0 : m.rows);
+    const startCols = clampSpan(m?.cols);
+    const startRows = clampSpan(m?.rows);
     this.adResize = { card, modId, startCols, startRows, x0: e.clientX, y0: e.clientY, moved: false };
     card.classList.add("mq-ad-card--resizing");
     const move = (ev) => this.onResizeMove(ev);
@@ -9281,13 +9253,12 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     card.classList.toggle("is-limit", limited);
   }
   onResizeEnd(_ev) {
-    var _a2;
     const st = this.adResize;
     if (!st) return;
     this.adResize = null;
     st.card.classList.remove("mq-ad-card--resizing");
     st.card.classList.remove("is-limit");
-    (_a2 = st.card.querySelector(".mq-ad-card__ratio")) == null ? void 0 : _a2.remove();
+    st.card.querySelector(".mq-ad-card__ratio")?.remove();
     if (!st.moved) {
       this.openProportionMenu(st.card, st.modId);
       return;
@@ -9314,9 +9285,8 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
    * 同时把 data-theme 复制过来，令牌（--mq-ad-*）在 body 层依然按当前主题解析。
    */
   createPopover(cls, opts) {
-    var _a2;
-    const backdrop = document.body.createDiv({ cls: `mq-ad-popover ${cls}` + ((opts == null ? void 0 : opts.anchored) ? " is-anchored" : "") });
-    const theme = (_a2 = this.dashboardEl) == null ? void 0 : _a2.getAttribute("data-theme");
+    const backdrop = document.body.createDiv({ cls: `mq-ad-popover ${cls}` + (opts?.anchored ? " is-anchored" : "") });
+    const theme = this.dashboardEl?.getAttribute("data-theme");
     if (theme) backdrop.setAttribute("data-theme", theme);
     const close = () => {
       window.removeEventListener("keydown", onKey, true);
@@ -9340,7 +9310,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const mr = menu.getBoundingClientRect();
-    const ar = anchor == null ? void 0 : anchor.getBoundingClientRect();
+    const ar = anchor?.getBoundingClientRect();
     let left;
     let top;
     if (ar) {
@@ -9356,11 +9326,10 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
   }
   /** 编辑态：弹出 4×4 比例选择器；宽度/高度各 1-4 格（宽度 4 = 页面最宽），高度可大于宽度（如 1:2 竖卡） */
   openProportionMenu(cardEl, modId) {
-    var _a2, _b;
     const m = this.findCardConfig(modId);
     if (!m) return;
-    const curCols = (_a2 = m.cols) != null ? _a2 : 1;
-    const curRows = (_b = m.rows) != null ? _b : 1;
+    const curCols = m.cols ?? 1;
+    const curRows = m.rows ?? 1;
     const { backdrop, close } = this.createPopover("mq-ad-propmenu-backdrop", { anchored: true });
     const menu = backdrop.createDiv({ cls: "mq-ad-propmenu" });
     const ratioHint = MIN_RATIO[modId] ? `\uFF08\u672C\u5361\u6700\u4F4E\u5BBD\u9AD8\u6BD4 ${MIN_RATIO[modId]}:1\uFF09` : "";
@@ -9399,11 +9368,10 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
   }
   /** 弹出被隐藏模块的列表，点击即加回首页 */
   openAddMenu() {
-    var _a2, _b, _c;
-    const hm = (_a2 = this.plugin.settings.homeModules) != null ? _a2 : [];
+    const hm = this.plugin.settings.homeModules ?? [];
     const hidden = hm.filter((m) => m.id !== "countdown" && !m.enabled);
     const titleMap = new Map(this.homeModules.map((m) => [m.id, m.title]));
-    const countdownCards = (_b = this.plugin.settings.countdownCards) != null ? _b : [];
+    const countdownCards = this.plugin.settings.countdownCards ?? [];
     const { backdrop, close } = this.createPopover("mq-ad-addmenu-backdrop");
     const menu = backdrop.createDiv({ cls: "mq-ad-addmenu" });
     menu.createDiv({ cls: "mq-ad-addmenu__title", text: "\u6DFB\u52A0\u5361\u7247\u5230\u9996\u9875" });
@@ -9421,7 +9389,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     }
     for (const m of hidden) {
       const item = menu.createDiv({ cls: "mq-ad-addmenu__item" });
-      item.createSpan({ text: (_c = titleMap.get(m.id)) != null ? _c : m.id });
+      item.createSpan({ text: titleMap.get(m.id) ?? m.id });
       item.createSpan({ text: "\uFF0B" });
       item.addEventListener("click", () => {
         close();
@@ -9431,8 +9399,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
   }
   /** 在底部编辑条中追加一张独立倒计时卡片，行为与 Xove 的多倒计时一致。 */
   async addCountdownCard() {
-    var _a2, _b, _c, _d;
-    const cards = (_a2 = this.plugin.settings.countdownCards) != null ? _a2 : [];
+    const cards = this.plugin.settings.countdownCards ?? [];
     if (cards.length >= 5) {
       this.showToast("\u5012\u8BA1\u65F6\u5361\u7247\u6700\u591A\u6DFB\u52A0 5 \u5F20");
       return;
@@ -9441,13 +9408,13 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     let sequence = cards.length + 1;
     let id = `countdown-${sequence}`;
     while (ids.has(id)) id = `countdown-${++sequence}`;
-    const staticOrders = ((_b = this.plugin.settings.homeModules) != null ? _b : []).filter((module2) => module2.id !== "countdown").map((module2) => module2.order);
+    const staticOrders = (this.plugin.settings.homeModules ?? []).filter((module2) => module2.id !== "countdown").map((module2) => module2.order);
     const dynamicOrders = cards.map((card) => card.order);
     const order = Math.max(-1, ...staticOrders, ...dynamicOrders) + 1;
     cards.push({ id, eventName: "\u65B0\u5E74", targetDate: "2027-01-01", enabled: true, order, cols: 1, rows: 1 });
     this.plugin.settings.countdownCards = cards;
     await this.plugin.saveSettings();
-    (_d = (_c = this.boardEl) == null ? void 0 : _c.querySelector(".mq-ad-empty")) == null ? void 0 : _d.remove();
+    this.boardEl?.querySelector(".mq-ad-empty")?.remove();
     await this.showDashboardKeepEditMode();
   }
   /** 全部卡片被移除后的空状态提示 */
@@ -9463,10 +9430,9 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
    *  A single vault scan feeds all three cards; each card reuses its own shell
    *  (no remove/re-create), so the layout never flashes. */
   async refreshHomeCards() {
-    var _a2, _b;
     if (this.currentPage !== "home" || !this.boardEl) return;
-    (_a2 = this.boardEl.querySelector(".mq-ad-card--guide")) == null ? void 0 : _a2.remove();
-    const allTasks = (_b = this.dashboardStore.getTasks()) != null ? _b : await this.taskStore.scanAllTasks();
+    this.boardEl.querySelector(".mq-ad-card--guide")?.remove();
+    const allTasks = this.dashboardStore.getTasks() ?? await this.taskStore.scanAllTasks();
     if (this.currentPage !== "home" || !this.boardEl) return;
     await this.renderEnabledModules(this.boardEl, { onlyLive: true, allTasks });
     this.refreshParseIssues();
@@ -9509,7 +9475,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
      TODO — async, reads real tasks from vault
      ============================================================ */
   async renderTodo(board, allTasks) {
-    const tasks = allTasks != null ? allTasks : await this.taskStore.scanAllTasks();
+    const tasks = allTasks ?? await this.taskStore.scanAllTasks();
     const card = this.getOrCreateCard(board, "mq-ad-card mq-ad-b-todo");
     const summary = card.createSpan({ cls: "mq-ad-card__hint" });
     this.cardHead(card, "\u25CE", "TODO", void 0, summary);
@@ -9517,10 +9483,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     try {
       const today = todayStr3();
       const todayTasks = getTodayTasks(tasks, today, this.plugin.settings.todoShowCompleted);
-      const isDoneRow = (task) => {
-        var _a2, _b, _c;
-        return task.status === "\u5DF2\u5B8C\u6210" || !!((_a2 = task.completeTime) == null ? void 0 : _a2.startsWith(today)) || ((_c = (_b = task.dailyNodes) == null ? void 0 : _b[today]) == null ? void 0 : _c.s) === "done";
-      };
+      const isDoneRow = (task) => task.status === "\u5DF2\u5B8C\u6210" || !!task.completeTime?.startsWith(today) || task.dailyNodes?.[today]?.s === "done";
       const sorted = todayTasks.sort((a, b) => {
         if (isDoneRow(a) !== isDoneRow(b)) return isDoneRow(a) ? 1 : -1;
         if (a.isOverdue && !b.isOverdue) return -1;
@@ -9571,14 +9534,14 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
       const skipCount = universe.filter((t2) => isSkipToday(t2)).length;
       const totalForSummary = universe.length - skipCount;
       summary.textContent = `${doneCount} / ${totalForSummary} done \xB7 \u6309\u4F18\u5148\u7EA7`;
-    } catch (e) {
+    } catch {
       summary.textContent = "0 / 0 done";
       list.createDiv({ cls: "mq-ad-todo__empty", text: "\u6682\u65E0\u4ECA\u65E5\u4EFB\u52A1" });
     }
   }
   /* ---- Progress (dual ring, real task data) ---- */
   async renderProgress(board, allTasks) {
-    const tasks = allTasks != null ? allTasks : await this.taskStore.scanAllTasks();
+    const tasks = allTasks ?? await this.taskStore.scanAllTasks();
     const card = this.getOrCreateCard(board, "mq-ad-card mq-ad-b-progress");
     this.cardHead(card, "\u25D0", "\u5DE5\u4F5C\u8FDB\u5EA6", "today \xB7 ring");
     const dp = card.createDiv({ cls: "mq-ad-dp" });
@@ -9591,7 +9554,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
       const nonCancelled = tasks.filter((t2) => t2.status !== "\u5DF2\u53D6\u6D88");
       allTotal = nonCancelled.length;
       allDone = nonCancelled.filter((t2) => t2.status === "\u5DF2\u5B8C\u6210").length;
-    } catch (e) {
+    } catch {
     }
     if (tasks.length === 0) {
       this.renderEmpty(card, {
@@ -9599,10 +9562,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
         title: "\u8FD8\u6CA1\u6709\u4EFB\u4F55\u4EFB\u52A1",
         hint: "\u5728\u4E0B\u65B9\u300C\u5FEB\u901F\u6355\u6349\u300D\u91CC\u968F\u624B\u8BB0\u4E00\u6761\uFF0C\u6216\u70B9\u5DE5\u5177\u680F\u300C\uFF0B \u65B0\u5EFA\u4EFB\u52A1\u300D\u5F00\u59CB\u3002",
         actionLabel: "\uFF0B \u65B0\u5EFA\u4EFB\u52A1",
-        onAction: () => {
-          var _a2;
-          return void this.openTaskModal((_a2 = this.selectedProject) != null ? _a2 : void 0);
-        }
+        onAction: () => void this.openTaskModal(this.selectedProject ?? void 0)
       });
       return;
     }
@@ -9614,7 +9574,6 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     dp.createDiv({ cls: "mq-ad-dp__stat" }).createEl("strong", { text: `\u5DF2\u5B8C\u6210 ${allDone} / \u603B\u4EFB\u52A1 ${allTotal}` });
   }
   buildRing(parent, pct, pctCls, ringKey) {
-    var _a2, _b;
     const C = 263.9;
     const wrap = parent.createDiv({ cls: "mq-ad-dp__ring" });
     const svg = wrap.createSvg("svg");
@@ -9630,7 +9589,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     fill.setAttribute("r", "42");
     fill.classList.add("mq-ad-fill");
     fill.setAttribute("stroke-dasharray", C.toFixed(2));
-    const from = (_b = (_a2 = this.ringAnim[ringKey]) == null ? void 0 : _a2.value) != null ? _b : 0;
+    const from = this.ringAnim[ringKey]?.value ?? 0;
     const to = Math.max(0, Math.min(100, pct));
     fill.setAttribute("stroke-dashoffset", (C * (1 - from / 100)).toFixed(2));
     const center = wrap.createDiv({ cls: "mq-ad-dp__center" });
@@ -9655,7 +9614,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     }
     const { duration, easing } = RING_ANIM;
     const state = this.ringAnim[ringKey];
-    if (state == null ? void 0 : state.raf) cancelAnimationFrame(state.raf);
+    if (state?.raf) cancelAnimationFrame(state.raf);
     const start = performance.now();
     const step = (now) => {
       const t2 = Math.min(1, (now - start) / duration);
@@ -9677,7 +9636,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
   /* ---- Weekly & Overdue ---- */
   /* ---- Weekly & Overdue (real task data) ---- */
   async renderWeekly(board, allTasks) {
-    const tasks = allTasks != null ? allTasks : await this.taskStore.scanAllTasks();
+    const tasks = allTasks ?? await this.taskStore.scanAllTasks();
     const card = this.getOrCreateCard(board, "mq-ad-card mq-ad-b-weekly");
     const head = card.createDiv({ cls: "mq-ad-card__head" });
     const h3 = head.createEl("h3", { cls: "mq-ad-card__title" });
@@ -9733,13 +9692,13 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
       }
       const foot = card.createDiv({ cls: "mq-ad-wo__foot" });
       foot.textContent = `\u672C\u5468\u5171 ${thisWeek.length} \u4E2A\u4EFB\u52A1\uFF0C\u903E\u671F ${overdue.length} \u4E2A`;
-    } catch (e) {
+    } catch {
       list.createDiv({ cls: "mq-ad-wo__empty", text: "\u52A0\u8F7D\u5931\u8D25" });
     }
   }
   /** All completed tasks across projects, most recently completed first. */
   async renderCompletedHistory(board, allTasks) {
-    const tasks = allTasks != null ? allTasks : await this.taskStore.scanAllTasks();
+    const tasks = allTasks ?? await this.taskStore.scanAllTasks();
     const card = this.getOrCreateCard(board, "mq-ad-card mq-ad-b-completed-history");
     const head = card.createDiv({ cls: "mq-ad-card__head" });
     const h3 = head.createEl("h3", { cls: "mq-ad-card__title" });
@@ -9756,14 +9715,11 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
         list.createDiv({ cls: "mq-ad-wo__empty", text: "\u6682\u65E0\u5DF2\u5B8C\u6210\u5F85\u529E" });
       } else {
         const ul = list.createEl("ul", { cls: "mq-ad-wo__list" });
-        completed.forEach((task) => {
-          var _a2;
-          return this.renderWeeklyRow(ul, task, false, (_a2 = task.completeTime) == null ? void 0 : _a2.slice(0, 10));
-        });
+        completed.forEach((task) => this.renderWeeklyRow(ul, task, false, task.completeTime?.slice(0, 10)));
       }
       const foot = card.createDiv({ cls: "mq-ad-wo__foot" });
       foot.textContent = `\u5386\u53F2\u5171 ${completed.length} \u4E2A\u5DF2\u5B8C\u6210\u4EFB\u52A1`;
-    } catch (e) {
+    } catch {
       list.createDiv({ cls: "mq-ad-wo__empty", text: "\u52A0\u8F7D\u5931\u8D25" });
     }
   }
@@ -9853,7 +9809,6 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
   }
   /* ---- Projects (real data) ---- */
   async renderProjects(board) {
-    var _a2;
     const card = this.getOrCreateCard(board, "mq-ad-card mq-ad-b-project");
     const head = card.createDiv({ cls: "mq-ad-card__head mq-ad-card__head--proj" });
     const h3 = head.createEl("h3", { cls: "mq-ad-card__title" });
@@ -9861,17 +9816,14 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     h3.appendText("\u9879\u76EE\u60C5\u51B5");
     const hint = head.createSpan({ cls: "mq-ad-card__hint mq-ad-card__hint--inline" });
     const stages = this.plugin.settings.npdpStages;
-    const maxStageFilter = (_a2 = this.plugin.settings.npdpProgressFilter) != null ? _a2 : stages.length;
+    const maxStageFilter = this.plugin.settings.npdpProgressFilter ?? stages.length;
     let projects = [];
     try {
       projects = await this.taskStore.scanAllProjects();
-    } catch (e) {
+    } catch {
     }
     const filtered = projects.filter(
-      (p) => {
-        var _a3;
-        return isLongTermProject(p.type) || maxStageFilter >= stages.length || ((_a3 = p.stage) != null ? _a3 : 0) <= maxStageFilter;
-      }
+      (p) => isLongTermProject(p.type) || maxStageFilter >= stages.length || (p.stage ?? 0) <= maxStageFilter
     );
     hint.textContent = `${filtered.length} / ${projects.length} \u4E2A\u9879\u76EE`;
     if (maxStageFilter < stages.length) {
@@ -9891,9 +9843,8 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     const list = proj.createDiv({ cls: "mq-ad-proj__list" });
     let activeCount = 0;
     filtered.forEach((p) => {
-      var _a3, _b, _c;
-      const projStage = (_a3 = p.stage) != null ? _a3 : 0;
-      if (projStage > 0 && projStage < ((_c = (_b = p.stages) == null ? void 0 : _b.length) != null ? _c : stages.length)) activeCount++;
+      const projStage = p.stage ?? 0;
+      if (projStage > 0 && projStage < (p.stages?.length ?? stages.length)) activeCount++;
       const pct = p.taskCount > 0 ? Math.round(p.activeCount / p.taskCount * 100) : 0;
       const row = list.createDiv({ cls: "mq-ad-proj__row" });
       row.createSpan({ cls: "mq-ad-proj__dot", attr: { style: `background:${p.color}` } });
@@ -9942,12 +9893,11 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
   }
   /* ---- Heatmap (year-based: Jan 1 -> Dec 31) ---- */
   renderHeatmap(board) {
-    var _a2, _b, _c;
     const card = this.getOrCreateCard(board, "mq-ad-card mq-ad-b-heatmap");
     this.heatmapCard = card;
     card.setAttribute("data-mod", "heatmap");
-    const hm = (_a2 = this.plugin.settings.homeModules) == null ? void 0 : _a2.find((x) => x.id === "heatmap");
-    this.applyCardSpan(card, hm == null ? void 0 : hm.cols, hm == null ? void 0 : hm.rows);
+    const hm = this.plugin.settings.homeModules?.find((x) => x.id === "heatmap");
+    this.applyCardSpan(card, hm?.cols, hm?.rows);
     const noteCounts = this.getVaultNoteCounts();
     const today = /* @__PURE__ */ new Date();
     const todayTime = today.getTime();
@@ -10001,7 +9951,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
           continue;
         }
         const dateStr = fmtDate2(cellDate);
-        const count = (_b = noteCounts.get(dateStr)) != null ? _b : 0;
+        const count = noteCounts.get(dateStr) ?? 0;
         const isFuture = cellTime > todayTime;
         if (!isFuture && count > 0) {
           if (count === 1) cell.addClass("l1");
@@ -10026,7 +9976,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     legend.createSpan({ cls: "mq-ad-ns__lbl", text: "\u591A" });
     this.layoutHeatmap(card);
     if (this.adHmObsTarget !== heat) {
-      (_c = this.adHmObs) == null ? void 0 : _c.disconnect();
+      this.adHmObs?.disconnect();
       this.adHmObs = new ResizeObserver(() => {
         if (this.heatmapCard) this.layoutHeatmap(this.heatmapCard);
       });
@@ -10042,7 +9992,6 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
    * 4) 月份标签按可见周窗口 + 实际间距重建，保证与格子列严格对齐。
    */
   layoutHeatmap(card) {
-    var _a2, _b;
     const heat = card.querySelector(".mq-ad-ns__heat");
     const cells = card.querySelector(".mq-ad-ns__cells");
     const dow = card.querySelector(".mq-ad-ns__dow");
@@ -10076,15 +10025,14 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     const visible = this.adHmWeekMonths.slice(total - weeks);
     monthsRow.empty();
     const unit = HM_CELL + cgap;
-    let curM = (_a2 = visible[0]) != null ? _a2 : 0;
+    let curM = visible[0] ?? 0;
     let curS = 1;
     const flush = (m, span) => {
-      var _a3;
-      const label = monthsRow.createSpan({ text: (_a3 = monthNames[m]) != null ? _a3 : "" });
+      const label = monthsRow.createSpan({ text: monthNames[m] ?? "" });
       label.style.minWidth = span * unit + "px";
     };
     for (let w = 1; w < visible.length; w++) {
-      const m = (_b = visible[w]) != null ? _b : curM;
+      const m = visible[w] ?? curM;
       if (m === curM) {
         curS++;
         continue;
@@ -10161,7 +10109,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     const stats = top.createEl("button", { cls: "mq-ad-pomo-stats-btn", attr: { type: "button", "aria-label": "\u4E13\u6CE8\u7EDF\u8BA1", title: "\u4E13\u6CE8\u7EDF\u8BA1" } });
     (0, import_obsidian21.setIcon)(stats, "bar-chart-2");
     const openStats = (event) => {
-      event == null ? void 0 : event.stopPropagation();
+      event?.stopPropagation();
       showPomodoroStats(card.ownerDocument, service);
     };
     stats.addEventListener("click", openStats);
@@ -10181,7 +10129,6 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
     const dots = card.createDiv({ cls: "mq-ad-pomo-dots" });
     const main = card.createEl("button", { cls: "mq-ad-pomo-main", attr: { type: "button" } });
     const update = () => {
-      var _a2, _b;
       const state = service.getState();
       const mins = Math.floor(state.remainingSeconds / 60);
       const seconds = state.remainingSeconds % 60;
@@ -10193,7 +10140,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
       main.textContent = state.status === "running" ? "\u505C\u6B62" : standby ? state.phase === "work" ? "\u7EE7\u7EED\u4E13\u6CE8" : "\u5F00\u59CB\u4F11\u606F" : "\u5F00\u59CB\u4E13\u6CE8";
       main.toggleClass("is-running", state.status === "running");
       dots.empty();
-      const interval = (_b = (_a2 = this.plugin.settings.pomodoro) == null ? void 0 : _a2.pomodoroLongBreakInterval) != null ? _b : 4;
+      const interval = this.plugin.settings.pomodoro?.pomodoroLongBreakInterval ?? 4;
       for (let index = 0; index < interval; index++) dots.createDiv({ cls: "mq-ad-pomo-dot" + (index < state.completedWorkSessions ? " is-filled" : "") });
     };
     service.setOnTick(update);
@@ -10220,7 +10167,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
       } else trigger.createSpan({ cls: "mq-ad-pomo-activity-placeholder", text: "\u8BBE\u7F6E\u6D3B\u52A8" });
     };
     const close = () => {
-      panel == null ? void 0 : panel.remove();
+      panel?.remove();
       panel = null;
     };
     const open = () => {
@@ -10306,7 +10253,7 @@ var DashboardView = class _DashboardView extends import_obsidian21.ItemView {
   }
   /** 解析 ISO yyyy-mm-dd 为目标 Date（当地 0 点）；非法或留空回退到「下一年 1 月 1 日」 */
   parseCountdownDate(s) {
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((s != null ? s : "").trim());
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((s ?? "").trim());
     if (m) {
       const y = parseInt(m[1], 10);
       const mo = parseInt(m[2], 10) - 1;
@@ -10338,9 +10285,10 @@ var KnowledgeWorkbenchView = class extends import_obsidian22.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.plugin = plugin;
-    __publicField(this, "frame", null);
-    __publicField(this, "pendingPage", "dashboard");
   }
+  plugin;
+  frame = null;
+  pendingPage = "dashboard";
   getViewType() {
     return KNOWLEDGE_WORKBENCH_VIEW_TYPE;
   }
@@ -10393,24 +10341,26 @@ var KnowledgeWorkbenchView = class extends import_obsidian22.ItemView {
 function getNodeRequire() {
   try {
     return Function('return typeof require === "function" ? require : null')();
-  } catch (e) {
+  } catch {
     return null;
   }
 }
 function getNodeProcessEnv() {
-  var _a2, _b;
   const nodeGlobal = globalThis;
-  return { ...(_b = (_a2 = nodeGlobal.process) == null ? void 0 : _a2.env) != null ? _b : {} };
+  return { ...nodeGlobal.process?.env ?? {} };
 }
 var KnowledgeWorkbenchController = class {
   constructor(getSettings, onLog, onSettingsChanged) {
     this.getSettings = getSettings;
     this.onLog = onLog;
     this.onSettingsChanged = onSettingsChanged;
-    __publicField(this, "child", null);
-    __publicField(this, "starting", null);
-    __publicField(this, "lastError", "");
   }
+  getSettings;
+  onLog;
+  onSettingsChanged;
+  child = null;
+  starting = null;
+  lastError = "";
   get error() {
     return this.lastError;
   }
@@ -10440,7 +10390,7 @@ var KnowledgeWorkbenchController = class {
     let existing = {};
     try {
       if (fs.existsSync(paths.configPath)) existing = JSON.parse(fs.readFileSync(paths.configPath, "utf-8"));
-    } catch (e) {
+    } catch {
     }
     fs.writeFileSync(paths.configPath, JSON.stringify({
       ...existing,
@@ -10465,7 +10415,7 @@ var KnowledgeWorkbenchController = class {
       window.clearTimeout(timer);
       if (!response.ok) return false;
       return (response.headers.get("content-type") || "").includes("application/json");
-    } catch (e) {
+    } catch {
       return false;
     }
   }
@@ -10476,7 +10426,7 @@ var KnowledgeWorkbenchController = class {
       const cp = req("child_process");
       const output = cp.execFileSync("/usr/sbin/lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN"], { encoding: "utf8" });
       if (String(output).trim()) return false;
-    } catch (e) {
+    } catch {
     }
     const net = req("net");
     const host = this.getSettings().host || "127.0.0.1";
@@ -10493,15 +10443,14 @@ var KnowledgeWorkbenchController = class {
     });
   }
   async selectPort() {
-    var _a2, _b;
     const s = this.getSettings();
     const preferred = Number(s.port) || 5173;
     if (await this.isPortAvailable(preferred)) return preferred;
     for (let port = 5174; port <= 5180; port += 1) {
       if (await this.isPortAvailable(port)) {
-        (_a2 = this.onLog) == null ? void 0 : _a2.call(this, `\u7AEF\u53E3 ${preferred} \u5DF2\u88AB\u5360\u7528\uFF0C\u5207\u6362\u5230 ${port}`);
+        this.onLog?.(`\u7AEF\u53E3 ${preferred} \u5DF2\u88AB\u5360\u7528\uFF0C\u5207\u6362\u5230 ${port}`);
         s.port = port;
-        await ((_b = this.onSettingsChanged) == null ? void 0 : _b.call(this));
+        await this.onSettingsChanged?.();
         return port;
       }
     }
@@ -10511,7 +10460,7 @@ var KnowledgeWorkbenchController = class {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
       if (await this.isHealthy()) return true;
-      if (failed == null ? void 0 : failed()) return false;
+      if (failed?.()) return false;
       await new Promise((resolve) => window.setTimeout(resolve, 250));
     }
     return false;
@@ -10542,7 +10491,6 @@ var KnowledgeWorkbenchController = class {
     if (!s.enabled) return false;
     if (this.starting) return this.starting;
     this.starting = (async () => {
-      var _a2, _b, _c, _d, _e, _f, _g, _h, _i;
       this.lastError = "";
       if (await this.isHealthy()) return true;
       const req = getNodeRequire();
@@ -10554,7 +10502,7 @@ var KnowledgeWorkbenchController = class {
       this.writeRuntimeConfig();
       const cp = req("child_process");
       const nodeCommand = this.resolveNodeCommand();
-      (_a2 = this.onLog) == null ? void 0 : _a2.call(this, `\u4F7F\u7528 Node\uFF1A${nodeCommand}`);
+      this.onLog?.(`\u4F7F\u7528 Node\uFF1A${nodeCommand}`);
       const env = getNodeProcessEnv();
       env.WB_CONFIG_PATH = paths.configPath;
       env.WB_KB_ROOT = s.vaultRoot;
@@ -10568,24 +10516,19 @@ var KnowledgeWorkbenchController = class {
         env,
         stdio: ["ignore", "pipe", "pipe"]
       });
-      (_b = this.child.stdout) == null ? void 0 : _b.on("data", (chunk) => {
-        var _a3;
-        return (_a3 = this.onLog) == null ? void 0 : _a3.call(this, String(chunk).trim());
-      });
-      (_c = this.child.stderr) == null ? void 0 : _c.on("data", (chunk) => {
-        var _a3;
+      this.child.stdout?.on("data", (chunk) => this.onLog?.(String(chunk).trim()));
+      this.child.stderr?.on("data", (chunk) => {
         const message = String(chunk).trim();
         if (message) stderrTail = `${stderrTail}
 ${message}`.slice(-1200);
-        (_a3 = this.onLog) == null ? void 0 : _a3.call(this, message);
+        this.onLog?.(message);
       });
-      (_e = (_d = this.child).on) == null ? void 0 : _e.call(_d, "error", (error) => {
-        var _a3;
+      this.child.on?.("error", (error) => {
         spawnError = error instanceof Error ? error : new Error(String(error));
         this.lastError = `Node \u670D\u52A1\u8FDB\u7A0B\u542F\u52A8\u5931\u8D25\uFF1A${spawnError.message}`;
-        (_a3 = this.onLog) == null ? void 0 : _a3.call(this, this.lastError);
+        this.onLog?.(this.lastError);
       });
-      (_g = (_f = this.child).on) == null ? void 0 : _g.call(_f, "exit", (code, signal) => {
+      this.child.on?.("exit", (code, signal) => {
         processExit = { code: typeof code === "number" ? code : null, signal: typeof signal === "string" ? signal : null };
         this.child = null;
       });
@@ -10594,10 +10537,10 @@ ${message}`.slice(-1200);
         if (spawnError) throw new Error(`\u670D\u52A1\u8FDB\u7A0B\u542F\u52A8\u5931\u8D25\uFF1A${spawnError.message}`);
         if (processExit) {
           if (stderrTail.includes("EADDRINUSE") && await this.isHealthy()) {
-            (_h = this.onLog) == null ? void 0 : _h.call(this, `\u7AEF\u53E3 ${s.port || 5173} \u5DF2\u6709\u53EF\u7528\u77E5\u8BC6\u5DE5\u4F5C\u53F0\u670D\u52A1\uFF0C\u590D\u7528\u73B0\u6709\u8FDB\u7A0B`);
+            this.onLog?.(`\u7AEF\u53E3 ${s.port || 5173} \u5DF2\u6709\u53EF\u7528\u77E5\u8BC6\u5DE5\u4F5C\u53F0\u670D\u52A1\uFF0C\u590D\u7528\u73B0\u6709\u8FDB\u7A0B`);
             return true;
           }
-          const reason = processExit.signal ? `signal ${processExit.signal}` : `exit code ${(_i = processExit.code) != null ? _i : "unknown"}`;
+          const reason = processExit.signal ? `signal ${processExit.signal}` : `exit code ${processExit.code ?? "unknown"}`;
           const detail = stderrTail.trim() ? `\uFF1A${stderrTail.trim().slice(-800)}` : "";
           throw new Error(`\u670D\u52A1\u8FDB\u7A0B\u5DF2\u9000\u51FA\uFF08${reason}\uFF09${detail}`);
         }
@@ -10605,9 +10548,8 @@ ${message}`.slice(-1200);
       }
       return true;
     })().catch((error) => {
-      var _a2;
       this.lastError = error instanceof Error ? error.message : String(error);
-      (_a2 = this.onLog) == null ? void 0 : _a2.call(this, this.lastError);
+      this.onLog?.(this.lastError);
       return false;
     }).finally(() => {
       this.starting = null;
@@ -10620,18 +10562,15 @@ ${message}`.slice(-1200);
     if (!child) return;
     try {
       child.kill("SIGTERM");
-    } catch (e) {
+    } catch {
     }
   }
 };
 
 // src/main.ts
 var Dashboard = class extends import_obsidian23.Plugin {
-  constructor() {
-    super(...arguments);
-    __publicField(this, "settings");
-    __publicField(this, "knowledgeWorkbench");
-  }
+  settings;
+  knowledgeWorkbench;
   async onload() {
     await this.loadSettings();
     this.knowledgeWorkbench = new KnowledgeWorkbenchController(
@@ -10666,20 +10605,18 @@ var Dashboard = class extends import_obsidian23.Plugin {
     if (this.settings.knowledgeWorkbench.enabled) void this.knowledgeWorkbench.ensureStarted();
   }
   onunload() {
-    var _a2;
-    void ((_a2 = this.knowledgeWorkbench) == null ? void 0 : _a2.stopOwnedProcess());
+    void this.knowledgeWorkbench?.stopOwnedProcess();
   }
   async loadSettings() {
-    var _a2, _b, _c, _d, _e;
-    const loaded = (_a2 = await this.loadData()) != null ? _a2 : {};
+    const loaded = await this.loadData() ?? {};
     const storedLayoutVersion = typeof loaded.homeLayoutVersion === "number" ? loaded.homeLayoutVersion : 0;
     this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded);
-    this.settings.banner = { ...DEFAULT_SETTINGS.banner, ...(_b = loaded.banner) != null ? _b : {} };
-    this.settings.pomodoro = { ...DEFAULT_SETTINGS.pomodoro, ...(_c = loaded.pomodoro) != null ? _c : {} };
+    this.settings.banner = { ...DEFAULT_SETTINGS.banner, ...loaded.banner ?? {} };
+    this.settings.pomodoro = { ...DEFAULT_SETTINGS.pomodoro, ...loaded.pomodoro ?? {} };
     this.settings.knowledgeWorkbench = {
       ...DEFAULT_SETTINGS.knowledgeWorkbench,
-      ...(_d = loaded.knowledgeWorkbench) != null ? _d : {},
-      extraRawScanPaths: Array.isArray((_e = loaded.knowledgeWorkbench) == null ? void 0 : _e.extraRawScanPaths) ? loaded.knowledgeWorkbench.extraRawScanPaths : [...DEFAULT_SETTINGS.knowledgeWorkbench.extraRawScanPaths]
+      ...loaded.knowledgeWorkbench ?? {},
+      extraRawScanPaths: Array.isArray(loaded.knowledgeWorkbench?.extraRawScanPaths) ? loaded.knowledgeWorkbench.extraRawScanPaths : [...DEFAULT_SETTINGS.knowledgeWorkbench.extraRawScanPaths]
     };
     for (const key of ["quickCapture", "diary"]) {
       const grp = loaded[key];
@@ -10696,10 +10633,9 @@ var Dashboard = class extends import_obsidian23.Plugin {
    * 唯一 ID 让每张倒计时可以复用首页既有的独立排序与缩放机制，而不会互相覆盖布局。
    */
   normalizeCountdownCards(rawCountdown) {
-    var _a2, _b, _c;
     const existing = this.settings.countdownCards;
     const rawList = Array.isArray(existing) ? existing : Array.isArray(rawCountdown) ? rawCountdown : [this.settings.countdown];
-    const legacyOrder = (_c = (_b = (_a2 = this.settings.homeModules) == null ? void 0 : _a2.find((module2) => module2.id === "countdown")) == null ? void 0 : _b.order) != null ? _c : 6;
+    const legacyOrder = this.settings.homeModules?.find((module2) => module2.id === "countdown")?.order ?? 6;
     const usedIds = /* @__PURE__ */ new Set();
     const cards = [];
     for (const [index, raw] of rawList.entries()) {
@@ -10731,7 +10667,6 @@ var Dashboard = class extends import_obsidian23.Plugin {
    *    （保留用户的显隐与排序）。此前比例功能存在 bug 从未真正落盘，故一次性纠正是安全的。
    */
   normalizeHomeModules(storedVersion) {
-    var _a2, _b;
     const defaults = new Map(DEFAULT_HOME_MODULES.map((m) => [m.id, m]));
     let hm = this.settings.homeModules;
     let changed = false;
@@ -10749,8 +10684,8 @@ var Dashboard = class extends import_obsidian23.Plugin {
     const migrate = storedVersion < HOME_LAYOUT_VERSION;
     for (const m of hm) {
       const d = defaults.get(m.id);
-      const dc = (_a2 = d == null ? void 0 : d.cols) != null ? _a2 : 1;
-      const dr = (_b = d == null ? void 0 : d.rows) != null ? _b : 1;
+      const dc = d?.cols ?? 1;
+      const dr = d?.rows ?? 1;
       if (migrate && d) {
         if (m.cols !== dc || m.rows !== dr) {
           m.cols = dc;
@@ -10860,10 +10795,9 @@ var Dashboard = class extends import_obsidian23.Plugin {
    * internal call is missing or renamed in a future Obsidian release.
    */
   setObsidianTheme(mode) {
-    var _a2;
     try {
       const vault = this.app.vault;
-      (_a2 = vault.setConfig) == null ? void 0 : _a2.call(vault, "theme", mode === "light" ? "moonstone" : "obsidian");
+      vault.setConfig?.("theme", mode === "light" ? "moonstone" : "obsidian");
     } catch (err) {
       console.error("[Dashboard] failed to set Obsidian theme", err);
     }
@@ -10952,8 +10886,7 @@ var Dashboard = class extends import_obsidian23.Plugin {
   }
   /** 重新加载工作台服务配置；只停止本插件自己创建的子进程。 */
   async restartKnowledgeWorkbench() {
-    var _a2;
-    await ((_a2 = this.knowledgeWorkbench) == null ? void 0 : _a2.stopOwnedProcess());
+    await this.knowledgeWorkbench?.stopOwnedProcess();
     if (this.settings.knowledgeWorkbench.enabled) await this.knowledgeWorkbench.ensureStarted();
   }
 };

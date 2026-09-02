@@ -1,4 +1,4 @@
-import { AbstractInputSuggest, App, Modal, TFile } from 'obsidian';
+import { AbstractInputSuggest, App, Modal, TFile, setIcon } from 'obsidian';
 import {
 	BoardItem,
 	BoardFormData,
@@ -55,6 +55,174 @@ interface OpportunityModalOptions {
 	editData?: BoardItem;
 	/** 编辑现有灵感时，可直接打开带默认标题的任务新建弹窗。 */
 	onConvertToTask?: () => void;
+	/** 从现有灵感记录汇总的历史标签，用于输入时的模糊搜索。 */
+	availableTags?: string[];
+}
+
+/**
+ * 标签多选输入：一个输入框同时承载已选标签、模糊搜索和新标签创建。
+ * 标签最终仍由 BoardItem.tags 持久化，不额外引入新的数据源。
+ */
+class TagPicker {
+	private readonly root: HTMLElement;
+	private readonly input: HTMLInputElement;
+	private readonly menu: HTMLElement;
+	private readonly knownTags: string[];
+	private selected: string[];
+	private readonly onDocumentPointerDown = (event: PointerEvent): void => {
+		if (!this.root.contains(event.target as Node)) this.hideMenu();
+	};
+
+	constructor(parent: HTMLElement, initial: string[], available: string[]) {
+		this.root = parent.createDiv({ cls: 'mq-ad-tag-picker' });
+		this.input = this.root.createEl('input', {
+			cls: 'mq-ad-tag-picker__input',
+			attr: { type: 'text', placeholder: '输入标签，模糊搜索或回车创建' },
+		});
+		this.menu = this.root.createDiv({ cls: 'mq-ad-tag-picker__menu' });
+		this.menu.addClass('is-hidden');
+		this.selected = this.unique(initial);
+		this.knownTags = this.unique([...available, ...initial]);
+		this.input.addEventListener('focus', () => this.showMenu());
+		this.input.addEventListener('blur', () => this.hideMenu());
+		document.addEventListener('pointerdown', this.onDocumentPointerDown);
+		this.input.addEventListener('input', () => {
+			this.commitDelimitedInput();
+			this.renderMenu();
+		});
+		this.input.addEventListener('keydown', (event) => {
+			if (event.key === 'Enter') {
+				event.preventDefault();
+				this.commitInput();
+			} else if (event.key === 'Escape') {
+				this.hideMenu();
+			} else if (event.key === 'Backspace' && !this.input.value && this.selected.length) {
+				this.remove(this.selected[this.selected.length - 1]!);
+			}
+		});
+		this.renderChips();
+	}
+
+	getTags(): string[] {
+		this.commitInput();
+		return [...this.selected];
+	}
+
+	dispose(): void {
+		document.removeEventListener('pointerdown', this.onDocumentPointerDown);
+	}
+
+	private unique(values: string[]): string[] {
+		const seen = new Set<string>();
+		return values.map((value) => value.trim()).filter((value) => {
+			if (!value) return false;
+			const key = value.toLocaleLowerCase();
+			if (seen.has(key)) return false;
+			seen.add(key);
+			return true;
+		});
+	}
+
+	private findSelected(value: string): number {
+		const key = value.toLocaleLowerCase();
+		return this.selected.findIndex((tag) => tag.toLocaleLowerCase() === key);
+	}
+
+	private add(value: string): void {
+		const tag = value.trim();
+		if (!tag || this.findSelected(tag) >= 0) return;
+		this.selected.push(tag);
+		if (!this.knownTags.some((candidate) => candidate.toLocaleLowerCase() === tag.toLocaleLowerCase())) {
+			this.knownTags.push(tag);
+		}
+		this.renderChips();
+	}
+
+	private remove(value: string): void {
+		const index = this.findSelected(value);
+		if (index < 0) return;
+		this.selected.splice(index, 1);
+		this.renderChips();
+		this.renderMenu();
+	}
+
+	private commitDelimitedInput(): void {
+		const parts = this.input.value.split(/[，,、]/);
+		if (parts.length < 2) return;
+		for (const part of parts.slice(0, -1)) this.add(part);
+		this.input.value = parts[parts.length - 1] ?? '';
+	}
+
+	private commitInput(): void {
+		const query = this.input.value.trim();
+		if (!query) return;
+		const exact = this.knownTags.find((tag) => tag.toLocaleLowerCase() === query.toLocaleLowerCase());
+		this.add(exact ?? query);
+		this.input.value = '';
+		this.renderMenu();
+	}
+
+	private showMenu(): void {
+		this.menu.removeClass('is-hidden');
+		this.renderMenu();
+	}
+
+	private hideMenu(): void {
+		this.menu.addClass('is-hidden');
+	}
+
+	private renderChips(): void {
+		this.root.querySelectorAll('.mq-ad-tag-picker__chip').forEach((el) => el.remove());
+		for (const tag of this.selected) {
+			const chip = this.root.createDiv({ cls: 'mq-ad-tag-picker__chip' });
+			chip.createSpan({ text: tag });
+			const remove = chip.createEl('button', {
+				cls: 'mq-ad-tag-picker__remove',
+				attr: { type: 'button', 'aria-label': `删除标签 ${tag}` },
+			});
+			setIcon(remove, 'x');
+			remove.addEventListener('click', () => this.remove(tag));
+		}
+		this.root.appendChild(this.input);
+	}
+
+	private renderMenu(): void {
+		this.menu.empty();
+		const query = this.input.value.trim().toLocaleLowerCase();
+		const matches = this.knownTags
+			.filter((tag) => !query || tag.toLocaleLowerCase().includes(query))
+			.slice(0, 30);
+		for (const tag of matches) {
+			const row = this.menu.createEl('button', {
+				cls: 'mq-ad-tag-picker__option' + (this.findSelected(tag) >= 0 ? ' is-selected' : ''),
+				attr: { type: 'button' },
+			});
+			const mark = row.createSpan({ cls: 'mq-ad-tag-picker__mark' });
+			if (this.findSelected(tag) >= 0) setIcon(mark, 'check');
+			row.createSpan({ text: tag });
+			row.addEventListener('mousedown', (event) => event.preventDefault());
+			row.addEventListener('click', () => {
+				if (this.findSelected(tag) >= 0) this.remove(tag);
+				else this.add(tag);
+				this.input.value = '';
+				this.input.focus();
+				this.renderMenu();
+			});
+		}
+		if (query && this.knownTags.findIndex((tag) => tag.toLocaleLowerCase() === query) < 0) {
+			const create = this.menu.createEl('button', {
+				cls: 'mq-ad-tag-picker__create',
+				attr: { type: 'button' },
+				text: `回车创建“${this.input.value.trim()}”`,
+			});
+			create.addEventListener('mousedown', (event) => event.preventDefault());
+			create.addEventListener('click', () => this.commitInput());
+		}
+		if (!matches.length && !query) {
+			this.menu.createDiv({ cls: 'mq-ad-tag-picker__empty', text: '暂无历史标签' });
+		}
+		this.menu.toggleClass('is-hidden', document.activeElement !== this.input);
+	}
 }
 
 export class OpportunityModal extends Modal {
@@ -64,6 +232,7 @@ export class OpportunityModal extends Modal {
 	private starred: boolean = false;
 	private stageNotes: Record<string, string> = {};
 	private linkSuggest: FileSuggest | null = null;
+	private tagPicker: TagPicker | null = null;
 
 	constructor(opts: OpportunityModalOptions) {
 		super(opts.app);
@@ -102,11 +271,8 @@ export class OpportunityModal extends Modal {
 		});
 
 		// 标签
-		contentEl.createEl('label', { cls: 'mq-ad-modal-label', text: '标签（逗号分隔）' });
-		const tagInput = contentEl.createEl('input', {
-			cls: 'mq-ad-modal-input', attr: { type: 'text', placeholder: '如：增长, 渠道' },
-		});
-		if (ed) tagInput.value = (ed.tags || []).join(', ');
+		contentEl.createEl('label', { cls: 'mq-ad-modal-label', text: '标签' });
+		this.tagPicker = new TagPicker(contentEl, ed?.tags || [], this.opts.availableTags || []);
 
 		// 背景 / 备注（机会级，始终显示）
 		contentEl.createEl('label', { cls: 'mq-ad-modal-label', text: '背景 / 备注' });
@@ -173,7 +339,7 @@ export class OpportunityModal extends Modal {
 			.addEventListener('click', () => {
 				const t = String(nameInput.value || '').trim();
 				if (!t) { nameInput.focus(); return; }
-				const tags = String(tagInput.value || '').split(',').map((s) => s.trim()).filter(Boolean);
+				const tags = this.tagPicker?.getTags() || [];
 				// 汇总阶段输入框：保留「当前不可见阶段」的历史内容，覆盖可见阶段（留空=清空）
 				const visibleLabels = new Set(this.opts.stages.filter((s) => s.hasInput).map((s) => s.label));
 				const sn: Record<string, string> = {};
@@ -218,6 +384,8 @@ export class OpportunityModal extends Modal {
 	onClose(): void {
 		this.linkSuggest?.close();
 		this.linkSuggest = null;
+		this.tagPicker?.dispose();
+		this.tagPicker = null;
 		this.contentEl.empty();
 	}
 }

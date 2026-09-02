@@ -40,6 +40,8 @@ export class DailyReportBoard {
 	private host: DailyReportHost;
 	private store: DailyReportStore;
 	private records: DailyReportRecord[] = [];
+	/** 日历始终使用当前月份的完整日报记录，不受列表日期筛选影响。 */
+	private calendarRecords: DailyReportRecord[] = [];
 	private year = new Date().getFullYear();
 	private month = new Date().getMonth();
 	private startDate = '';
@@ -145,8 +147,21 @@ export class DailyReportBoard {
 	}
 
 	private async loadRecords(): Promise<void> {
+		const monthStart = dayString(this.year, this.month, 1);
+		const monthEnd = dayString(this.year, this.month, new Date(this.year, this.month + 1, 0).getDate());
 		const { start, end } = this.currentRange();
-		this.records = start <= end ? await this.store.listRange(start, end) : [];
+		if (start === monthStart && end === monthEnd) {
+			const monthRecords = await this.store.listRange(monthStart, monthEnd);
+			this.calendarRecords = monthRecords;
+			this.records = monthRecords;
+		} else {
+			const [monthRecords, filteredRecords] = await Promise.all([
+				this.store.listRange(monthStart, monthEnd),
+				start <= end ? this.store.listRange(start, end) : Promise.resolve([]),
+			]);
+			this.calendarRecords = monthRecords;
+			this.records = filteredRecords;
+		}
 		const maxPage = Math.max(1, Math.ceil(this.records.length / this.pageSize));
 		this.page = Math.min(this.page, maxPage);
 	}
@@ -195,19 +210,30 @@ export class DailyReportBoard {
 		prev.addEventListener('click', () => this.shiftMonth(-1));
 
 		const years = new Set<number>([this.year, new Date().getFullYear()]);
-		for (const record of this.records) years.add(Number(record.date.slice(0, 4)));
+		for (const record of this.calendarRecords) years.add(Number(record.date.slice(0, 4)));
 		for (let offset = -3; offset <= 3; offset++) years.add(new Date().getFullYear() + offset);
 		const yearSelect = controls.createEl('select', { cls: 'mq-dr-select', attr: { 'aria-label': '选择年份' } });
 		[...years].sort((a, b) => a - b).forEach((year) => yearSelect.createEl('option', { value: String(year), text: `${year}年` }));
 		yearSelect.value = String(this.year);
-		yearSelect.addEventListener('change', () => { this.year = Number(yearSelect.value); this.render(); });
+		yearSelect.addEventListener('change', () => {
+			this.year = Number(yearSelect.value);
+			void this.loadRecords().then(() => this.render());
+		});
 		const monthSelect = controls.createEl('select', { cls: 'mq-dr-select', attr: { 'aria-label': '选择月份' } });
 		for (let month = 0; month < 12; month++) monthSelect.createEl('option', { value: String(month), text: `${month + 1}月` });
 		monthSelect.value = String(this.month);
-		monthSelect.addEventListener('change', () => { this.month = Number(monthSelect.value); this.render(); });
+		monthSelect.addEventListener('change', () => {
+			this.month = Number(monthSelect.value);
+			void this.loadRecords().then(() => this.render());
+		});
 
 		const todayButton = controls.createEl('button', { cls: 'mq-dr-text-btn', text: '今天' });
-		todayButton.addEventListener('click', () => { const now = new Date(); this.year = now.getFullYear(); this.month = now.getMonth(); this.render(); });
+		todayButton.addEventListener('click', () => {
+			const now = new Date();
+			this.year = now.getFullYear();
+			this.month = now.getMonth();
+			void this.loadRecords().then(() => this.render());
+		});
 		const next = controls.createEl('button', { cls: 'mq-dr-icon-btn', attr: { 'aria-label': '下个月', title: '下个月' } });
 		setIcon(next, 'chevron-right');
 		next.addEventListener('click', () => this.shiftMonth(1));
@@ -219,8 +245,8 @@ export class DailyReportBoard {
 		const firstOffset = first.getDay();
 		const days = new Date(this.year, this.month + 1, 0).getDate();
 		const cellCount = Math.ceil((firstOffset + days) / 7) * 7;
-		const reportDates = new Set(this.records.map((record) => record.date));
-		const completedDates = new Set(this.records.filter((record) => record.summary.length > 0).map((record) => record.date));
+		const reportDates = new Set(this.calendarRecords.map((record) => record.date));
+		const completedDates = new Set(this.calendarRecords.filter((record) => record.summary.length > 0).map((record) => record.date));
 		const todayDate = todayString();
 		for (let cell = 0; cell < cellCount; cell++) {
 			const day = cell - firstOffset + 1;
@@ -328,8 +354,7 @@ export class DailyReportBoard {
 		const next = new Date(this.year, this.month + delta, 1);
 		this.year = next.getFullYear();
 		this.month = next.getMonth();
-		if (!this.startDate && !this.endDate) void this.loadRecords().then(() => this.render());
-		else this.render();
+		void this.loadRecords().then(() => this.render());
 	}
 
 	private async export(type: 'csv' | 'md'): Promise<void> {

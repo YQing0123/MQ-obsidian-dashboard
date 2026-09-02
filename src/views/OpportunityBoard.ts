@@ -58,7 +58,7 @@ export class OpportunityBoard {
 
 	/** 供顶部导航直接打开灵感新建弹窗。 */
 	openCreateModal(): void {
-		this.openModal();
+		void this.openModal();
 	}
 
 	/** Debounced refresh of the board (250ms) to coalesce rapid vault events. */
@@ -630,7 +630,10 @@ export class OpportunityBoard {
 		});
 	}
 
-	private openModal(item?: BoardItem): void {
+	private async openModal(item?: BoardItem): Promise<void> {
+		// 顶部导航可以在尚未打开看板时直接唤起新建弹窗，此时先加载一次已有记录以提供历史标签。
+		const items = this.currentItems.length ? this.currentItems : await this.loadItems();
+		const availableTags = [...new Set(items.flatMap((candidate) => candidate.tags || []))];
 		const modal = new OpportunityModal({
 			app: this.host.app,
 			stages: this.host.plugin.settings.boardStages,
@@ -639,6 +642,7 @@ export class OpportunityBoard {
 			editData: item,
 			onSave: (data: BoardFormData) => { void this.onSave(data, item); },
 			onConvertToTask: item ? () => void this.convertToTask(item) : undefined,
+			availableTags,
 		});
 		modal.open();
 	}
