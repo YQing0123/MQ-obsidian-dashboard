@@ -17,6 +17,10 @@ export class AiQaSessionStore {
     return rows.sort((a, b) => b.updatedAt - a.updatedAt);
   }
   async read(id: string): Promise<SessionFile | null> { const file = this.app.vault.getAbstractFileByPath(this.path(id)); if (!(file instanceof TFile)) return null; try { return JSON.parse(await this.app.vault.read(file)) as SessionFile; } catch { return null; } }
+  async remove(id: string): Promise<void> {
+    const file = this.app.vault.getAbstractFileByPath(this.path(id));
+    if (file instanceof TFile) await this.app.vault.delete(file);
+  }
   async write(value: SessionFile): Promise<void> {
     const id = value.session.id;
     const previous = this.writes.get(id) ?? Promise.resolve();
