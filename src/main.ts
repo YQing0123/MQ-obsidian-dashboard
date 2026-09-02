@@ -71,13 +71,15 @@ export default class Dashboard extends Plugin {
 		this.settings.aiQa = {
 			...DEFAULT_SETTINGS.aiQa,
 			...(loaded.aiQa ?? {}),
-			webSearch: { ...DEFAULT_SETTINGS.aiQa.webSearch, ...(loaded.aiQa?.webSearch ?? {}) },
 			providers: Array.isArray(loaded.aiQa?.providers) ? loaded.aiQa!.providers : [],
 			mcpServers: Array.isArray(loaded.aiQa?.mcpServers) ? loaded.aiQa!.mcpServers : [],
 			deepResearchRounds: Math.min(5, Math.max(1, Number(loaded.aiQa?.deepResearchRounds) || 3)),
 		};
 		if (!this.settings.aiQa.mcpServers.some((server) => server.id === 'sag-knowledge')) {
 			this.settings.aiQa.mcpServers.unshift({ id: 'sag-knowledge', displayName: 'SAG 知识库', transport: 'streamable-http', url: 'http://localhost:8000/mcp/', enabled: true, readOnlyByDefault: true, authKeychainId: 'mq-aiqa-mcp-sag-knowledge' });
+		}
+		if (!this.settings.aiQa.mcpServers.some((server) => server.id === 'firecrawl')) {
+			this.settings.aiQa.mcpServers.push({ id: 'firecrawl', displayName: 'Firecrawl 联网搜索', transport: 'streamable-http', url: 'https://mcp.firecrawl.dev/v2/mcp-oauth', enabled: false, readOnlyByDefault: true, authKeychainId: 'mq-aiqa-mcp-firecrawl' });
 		}
 		for (const provider of this.settings.aiQa.providers) {
 			provider.id = provider.id || provider.providerId || crypto.randomUUID();
@@ -99,7 +101,6 @@ export default class Dashboard extends Plugin {
 			return typeof ref.providerId === 'string' && typeof ref.modelId === 'string' ? { providerId: ref.providerId, modelId: ref.modelId } : undefined;
 		};
 		this.settings.aiQa.defaultModel = migrateModelRef(this.settings.aiQa.defaultModel);
-		this.settings.aiQa.webModel = migrateModelRef(this.settings.aiQa.webModel);
 		// 迁移：旧版「模板文件夹 + 模板文件名」合并为「模板文件（完整路径）」
 		for (const key of ['quickCapture', 'diary'] as const) {
 			const grp = loaded[key];
