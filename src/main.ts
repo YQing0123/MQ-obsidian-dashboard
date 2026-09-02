@@ -75,6 +75,9 @@ export default class Dashboard extends Plugin {
 			mcpServers: Array.isArray(loaded.aiQa?.mcpServers) ? loaded.aiQa!.mcpServers : [],
 			deepResearchRounds: Math.min(5, Math.max(1, Number(loaded.aiQa?.deepResearchRounds) || 3)),
 		};
+		if (!this.settings.aiQa.mcpServers.some((server) => server.id === 'sag-knowledge')) {
+			this.settings.aiQa.mcpServers.unshift({ id: 'sag-knowledge', displayName: 'SAG 知识库', transport: 'streamable-http', url: 'http://localhost:8000/mcp/', enabled: true, readOnlyByDefault: true, authKeychainId: 'mq-aiqa-mcp-sag-knowledge' });
+		}
 		for (const provider of this.settings.aiQa.providers) {
 			provider.id = provider.id || provider.providerId || crypto.randomUUID();
 			provider.providerId = provider.providerId || provider.id;

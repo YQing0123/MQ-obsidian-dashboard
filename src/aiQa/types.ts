@@ -1,6 +1,6 @@
 import type { AiQaModel, AiQaProvider, AiQaSettings } from '../settings';
 
-export interface AiQaSession { id: string; title: string; createdAt: number; updatedAt: number; archived: boolean; model?: { providerId: string; modelId: string }; webEnabled: boolean; mode: 'normal' | 'deep'; }
+export interface AiQaSession { id: string; title: string; createdAt: number; updatedAt: number; archived: boolean; model?: { providerId: string; modelId: string }; webEnabled: boolean; mode: 'normal' | 'deep'; sourceIds?: string[]; }
 export interface AiQaAttachment { id: string; name: string; mimeType: string; size: number; path: string; text?: string; }
 export interface AiQaCitation { title: string; source: string; url?: string; excerpt?: string; kind?: 'internal' | 'external' | 'tool'; score?: number; }
 export interface AiQaStep { id: string; kind: 'thinking' | 'retrieval' | 'web' | 'tool' | 'answer'; label: string; detail?: string; status: 'active' | 'done' | 'error'; count?: number; elapsedMs?: number; }
