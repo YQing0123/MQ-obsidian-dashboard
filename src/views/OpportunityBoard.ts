@@ -27,7 +27,7 @@ export interface OpportunityHost {
 		saveSettings(): Promise<void>;
 	};
 	boardEl: HTMLElement | null;
-	currentPage: 'home' | 'project' | 'opportunity' | 'daily-report';
+	currentPage: 'home' | 'project' | 'opportunity' | 'daily-report' | 'ai-qa';
 	exitEditMode(): void;
 	showToast(message: string, kind?: 'success' | 'error'): void;
 	taskStore: TaskStore;

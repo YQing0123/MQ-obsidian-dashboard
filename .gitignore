@@ -3,3 +3,5 @@ data.json
 
 # macOS Finder metadata.
 .DS_Store
+
+node_modules/

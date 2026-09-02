@@ -30,7 +30,7 @@ export interface ProjectHost {
 		saveSettings(): Promise<void>;
 	};
 	boardEl: HTMLElement | null;
-	currentPage: 'home' | 'project' | 'opportunity' | 'daily-report';
+	currentPage: 'home' | 'project' | 'opportunity' | 'daily-report' | 'ai-qa';
 	exitEditMode(): void;
 	selectedProject: string | null;
 	showToast(message: string, kind?: 'success' | 'error'): void;
@@ -72,7 +72,7 @@ export class ProjectBoard {
 	private get plugin() { return this.host.plugin; }
 	private get boardEl() { return this.host.boardEl; }
 	private get currentPage() { return this.host.currentPage; }
-	private set currentPage(v: 'home' | 'project' | 'opportunity' | 'daily-report') { this.host.currentPage = v; }
+	private set currentPage(v: 'home' | 'project' | 'opportunity' | 'daily-report' | 'ai-qa') { this.host.currentPage = v; }
 	private get selectedProject() { return this.host.selectedProject; }
 	private set selectedProject(v: string | null) { this.host.selectedProject = v; }
 	private get showToast() { return this.host.showToast.bind(this.host); }

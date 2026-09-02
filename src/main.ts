@@ -6,7 +6,7 @@ import { KnowledgeWorkbenchController } from './KnowledgeWorkbenchController';
 import type { BoardStage } from './data/opportunityParser';
 
 export default class Dashboard extends Plugin {
-	settings!: DashboardSettings;
+	declare settings: DashboardSettings;
 	knowledgeWorkbench!: KnowledgeWorkbenchController;
 
 	async onload(): Promise<void> {
@@ -41,6 +41,7 @@ export default class Dashboard extends Plugin {
 			name: 'Open Knowledge Workbench',
 			callback: () => { void this.openKnowledgeWorkbench('dashboard'); },
 		});
+		this.addCommand({ id: 'open-ai-qa', name: '打开 AI 问答', callback: () => { void this.openAiQa(); } });
 
 		this.addSettingTab(new DashboardSettingTab(this.app, this));
 		/* 服务由插件加载时自动启动；Workbench View 打开时仍会再次健康检查。 */
@@ -67,6 +68,34 @@ export default class Dashboard extends Plugin {
 				? loaded.knowledgeWorkbench!.extraRawScanPaths
 				: [...DEFAULT_SETTINGS.knowledgeWorkbench.extraRawScanPaths],
 		};
+		this.settings.aiQa = {
+			...DEFAULT_SETTINGS.aiQa,
+			...(loaded.aiQa ?? {}),
+			providers: Array.isArray(loaded.aiQa?.providers) ? loaded.aiQa!.providers : [],
+			mcpServers: Array.isArray(loaded.aiQa?.mcpServers) ? loaded.aiQa!.mcpServers : [],
+			deepResearchRounds: Math.min(5, Math.max(1, Number(loaded.aiQa?.deepResearchRounds) || 3)),
+		};
+		for (const provider of this.settings.aiQa.providers) {
+			provider.id = provider.id || provider.providerId || crypto.randomUUID();
+			provider.providerId = provider.providerId || provider.id;
+			provider.displayName = provider.displayName || provider.providerId;
+			provider.baseUrl = provider.baseUrl || '';
+			provider.protocol = provider.protocol === 'openai-responses' ? 'openai-responses' : 'openai-compatible';
+			provider.models = Array.isArray(provider.models) ? provider.models.map((model) => ({ ...model, displayName: model.displayName || model.id, contextWindow: Number(model.contextWindow) || 128000, maxOutputTokens: Number(model.maxOutputTokens) || 8192 })) : [];
+			provider.enabled = provider.enabled !== false;
+			if (provider.apiKey && this.app.secretStorage) {
+				provider.apiKeyKeychainId ||= `mq-aiqa-${provider.id.replace(/[^a-z0-9-]/gi, '').toLowerCase()}`;
+				this.app.secretStorage.setSecret(provider.apiKeyKeychainId, provider.apiKey);
+				delete provider.apiKey;
+			}
+		}
+		const migrateModelRef = (value: unknown): { providerId: string; modelId: string } | undefined => {
+			if (!value || typeof value !== 'object') return undefined;
+			const ref = value as { providerId?: unknown; modelId?: unknown };
+			return typeof ref.providerId === 'string' && typeof ref.modelId === 'string' ? { providerId: ref.providerId, modelId: ref.modelId } : undefined;
+		};
+		this.settings.aiQa.defaultModel = migrateModelRef(this.settings.aiQa.defaultModel);
+		this.settings.aiQa.webModel = migrateModelRef(this.settings.aiQa.webModel);
 		// 迁移：旧版「模板文件夹 + 模板文件名」合并为「模板文件（完整路径）」
 		for (const key of ['quickCapture', 'diary'] as const) {
 			const grp = loaded[key];
@@ -354,6 +383,14 @@ export default class Dashboard extends Plugin {
 		await this.app.workspace.revealLeaf(leaf);
 		const view = leaf.view;
 		if (view instanceof KnowledgeWorkbenchView) view.setPage(page);
+	}
+
+	async openAiQa(): Promise<void> {
+		let leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
+		if (!leaf) { await this.activateView(); leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]; }
+		if (!leaf) return;
+		await this.app.workspace.revealLeaf(leaf);
+		if (leaf.view instanceof DashboardView) await leaf.view.showAiQa();
 	}
 
 	/** 重新加载工作台服务配置；只停止本插件自己创建的子进程。 */

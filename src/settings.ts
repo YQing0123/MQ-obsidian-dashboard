@@ -1,6 +1,7 @@
-import { App, PluginSettingTab, Setting, TFile, TFolder } from 'obsidian';
+import { App, Notice, PluginSettingTab, Setting, TFile, TFolder, requestUrl } from 'obsidian';
 import Dashboard from './main';
 import type { BoardStage } from './data/opportunityParser';
+import { normalizeOpenAiBaseUrl } from './aiQa/transport';
 
 export type BannerLeftStat = 'totalNotes' | 'tagsCount' | 'totalLinks' | 'newThisMonth' | 'newThisWeek' | 'totalTasks' | 'doneTasks' | 'pendingTasks';
 export type BannerCenterStat = 'streak' | 'taskCompletion' | 'connectivity' | 'newThisWeek';
@@ -47,6 +48,12 @@ export interface KnowledgeWorkbenchSettings {
 	vaultRoot: string;
 	extraRawScanPaths: string[];
 }
+
+export type AiQaProtocol = 'openai-compatible' | 'openai-responses';
+export interface AiQaModel { id: string; displayName: string; contextWindow: number; maxOutputTokens: number; supportsVision?: boolean; supportsTools?: boolean; reasoningEfforts?: string[]; }
+export interface AiQaProvider { id: string; providerId: string; displayName: string; baseUrl: string; protocol: AiQaProtocol; apiKeyKeychainId?: string; apiKey?: string; models: AiQaModel[]; enabled: boolean; }
+export interface AiQaMcpServer { id: string; displayName: string; transport: 'streamable-http' | 'stdio'; url?: string; command?: string; args?: string[]; enabled: boolean; allowedTools?: string[]; readOnlyByDefault: boolean; }
+export interface AiQaSettings { providers: AiQaProvider[]; defaultModel?: { providerId: string; modelId: string }; webModel?: { providerId: string; modelId: string }; deepResearchRounds: number; sessionFolder: string; mcpServers: AiQaMcpServer[]; }
 
 /** 倒计时卡片自定义事件：事件名称与目标日期 */
 export interface CountdownSettings {
@@ -133,6 +140,7 @@ export interface DashboardSettings {
 	legacyDashboardViewMigrated?: boolean;
 	/** 首页背景颗粒。默认关闭，避免为装饰效果持续占用渲染线程。 */
 	showNoiseOverlay: boolean;
+	aiQa: AiQaSettings;
 }
 
 /**
@@ -205,6 +213,7 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
 	oppKanbanColumnWidth: 230,
 	oppListColumnWidths: {},
 	showNoiseOverlay: false,
+	aiQa: { providers: [], deepResearchRounds: 3, sessionFolder: 'AI问答', mcpServers: [] },
 	homeLayoutVersion: HOME_LAYOUT_VERSION,
 	countdown: { eventName: '2027', targetDate: '2027-01-01' },
 	pomodoro: {
@@ -286,7 +295,7 @@ export class DashboardSettingTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
-	display(): void {
+		display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
 
@@ -303,6 +312,8 @@ export class DashboardSettingTab extends PluginSettingTab {
 					this.plugin.refreshNoiseOverlays();
 				}),
 			);
+
+		this.renderAiQaSettings(containerEl);
 
 		/* ---- 快速捕捉 ---- */
 		new Setting(containerEl).setName('快速捕捉').setHeading();
@@ -695,6 +706,39 @@ export class DashboardSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				});
 			});
+	}
+
+	private renderAiQaSettings(containerEl: HTMLElement): void {
+		const config = this.plugin.settings.aiQa;
+		new Setting(containerEl).setName('AI问答').setHeading();
+		new Setting(containerEl).setName('会话存储路径').setDesc('AI问答会话和附件保存在 Vault 内此目录，不会写入其他插件的历史记录。').addText((text) => text.setValue(config.sessionFolder).onChange(async (value) => { config.sessionFolder = value.trim() || 'AI问答'; await this.plugin.saveSettings(); }));
+		new Setting(containerEl).setName('深度研究轮次').setDesc('深度模式最多执行 5 轮检索和查询改写。').addSlider((slider) => slider.setLimits(1, 5, 1).setValue(config.deepResearchRounds).setDynamicTooltip().onChange(async (value) => { config.deepResearchRounds = value; await this.plugin.saveSettings(); }));
+		new Setting(containerEl).setName('添加模型提供方').setDesc('支持 OpenAI Compatible 和 OpenAI Responses 协议。API Key 仅用于当前设备调用。').addButton((button) => button.setButtonText('新增').onClick(async () => { config.providers.push({ id: crypto.randomUUID(), providerId: 'custom', displayName: '新提供方', baseUrl: 'https://api.openai.com/v1', protocol: 'openai-compatible', models: [], enabled: true }); await this.plugin.saveSettings(); this.display(); }));
+		for (const provider of config.providers) {
+			const block = containerEl.createDiv({ cls: 'mq-ai-qa-provider-settings' });
+			const readProviderKey = (): string | undefined => provider.apiKey ?? (provider.apiKeyKeychainId ? this.app.secretStorage?.getSecret(provider.apiKeyKeychainId) ?? undefined : undefined);
+			const storedApiKey = readProviderKey();
+			new Setting(block).setName(provider.displayName).setHeading();
+			new Setting(block).setName('提供方 ID').addText((text) => text.setValue(provider.providerId).onChange(async (value) => { provider.providerId = value.trim(); await this.plugin.saveSettings(); }));
+			new Setting(block).setName('显示名称').addText((text) => text.setValue(provider.displayName).onChange(async (value) => { provider.displayName = value.trim() || provider.providerId; await this.plugin.saveSettings(); }));
+			new Setting(block).setName('API 地址').addText((text) => text.setValue(provider.baseUrl).onChange(async (value) => { provider.baseUrl = normalizeOpenAiBaseUrl(value); await this.plugin.saveSettings(); }));
+			new Setting(block).setName('API 协议').addDropdown((dropdown) => dropdown.addOption('openai-compatible', 'OpenAI Compatible').addOption('openai-responses', 'OpenAI Responses').setValue(provider.protocol).onChange(async (value) => { provider.protocol = value as AiQaProtocol; await this.plugin.saveSettings(); }));
+			new Setting(block).setName('API 密钥').addText((text) => text.setPlaceholder('留空保持现有密钥').setValue(storedApiKey ? '********' : '').onChange(async (value) => { if (value && value !== '********') { provider.apiKeyKeychainId ||= `mq-aiqa-${provider.id.replace(/[^a-z0-9-]/gi, '').toLowerCase()}`; if (!this.app.secretStorage) { new Notice('当前 Obsidian 不支持安全密钥存储，未保存 API Key'); return; } this.app.secretStorage.setSecret(provider.apiKeyKeychainId, value); delete provider.apiKey; await this.plugin.saveSettings(); } }));
+			new Setting(block).setName('模型').setDesc(provider.models.length ? provider.models.map((model) => `${model.displayName || model.id} (${model.contextWindow}/${model.maxOutputTokens})`).join('、') : '尚未配置模型').addButton((button) => button.setButtonText('获取模型').onClick(async () => { try { const apiKey = readProviderKey(); const response = await requestUrl({ url: `${normalizeOpenAiBaseUrl(provider.baseUrl)}/models`, headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {} }); const data = (response.json as { data?: Array<{ id?: string }> }).data ?? []; provider.models = data.filter((item): item is { id: string } => typeof item.id === 'string').map((item) => ({ id: item.id, displayName: item.id, contextWindow: 128000, maxOutputTokens: 8192, supportsTools: true })); await this.plugin.saveSettings(); this.display(); new Notice(`已获取 ${provider.models.length} 个模型`); } catch (error) { new Notice(`获取模型失败：${error instanceof Error ? error.message : String(error)}`); } })).addButton((button) => button.setButtonText('测试连接').onClick(async () => { try { const apiKey = readProviderKey(); const response = await requestUrl({ url: `${normalizeOpenAiBaseUrl(provider.baseUrl)}/models`, headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {} }); const data = (response.json as { data?: unknown[] }).data; new Notice(`连接成功${Array.isArray(data) ? `，发现 ${data.length} 个模型` : ''}`); } catch (error) { new Notice(`连接失败：${error instanceof Error ? error.message : String(error)}`); } }));
+			for (const model of provider.models) {
+				new Setting(block).setName(model.displayName || model.id).setDesc(`模型 ID：${model.id}`).addText((text) => text.setValue(String(model.contextWindow)).setPlaceholder('上下文窗口').onChange(async (value) => { const next = Number(value); if (Number.isFinite(next) && next > 0) model.contextWindow = Math.round(next); await this.plugin.saveSettings(); })).addText((text) => text.setValue(String(model.maxOutputTokens)).setPlaceholder('最大输出 Token').onChange(async (value) => { const next = Number(value); if (Number.isFinite(next) && next > 0) model.maxOutputTokens = Math.round(next); await this.plugin.saveSettings(); }));
+			}
+			const manual = new Setting(block).addText((text) => text.setPlaceholder('手动添加模型 ID'));
+			manual.addButton((button) => button.setButtonText('添加').onClick(async () => { const id = manual.controlEl.querySelector('input')?.value.trim(); if (!id) return; provider.models.push({ id, displayName: id, contextWindow: 128000, maxOutputTokens: 8192 }); await this.plugin.saveSettings(); this.display(); }));
+			manual.addButton((button) => button.setButtonText('删除提供方').setWarning().onClick(async () => { config.providers = config.providers.filter((item) => item.id !== provider.id); await this.plugin.saveSettings(); this.display(); }));
+		}
+		new Setting(containerEl).setName('默认模型').addDropdown((dropdown) => { dropdown.addOption('', '未设置'); for (const p of config.providers) for (const m of p.models) dropdown.addOption(`${p.id}::${m.id}`, `${p.displayName} / ${m.displayName}`); dropdown.setValue(config.defaultModel ? `${config.defaultModel.providerId}::${config.defaultModel.modelId}` : ''); dropdown.onChange(async (value) => { const [providerId, ...model] = value.split('::'); config.defaultModel = providerId ? { providerId, modelId: model.join('::') } : undefined; await this.plugin.saveSettings(); }); });
+		new Setting(containerEl).setName('联网模型').setDesc('联网模式使用此模型进行搜索规划和回答。').addDropdown((dropdown) => { dropdown.addOption('', '未设置'); for (const p of config.providers) for (const m of p.models) dropdown.addOption(`${p.id}::${m.id}`, `${p.displayName} / ${m.displayName}`); dropdown.setValue(config.webModel ? `${config.webModel.providerId}::${config.webModel.modelId}` : ''); dropdown.onChange(async (value) => { const [providerId, ...model] = value.split('::'); config.webModel = providerId ? { providerId, modelId: model.join('::') } : undefined; await this.plugin.saveSettings(); }); });
+		new Setting(containerEl).setName('MCP 服务').setHeading();
+		new Setting(containerEl).setName('添加 Streamable HTTP 服务').setDesc('MCP 服务用于扩展 AI 问答工具；写操作仍需在会话中确认。').addButton((button) => button.setButtonText('新增').onClick(async () => { config.mcpServers.push({ id: crypto.randomUUID(), displayName: '新 MCP 服务', transport: 'streamable-http', url: 'http://127.0.0.1:3000/mcp', enabled: true, readOnlyByDefault: true }); await this.plugin.saveSettings(); this.display(); }));
+		for (const server of config.mcpServers) {
+			new Setting(containerEl).setName(server.displayName).addText((text) => text.setValue(server.displayName).onChange(async (value) => { server.displayName = value.trim() || 'MCP 服务'; await this.plugin.saveSettings(); })).addText((text) => text.setValue(server.url || '').setPlaceholder('https://example.com/mcp').onChange(async (value) => { server.url = value.trim(); await this.plugin.saveSettings(); })).addToggle((toggle) => toggle.setTooltip('启用服务').setValue(server.enabled).onChange(async (value) => { server.enabled = value; await this.plugin.saveSettings(); })).addButton((button) => button.setButtonText('删除').setWarning().onClick(async () => { config.mcpServers = config.mcpServers.filter((item) => item.id !== server.id); await this.plugin.saveSettings(); this.display(); }));
+		}
 	}
 
 	private applyTheme(): void {

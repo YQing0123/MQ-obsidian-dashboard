@@ -16,6 +16,7 @@ import { DashboardStore } from '../data/dashboardStore';
 import { OpportunityBoard } from './OpportunityBoard';
 import { ProjectBoard } from './ProjectBoard';
 import { DailyReportBoard } from './DailyReportBoard';
+import { AiQaBoard } from './AiQaBoard';
 import { DAILY_REPORT_FOLDER } from '../data/dailyReport';
 import { fmtDate, todayStr, nowFmt, calcNextRemindDate, getTodayUniverse, getTodayTasks, isDoneToday, isSkipToday, overdueDays, urgencyMeta } from '../data/taskLogic';
 import { t } from '../i18n';
@@ -270,7 +271,7 @@ export class DashboardView extends ItemView {
 	public selectedProject: string | null = null;
 
 	// Which top-level page is currently shown (home / project overview / opportunity board)
-	public currentPage: 'home' | 'project' | 'opportunity' | 'daily-report' = 'home';
+	public currentPage: 'home' | 'project' | 'opportunity' | 'daily-report' | 'ai-qa' = 'home';
 
 	public taskStore: TaskStore;
 	private dashboardStore: DashboardStore;
@@ -278,6 +279,7 @@ export class DashboardView extends ItemView {
 	private oppBoard: OpportunityBoard;
 	private projectBoard: ProjectBoard;
 	private dailyReportBoard: DailyReportBoard;
+	private aiQaBoard: AiQaBoard;
 	private pomodoroService: PomodoroService | null = null;
 	private calendarCardDate = new Date();
 
@@ -290,6 +292,8 @@ export class DashboardView extends ItemView {
 		this.oppBoard = new OpportunityBoard(this);
 		this.projectBoard = new ProjectBoard(this);
 		this.dailyReportBoard = new DailyReportBoard(this);
+		const view = this;
+		this.aiQaBoard = new AiQaBoard({ app: this.app, plugin: this.plugin, get boardEl() { return view.boardEl; }, get currentPage() { return view.currentPage; }, set currentPage(value) { view.currentPage = value; }, exitEditMode: () => view.exitEditMode(), });
 	}
 
 	/** Theme actually in effect for the dashboard right now. */
@@ -392,7 +396,7 @@ export class DashboardView extends ItemView {
 				}
 			} else if (this.currentPage === 'daily-report') {
 				if (taskRelevant || reportRelevant) this.dailyReportBoard.scheduleRefresh();
-			} else {
+			} else if (this.currentPage === 'home') {
 				// Home: ignore edits to unrelated files. Only task files (markdown under
 				// the projects folder) affect the home cards, so this saves a full rescan
 				// on every unrelated note edit while still staying fresh for real changes.
@@ -430,6 +434,7 @@ export class DashboardView extends ItemView {
 		if (this.adLimitTimer !== null) { window.clearTimeout(this.adLimitTimer); this.adLimitTimer = null; }
 		this.oppBoard.dispose();
 		this.dailyReportBoard.dispose();
+		this.aiQaBoard.dispose();
 		if (this.storeUnsub) { this.storeUnsub(); this.storeUnsub = null; }
 		this.dashboardStore.dispose();
 		this.dashboardEl?.empty();
@@ -841,6 +846,7 @@ export class DashboardView extends ItemView {
 			navItems.push({ glyph: '\u25C8', label: this.plugin.settings.boardTitle || '\u770B\u677F', action: 'opportunity', svg: ICON_opportunity });
 		}
 		navItems.push({ glyph: '', label: '日报周报', action: 'daily-report', icon: 'calendar-days' });
+		navItems.push({ glyph: '', label: 'AI问答', action: 'ai-qa', icon: 'message-circle' });
 		// 动作组：建什么（新建日记 / 新建任务 / 新建项目）
 		const actionItems: Array<{ glyph: string; label: string; action: string; svg?: string; icon?: string }> = [
 			{ glyph: '+', label: '\u65B0\u5EFA\u65E5\u8BB0', action: 'diary', svg: ICON_newDiary },
@@ -869,6 +875,7 @@ export class DashboardView extends ItemView {
 					if (it.action === 'all') void this.projectBoard.show();
 					if (it.action === 'opportunity') void this.oppBoard.show();
 					if (it.action === 'daily-report') void this.dailyReportBoard.show();
+					if (it.action === 'ai-qa') void this.aiQaBoard.show();
 				} catch (e) {
 					const msg = e instanceof Error ? e.message : String(e);
 					this.showToast('打开失败：' + msg, 'error');
@@ -1408,6 +1415,9 @@ export class DashboardView extends ItemView {
 			}).open();
 		})();
 	}
+
+	/** Show AI Q&A inside the existing workbench view. */
+	async showAiQa(): Promise<void> { await this.aiQaBoard.show(); }
 
 	/** Find the actual project folder by scanning vault */
 	private async findProjectFolder(projectName: string): Promise<TFolder | null> {
