@@ -67,6 +67,11 @@
   margin: 0 auto;
 }
 
+/* AI 问答自身管理滚动区域，避免工作台通用底部留白叠加到会话外框。 */
+.mq-dashboard-plugin:has(.mq-ai-qa-board) {
+  padding-bottom: 8px;
+}
+
 /* ---- Light Theme (shadcn-style neutral) ----
    Self-contained neutral palette applied in BOTH cases:
    - Obsidian light  -> dashboard is light (covers auto + explicit light)
