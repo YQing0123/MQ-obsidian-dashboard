@@ -67,9 +67,24 @@
   margin: 0 auto;
 }
 
-/* AI 问答自身管理滚动区域，避免工作台通用底部留白叠加到会话外框。 */
+/* AI 问答自身管理滚动区域。将横幅、导航和问答工作区放入同一纵向
+   flex 布局，问答工作区始终接管剩余高度。 */
 .mq-dashboard-plugin:has(.mq-ai-qa-board) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  box-sizing: border-box;
+  overflow: hidden;
   padding-bottom: 8px;
+}
+.mq-dashboard-plugin:has(.mq-ai-qa-board) > .mq-ad-banner,
+.mq-dashboard-plugin:has(.mq-ai-qa-board) > .mq-ad-toolbar,
+.mq-dashboard-plugin:has(.mq-ai-qa-board) > .mq-ad-parse-issues { flex: 0 0 auto; }
+.mq-dashboard-plugin:has(.mq-ai-qa-board) > .mq-ai-qa-board {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto !important;
+  margin-bottom: 0;
 }
 
 /* ---- Light Theme (shadcn-style neutral) ----
@@ -490,9 +505,10 @@
 
 /* ============================================================ banner */
 .mq-ad-banner {
-  position: relative; width: 100%; height: 120px; aspect-ratio: auto;
+  position: relative; width: 100%; height: 120px; min-height: 18px; aspect-ratio: auto;
   border: 1px solid var(--mq-ad-line); border-radius: var(--mq-ad-r3);
   overflow: hidden;
+  transition: height .2s ease, border-radius .2s ease;
   background:
     radial-gradient(120% 80% at 0% 0%, rgba(123,167,255,0.10), transparent 55%),
     radial-gradient(100% 90% at 100% 100%, rgba(123,167,255,0.08), transparent 60%),
@@ -539,6 +555,29 @@
   transition: border-color .12s, color .12s;
 }
 .mq-ad-banner__btn:hover { border-color: var(--mq-ad-accent); color: var(--mq-ad-accent); }
+.mq-ad-banner__collapse {
+  position: absolute; z-index: 12; left: 50%; bottom: 3px; display: grid; place-items: center;
+  width: 34px; height: 20px; padding: 0; transform: translate(-50%, 5px);
+  opacity: 0; color: rgba(255,255,255,.78); background: rgba(15,16,20,.72);
+  border: 1px solid rgba(255,255,255,.18); border-radius: 6px; cursor: pointer;
+  transition: opacity .15s ease, transform .15s ease, color .12s ease, border-color .12s ease;
+}
+.mq-ad-banner__collapse svg { width: 15px; height: 15px; }
+.mq-ad-banner:hover .mq-ad-banner__collapse,
+.mq-ad-banner__collapse:focus-visible { opacity: 1; transform: translate(-50%, 0); }
+.mq-ad-banner__collapse:hover { color: #fff; border-color: var(--banner-stat-accent, var(--mq-ad-accent)); }
+.mq-ad-banner--collapsed { height: 18px; border-radius: 6px; }
+.mq-ad-banner--collapsed::after { opacity: .35; }
+.mq-ad-banner--collapsed .mq-ad-banner__bar,
+.mq-ad-banner--collapsed .mq-ad-banner-stats,
+.mq-ad-banner--collapsed .mq-ad-banner-meta,
+.mq-ad-banner--collapsed .mq-ad-banner__ph,
+.mq-ad-banner--collapsed .mq-ad-banner__img { opacity: 0; pointer-events: none; }
+.mq-ad-banner--collapsed .mq-ad-banner__collapse {
+  top: 0; bottom: auto; height: 17px; transform: translate(-50%, -3px); border-radius: 0 0 6px 6px;
+}
+.mq-ad-banner--collapsed:hover .mq-ad-banner__collapse,
+.mq-ad-banner--collapsed .mq-ad-banner__collapse:focus-visible { transform: translate(-50%, 0); }
 .mq-ad-banner--stats { background-color: #16161d; }
 .mq-ad-banner--stats::before { content: ''; position: absolute; inset: 0; border-radius: inherit; background: rgba(10,10,18,var(--banner-scrim,.55)); backdrop-filter: blur(var(--banner-blur,6px)) brightness(var(--banner-bright,.6)); -webkit-backdrop-filter: blur(var(--banner-blur,6px)) brightness(var(--banner-bright,.6)); pointer-events: none; z-index: 1; }
 .mq-ad-banner--stats::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(120deg,var(--banner-stat-accent,#bff038),transparent 62%); opacity: .22; pointer-events: none; z-index: 1; }
@@ -640,6 +679,37 @@
   .mq-ad-banner-stats { padding-right: 158px; }
   .mq-ad-banner-meta { right: 9px; }
   .mq-ad-banner-stat-title-prefix { max-width: 9ch; }
+}
+
+/* Compact vertical rhythm: keep the dashboard information-dense while
+   preserving horizontal breathing room and the established card proportions. */
+.mq-dashboard-plugin > .mq-ad-pulse { margin-top: 5px; }
+.mq-dashboard-plugin > .mq-ad-header { margin-top: 7px; }
+.mq-dashboard-plugin > .mq-ad-toolbar { margin-top: 9px; }
+.mq-dashboard-plugin > .mq-ad-parse-issues { margin-top: 5px; }
+.mq-dashboard-plugin > .mq-ad-board { margin-top: 7px; row-gap: 6px; }
+.mq-dashboard-plugin > .mq-ai-qa-board { margin-top: 8px; margin-bottom: 3px; }
+.mq-dashboard-plugin .mq-ad-card { row-gap: 5px; }
+.mq-dashboard-plugin .mq-ad-proj,
+.mq-dashboard-plugin .mq-ad-wo { row-gap: 5px; }
+.mq-dashboard-plugin .mq-po-topbar { margin-bottom: 5px; }
+.mq-dashboard-plugin .mq-po-container { margin-top: 7px; }
+.mq-dashboard-plugin .mq-dr-container { gap: 6px; padding-top: 5px; padding-bottom: 6px; }
+
+/* The composer is the final fixed flex row inside the workspace; only the
+   transcript scrolls, so it remains at the workspace bottom on resize. */
+.mq-dashboard-plugin > .mq-ai-qa-board .qa-main { position: relative; min-height: 0; }
+.mq-dashboard-plugin > .mq-ai-qa-board .qa-composer {
+  position: relative;
+  z-index: 20;
+  flex: 0 0 auto;
+  background: var(--background-primary);
+  box-shadow: 0 -8px 18px color-mix(in srgb, var(--background-modifier-box-shadow) 16%, transparent);
+}
+
+/* Collapsing the banner gives the embedded AI workspace the released vertical space. */
+.mq-dashboard-plugin.mq-ad-banner-collapsed .mq-ai-qa-board {
+  min-height: 0;
 }
 
 /* ============================================================ pulse */

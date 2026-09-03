@@ -201,6 +201,7 @@ export class DashboardView extends ItemView {
 	private bannerPh: HTMLElement | null = null;
 	private bannerEl: HTMLElement | null = null;
 	private bannerStatsEl: HTMLElement | null = null;
+	private bannerCollapsed = false;
 	public boardEl: HTMLElement | null = null;
 	private heatmapCard: HTMLElement | null = null;
 	private heatmapTimer: number | null = null;
@@ -446,6 +447,8 @@ export class DashboardView extends ItemView {
 	private renderBanner(root: HTMLElement): HTMLElement {
 		const banner = root.createDiv({ cls: 'mq-ad-banner' });
 		this.bannerEl = banner;
+		banner.toggleClass('mq-ad-banner--collapsed', this.bannerCollapsed);
+		this.dashboardEl?.toggleClass('mq-ad-banner-collapsed', this.bannerCollapsed);
 		const ph = this.bannerState.mode === 'stats'
 			? null
 			: banner.createDiv({ cls: 'mq-ad-banner__ph', text: '[ banner ]  ·  点击右上角按钮插入封面图片' });
@@ -466,6 +469,20 @@ export class DashboardView extends ItemView {
 		modeBtn.addEventListener('click', (e) => {
 			e.stopPropagation();
 			this.openBannerEditModal();
+		});
+		const collapseBtn = banner.createEl('button', {
+			cls: 'mq-ad-banner__collapse',
+			attr: {
+				type: 'button',
+				'aria-label': this.bannerCollapsed ? '展开横幅' : '收起横幅',
+				title: this.bannerCollapsed ? '展开横幅' : '收起横幅',
+				'aria-expanded': String(!this.bannerCollapsed),
+			},
+		});
+		setIcon(collapseBtn, this.bannerCollapsed ? 'chevron-down' : 'chevron-up');
+		collapseBtn.addEventListener('click', (e) => {
+			e.stopPropagation();
+			this.setBannerCollapsed(!this.bannerCollapsed);
 		});
 		if (this.bannerState.mode === 'stats') {
 			banner.addClass('mq-ad-banner--stats');
@@ -507,6 +524,18 @@ export class DashboardView extends ItemView {
 			}
 		});
 		return banner;
+	}
+
+	private setBannerCollapsed(collapsed: boolean): void {
+		this.bannerCollapsed = collapsed;
+		this.bannerEl?.toggleClass('mq-ad-banner--collapsed', collapsed);
+		this.dashboardEl?.toggleClass('mq-ad-banner-collapsed', collapsed);
+		const button = this.bannerEl?.querySelector('.mq-ad-banner__collapse');
+		if (!(button instanceof HTMLElement)) return;
+		button.setAttribute('aria-label', collapsed ? '展开横幅' : '收起横幅');
+		button.setAttribute('title', collapsed ? '展开横幅' : '收起横幅');
+		button.setAttribute('aria-expanded', String(!collapsed));
+		setIcon(button, collapsed ? 'chevron-down' : 'chevron-up');
 	}
 
 	/** Date, lunar date, theme and plugin settings now live inside the banner. */
@@ -875,7 +904,7 @@ export class DashboardView extends ItemView {
 					if (it.action === 'all') void this.projectBoard.show();
 					if (it.action === 'opportunity') void this.oppBoard.show();
 					if (it.action === 'daily-report') void this.dailyReportBoard.show();
-					if (it.action === 'ai-qa') void this.aiQaBoard.show();
+						if (it.action === 'ai-qa') void this.showAiQa();
 				} catch (e) {
 					const msg = e instanceof Error ? e.message : String(e);
 					this.showToast('打开失败：' + msg, 'error');
@@ -1417,7 +1446,10 @@ export class DashboardView extends ItemView {
 	}
 
 	/** Show AI Q&A inside the existing workbench view. */
-	async showAiQa(): Promise<void> { await this.aiQaBoard.show(); }
+	async showAiQa(): Promise<void> {
+		if (this.plugin.settings.aiQa.collapseBannerOnOpen === true) this.setBannerCollapsed(true);
+		await this.aiQaBoard.show();
+	}
 
 	/** Find the actual project folder by scanning vault */
 	private async findProjectFolder(projectName: string): Promise<TFolder | null> {
