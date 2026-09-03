@@ -19,6 +19,7 @@ import { DailyReportBoard } from './DailyReportBoard';
 import { AiQaBoard } from './AiQaBoard';
 import { DAILY_REPORT_FOLDER } from '../data/dailyReport';
 import { fmtDate, todayStr, nowFmt, calcNextRemindDate, getTodayUniverse, getTodayTasks, isDoneToday, isSkipToday, overdueDays, urgencyMeta } from '../data/taskLogic';
+import { buildTaskHierarchy, completionCascade, orderTasksByHierarchy } from '../data/taskHierarchy';
 import { t } from '../i18n';
 
 import type Dashboard from '../main';
@@ -1232,16 +1233,30 @@ export class DashboardView extends ItemView {
 		}
 
 		const newStatus: TaskStatus = task.status === '\u5DF2\u5B8C\u6210' ? '\u5F85\u529E' : '\u5DF2\u5B8C\u6210';
-		const now = nowFmt();
-		// 统一走 data 层写入器：一次调用完成 状态切换 + 完成时间 set/del
-		// （CRLF-safe + 值转义；此前这里是手写行扫描，且不处理值含换行/冒号的情形）
-		await fmWriteFrontmatter(this.app, file, {
-			'\u72B6\u6001': newStatus,
-			'\u5B8C\u6210\u65F6\u95F4': newStatus === '\u5DF2\u5B8C\u6210' ? now : null,
-		});
-		task.status = newStatus;
-		task.completeTime = newStatus === '\u5DF2\u5B8C\u6210' ? now : null;
+		await this.updateTaskStatus(task, newStatus);
 		row.toggleClass('is-done', newStatus === '\u5DF2\u5B8C\u6210');
+	}
+
+	/** Write a task status and propagate parent/child completion rules. */
+	async updateTaskStatus(task: TaskItem, newStatus: TaskStatus): Promise<void> {
+		const allTasks = await this.taskStore.scanAllTasks();
+		const sourceTask = allTasks.find((item) => item.id === task.id) || task;
+		const updates = completionCascade(allTasks.length ? allTasks : [task], sourceTask, newStatus);
+		const now = nowFmt();
+		for (const update of updates) {
+			const updateFile = this.app.vault.getAbstractFileByPath(update.task.sourceFile);
+			if (!(updateFile instanceof TFile)) continue;
+			const completeTime = update.status === '\u5DF2\u5B8C\u6210' ? (update.task.completeTime || now) : null;
+			await fmWriteFrontmatter(this.app, updateFile, { '\u72B6\u6001': update.status, '\u5B8C\u6210\u65F6\u95F4': completeTime });
+			update.task.status = update.status;
+			update.task.completeTime = completeTime;
+			if (update.task.id === task.id) {
+				task.status = update.status;
+				task.completeTime = completeTime;
+			}
+		}
+		this.showToast('\u2728 \u4EFB\u52A1\u72B6\u6001\u5DF2\u66F4\u65B0: ' + newStatus);
+		void this.refreshRelevant();
 	}
 
 	/** Write frontmatter fields to a file via the shared data-layer writer (CRLF-safe + YAML value escaping). */
@@ -1404,6 +1419,7 @@ export class DashboardView extends ItemView {
 		this.boardEl.removeClass('mq-po-board');
 		this.boardEl.removeClass('mq-op-board');
 		this.boardEl.removeClass('mq-dr-board');
+		this.boardEl.removeClass('mq-ai-qa-board');
 		this.boardEl.addClass('mq-ad-board');
 		this.currentPage = 'home';
 		// 按注册表渲染全部启用模块（顺序/显隐由 settings.homeModules 决定）
@@ -2770,13 +2786,16 @@ export class DashboardView extends ItemView {
 			const isDoneRow = (task: TaskItem): boolean =>
 				task.status === '已完成' || !!task.completeTime?.startsWith(today) || task.dailyNodes?.[today]?.s === 'done';
 
-			// Completed items stay at the end so active work remains actionable.
-			const sorted = todayTasks.sort((a, b) => {
+			// Completed items stay at the end so active work remains actionable;
+			// hierarchy ordering then keeps each parent beside its children.
+			const compareTodo = (a: TaskItem, b: TaskItem): number => {
 				if (isDoneRow(a) !== isDoneRow(b)) return isDoneRow(a) ? 1 : -1;
 				if (a.isOverdue && !b.isOverdue) return -1;
 				if (!a.isOverdue && b.isOverdue) return 1;
 				return priorityWeight(a.priority) - priorityWeight(b.priority);
-			});
+			};
+			const sorted = orderTasksByHierarchy(todayTasks, compareTodo);
+			const hierarchy = buildTaskHierarchy(tasks);
 
 			sorted.forEach((task) => {
 				const isDone = isDoneRow(task);
@@ -2788,6 +2807,10 @@ export class DashboardView extends ItemView {
 					e.stopPropagation();
 					void this.toggleTask(task, row);
 				});
+
+			const node = hierarchy.get(task.id);
+			if (node?.parent) row.createSpan({ cls: 'mq-ad-todo__hierarchy-tag mq-ad-todo__hierarchy-tag--child', text: '子' });
+			if (node?.children.length) row.createSpan({ cls: 'mq-ad-todo__hierarchy-tag mq-ad-todo__hierarchy-tag--parent', text: `父${node.children.length}` });
 
 		// Text click → open edit modal
 		const text = row.createSpan({ cls: 'mq-ad-todo__text', text: task.content });

@@ -6,6 +6,8 @@ import {
 } from '../data/taskParser';
 import type { TaskStore } from '../data/taskStore';
 import { fmtDate, nowFmt } from '../data/taskLogic';
+import { buildTaskHierarchy, orderTasksByHierarchy } from '../data/taskHierarchy';
+import type { TaskHierarchyNode } from '../data/taskHierarchy';
 import { computeWindow, filterWithOrig } from '../data/virtualList';
 import { UI_TEXT } from '../constants';
 import { t, tArr } from '../i18n';
@@ -42,6 +44,7 @@ export interface ProjectHost {
 	createProjectFile(): Promise<void>;
 	openTaskModalWithParent(parentName: string, projectName: string): Promise<void>;
 	toggleTask(task: TaskItem, row: HTMLElement): Promise<void>;
+	updateTaskStatus(task: TaskItem, newStatus: TaskStatus): Promise<void>;
 	setDailyNode(task: TaskItem, date: string, state: 'done' | 'todo' | 'skip'): Promise<void>;
 }
 
@@ -142,6 +145,7 @@ export class ProjectBoard {
 		this.boardEl.removeClass('mq-ad-board');
 		this.boardEl.removeClass('mq-op-board');
 		this.boardEl.removeClass('mq-dr-board');
+		this.boardEl.removeClass('mq-ai-qa-board');
 		this.currentPage = 'project';
 
 		this.currentProjects = projects;
@@ -493,16 +497,16 @@ export class ProjectBoard {
 		const taskByName = new Map<string, TaskItem>();
 		const taskById = new Map<string, TaskItem>();
 		tasks.forEach((t) => {
-			taskByName.set(t.content, t);
+			taskByName.set(`${t.projectId}\u0000${t.content}`, t);
 			taskById.set(t.id, t);
 		});
 
 		const childrenOf = new Map<string, TaskItem[]>();
 		const rootTasks: TaskItem[] = [];
 		tasks.forEach((t) => {
-			if (t.parent && (taskByName.has(t.parent) || taskById.has(t.parent))) {
-				const parentTask = taskByName.get(t.parent) || taskById.get(t.parent);
-				const parentKey = parentTask ? parentTask.content : t.parent;
+			if (t.parent && (taskByName.has(`${t.projectId}\u0000${t.parent}`) || taskById.has(t.parent))) {
+				const parentTask = taskByName.get(`${t.projectId}\u0000${t.parent}`) || taskById.get(t.parent);
+				const parentKey = parentTask ? parentTask.id : t.parent;
 				const children = childrenOf.get(parentKey) || [];
 				children.push(t);
 				childrenOf.set(parentKey, children);
@@ -564,9 +568,9 @@ export class ProjectBoard {
 				const isLast = index === list.length - 1;
 				orderedTasks.push(t);
 				taskTree.set(t.id, { level, ancestorHasNext, isLast });
-				const kids = childrenOf.get(t.content) || [];
+				const kids = childrenOf.get(t.id) || [];
 				// Skip children of collapsed parents (collapse/expand via arrow)
-				if (kids.length && !this.collapsedParents.has(t.content)) {
+				if (kids.length && !this.collapsedParents.has(t.id)) {
 					flattenWithLevel(kids, level + 1, [...ancestorHasNext, !isLast]);
 				}
 			}
@@ -877,7 +881,7 @@ export class ProjectBoard {
 		orderedTasks.forEach((t, idx) => {
 			const tree = taskTree.get(t.id) ?? { level: 0, ancestorHasNext: [], isLast: true };
 			const level = tree.level;
-			const isParent = childrenOf.has(t.content);
+			const isParent = childrenOf.has(t.id);
 			const color = colorMap[t.projectId] || '#3b82f6';
 
 			// Left label row (indentation by depth)
@@ -897,12 +901,12 @@ export class ProjectBoard {
 				}
 			}
 			if (isParent) {
-				const collapsed = this.collapsedParents.has(t.content);
+				const collapsed = this.collapsedParents.has(t.id);
 				const dot = lr.createSpan({ cls: 'mq-po-gantt__label-dot', text: collapsed ? '▸' : '▾' });
 				dot.addEventListener('click', (e) => {
 					e.stopPropagation();
-					if (collapsed) this.collapsedParents.delete(t.content);
-					else this.collapsedParents.add(t.content);
+					if (collapsed) this.collapsedParents.delete(t.id);
+					else this.collapsedParents.add(t.id);
 					panel.empty();
 					this.renderGanttPanel(panel, tasks, projects);
 				});
@@ -1287,11 +1291,10 @@ export class ProjectBoard {
 		const tbody = table.createEl('tbody');
 		tbody.id = tbodyId;
 
-		// Sort tasks
+		// Sort tasks, then keep each parent beside its children.
 		let sortedTasks = [...tasks];
-		const applySort = () => {
-			if (!this.sortCol) { sortedTasks = [...tasks]; return; }
-			sortedTasks = [...tasks].sort((a, b) => {
+		const compareTasks = (a: TaskItem, b: TaskItem): number => {
+			if (!this.sortCol) return 0;
 				let va = '', vb = '';
 				switch (this.sortCol) {
 					case 'name': va = a.content; vb = b.content; break;
@@ -1303,9 +1306,12 @@ export class ProjectBoard {
 				}
 				const cmp = va.localeCompare(vb, 'zh-CN');
 				return this.sortDir === 'asc' ? cmp : -cmp;
-			});
+		};
+		const applySort = () => {
+			sortedTasks = orderTasksByHierarchy([...tasks].sort(compareTasks), compareTasks);
 		};
 		applySort();
+		const hierarchy = buildTaskHierarchy(tasks);
 
 		// ---- 窗口化渲染：只创建可视区行，避免上千任务一次性渲染全部 DOM ----
 		const FILTER_KEYS: Record<string, (st: string) => boolean> = {
@@ -1350,7 +1356,7 @@ export class ProjectBoard {
 					if (o === undefined) continue;
 					const task = visible.items[v];
 				if (!task) continue;
-				const tr = this.buildPoRow(tbody, task, projects, o);
+					const tr = this.buildPoRow(tbody, task, projects, o, hierarchy);
 					rows[o] = tr;
 					lastRendered.push(o);
 				}
@@ -1422,7 +1428,7 @@ export class ProjectBoard {
 	}
 
 	/** 构建单行（窗口化渲染按需调用）。origIndex 为该行在完整任务列表中的下标（与甘特条联动）。 */
-	private buildPoRow(tbody: HTMLElement, t: TaskItem, projects: ProjectInfo[], origIndex: number): HTMLElement {
+	private buildPoRow(tbody: HTMLElement, t: TaskItem, projects: ProjectInfo[], origIndex: number, hierarchy?: Map<string, TaskHierarchyNode>): HTMLElement {
 		const statusMap: Record<string, string> = { '待办':'mq-po-todo', '进行中':'mq-po-progress', '已阻塞':'mq-po-blocked', '已完成':'mq-po-done', '已取消':'mq-po-cancelled' };
 		const prioMap: Record<string, string> = { '重要且紧急':'mq-po-p-high', '重要不紧急':'mq-po-p-med', '紧急不重要':'mq-po-p-med', '不重要不紧急':'mq-po-p-low' };
 		const prioShort: Record<string, string> = { '重要且紧急':'高', '重要不紧急':'中', '紧急不重要':'中', '不重要不紧急':'低' };
@@ -1444,8 +1450,11 @@ export class ProjectBoard {
 			void this.toggleTask(t, tr);
 		});
 
-		// Task name (clickable to edit)
-		const nameEl = tr.createEl('td', { text: t.content, cls: 'mq-po-name-cell' });
+		// Task name (clickable to edit), with a compact parent/child marker.
+		const nameEl = tr.createEl('td', { cls: 'mq-po-name-cell' });
+		const node = hierarchy?.get(t.id);
+		if (node?.depth && hierarchy) this.renderListTreeConnector(nameEl, node, hierarchy);
+		nameEl.createSpan({ text: t.content });
 		nameEl.addEventListener('click', () => {
 			this.openTaskEditModal(t);
 		});
@@ -1488,6 +1497,26 @@ export class ProjectBoard {
 			menu.showAtMouseEvent(e);
 		});
 		return tr;
+	}
+
+	/** Reuse the Gantt tree geometry in the virtualized task list. */
+	private renderListTreeConnector(parent: HTMLElement, node: TaskHierarchyNode, hierarchy: Map<string, TaskHierarchyNode>): void {
+		const chain: TaskHierarchyNode[] = [];
+		let current: TaskHierarchyNode | undefined = node;
+		while (current?.parent) {
+			chain.unshift(current);
+			current = hierarchy.get(current.parent.id);
+		}
+		if (!chain.length) return;
+		const tree = parent.createSpan({ cls: 'mq-po-list-tree' });
+		chain.forEach((childNode, index) => {
+			const segment = tree.createSpan({ cls: 'mq-po-gantt__tree-segment' });
+			const parentNode = childNode.parent ? hierarchy.get(childNode.parent.id) : undefined;
+			const siblings = parentNode?.children ?? [];
+			const isLast = siblings[siblings.length - 1]?.id === childNode.task.id;
+			if (index === chain.length - 1) segment.addClass(isLast ? 'is-last' : 'is-middle');
+			else if (!isLast) segment.addClass('has-vertical');
+		});
 	}
 
 
@@ -2263,20 +2292,7 @@ export class ProjectBoard {
 
 	/** Update task status in source file (unified writer) */
 	private async updateTaskStatus(task: TaskItem, newStatus: TaskStatus): Promise<void> {
-		if (!task.sourceFile) return;
-		const file = this.app.vault.getAbstractFileByPath(task.sourceFile);
-		if (!(file instanceof TFile)) return;
-
-		const wasComplete = task.status === '\u5DF2\u5B8C\u6210';
-		const updates: Record<string, string | null> = { '\u72B6\u6001': newStatus };
-		if (newStatus === '\u5DF2\u5B8C\u6210' && !wasComplete) updates['\u5B8C\u6210\u65F6\u95F4'] = nowFmt();
-		if (newStatus !== '\u5DF2\u5B8C\u6210' && wasComplete) updates['\u5B8C\u6210\u65F6\u95F4'] = null;
-		await this.writeFrontmatter(file, updates);
-		task.status = newStatus;
-		if (newStatus === '\u5DF2\u5B8C\u6210' && !wasComplete) task.completeTime = updates['\u5B8C\u6210\u65F6\u95F4'] ?? null;
-		if (newStatus !== '\u5DF2\u5B8C\u6210' && wasComplete) task.completeTime = null;
-		this.showToast('\u2728 \u4EFB\u52A1\u72B6\u6001\u5DF2\u66F4\u65B0: ' + newStatus);
-		await this.refresh();
+		await this.host.updateTaskStatus(task, newStatus);
 	}
 
 

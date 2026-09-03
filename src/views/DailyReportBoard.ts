@@ -83,6 +83,7 @@ export class DailyReportBoard {
 		this.host.boardEl.removeClass('mq-ad-board');
 		this.host.boardEl.removeClass('mq-po-board');
 		this.host.boardEl.removeClass('mq-op-board');
+		this.host.boardEl.removeClass('mq-ai-qa-board');
 		this.host.boardEl.addClass('mq-dr-board');
 		this.host.currentPage = 'daily-report';
 		this.startDate = '';

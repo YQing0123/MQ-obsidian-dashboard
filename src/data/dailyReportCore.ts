@@ -1,4 +1,5 @@
 import type { TaskItem } from './taskParser';
+import { taskDisplayTitle } from './taskHierarchy';
 
 export interface DailyReportRecord {
 	date: string;
@@ -20,8 +21,8 @@ function weekRange(date: string): { start: string; end: string } {
 	return { start: format(start), end: format(end) };
 }
 
-function lineForTask(task: TaskItem): string {
-	return `${task.content}。（${task.projectId || '未归属项目'}）`;
+function lineForTask(task: TaskItem, tasks: TaskItem[]): string {
+	return `${taskDisplayTitle(task, tasks)}。（${task.projectId || '未归属项目'}）`;
 }
 
 export function doneDates(task: TaskItem): string[] {
@@ -38,13 +39,13 @@ export function buildDailyReport(date: string, tasks: TaskItem[]): DailyReportRe
 	const summary = tasks
 		.filter((task) => doneDates(task).includes(date))
 		.sort((a, b) => a.projectId.localeCompare(b.projectId, 'zh-CN') || a.content.localeCompare(b.content, 'zh-CN'))
-		.map(lineForTask);
+		.map((task) => lineForTask(task, tasks));
 	const range = weekRange(date);
 	const plan = tasks
 		.filter((task) => task.status !== '已完成' && task.status !== '已取消')
 		.filter((task) => !!task.dueDate && task.dueDate >= range.start && task.dueDate <= range.end)
 		.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || '') || a.content.localeCompare(b.content, 'zh-CN'))
-		.map(lineForTask);
+		.map((task) => lineForTask(task, tasks));
 	return { date, summary, plan };
 }
 

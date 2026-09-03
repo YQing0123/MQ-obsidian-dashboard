@@ -1,6 +1,7 @@
 import { App, Modal, TFile } from 'obsidian';
 import { TaskItem, ProjectInfo, TaskStatus, TaskPriority, STATUS_LIST, PRIORITY_LIST, NodeState, DailyNode, serializeDailyNodesBlock } from '../data/taskParser';
-import { applyFrontmatterUpdates, yamlScalar } from '../data/frontmatterWriter';
+import { applyFrontmatterUpdates, writeFrontmatter as fmWriteFrontmatter, yamlScalar } from '../data/frontmatterWriter';
+import { completionCascade } from '../data/taskHierarchy';
 import { UI_TEXT } from '../constants';
 
 interface TaskEditModalOptions {
@@ -228,6 +229,9 @@ export class TaskEditModal extends Modal {
 		// ---- 完成时间 (record when whole task status changes) ----
 		const wasDone = task.status === '已完成';
 		const willDone = status === '已完成';
+		const cascade = wasDone !== willDone
+			? completionCascade(this.opts.allTasks, task, status as TaskStatus)
+			: [];
 		if (willDone && !wasDone) {
 			// 未完成 → 已完成：写入当前时间
 			inFM = false; // reset for a fresh frontmatter scan
@@ -282,6 +286,16 @@ export class TaskEditModal extends Modal {
 		}
 
 		await this.app.vault.modify(file, lines.join(eol));
+		// Keep parent/child completion states consistent when status is edited in the modal.
+		for (const update of cascade) {
+			if (update.task.id === task.id) continue;
+			const updateFile = this.app.vault.getAbstractFileByPath(update.task.sourceFile);
+			if (!(updateFile instanceof TFile)) continue;
+			const completeTime = update.status === '已完成' ? (update.task.completeTime || nowFmt()) : null;
+			await fmWriteFrontmatter(this.app, updateFile, { '状态': update.status, '完成时间': completeTime });
+			update.task.status = update.status;
+			update.task.completeTime = completeTime;
+		}
 
 		// Update task object — only refresh completeTime when the file was actually
 		// changed, so memory stays consistent with disk (fixes stale-time bug).

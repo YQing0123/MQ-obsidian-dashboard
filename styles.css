@@ -69,7 +69,7 @@
 
 /* AI 问答自身管理滚动区域。将横幅、导航和问答工作区放入同一纵向
    flex 布局，问答工作区始终接管剩余高度。 */
-.mq-dashboard-plugin:has(.mq-ai-qa-board) {
+.mq-dashboard-plugin:has(> .mq-ai-qa-board) {
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -77,10 +77,10 @@
   overflow: hidden;
   padding-bottom: 8px;
 }
-.mq-dashboard-plugin:has(.mq-ai-qa-board) > .mq-ad-banner,
-.mq-dashboard-plugin:has(.mq-ai-qa-board) > .mq-ad-toolbar,
-.mq-dashboard-plugin:has(.mq-ai-qa-board) > .mq-ad-parse-issues { flex: 0 0 auto; }
-.mq-dashboard-plugin:has(.mq-ai-qa-board) > .mq-ai-qa-board {
+.mq-dashboard-plugin:has(> .mq-ai-qa-board) > .mq-ad-banner,
+.mq-dashboard-plugin:has(> .mq-ai-qa-board) > .mq-ad-toolbar,
+.mq-dashboard-plugin:has(> .mq-ai-qa-board) > .mq-ad-parse-issues { flex: 0 0 auto; }
+.mq-dashboard-plugin:has(> .mq-ai-qa-board) > .mq-ai-qa-board {
   flex: 1 1 auto;
   min-height: 0;
   height: auto !important;
@@ -949,7 +949,14 @@ body.theme-dark .mq-dashboard-plugin:not([data-theme="light"]) { --mq-ad-icon-ac
 .mq-ad-todo__item.is-done .mq-ad-todo__text { color: var(--mq-ad-text-dim); text-decoration: line-through; }
 .mq-ad-todo__item.is-overdue { background: rgba(224,127,135,0.06); }
 .mq-ad-todo__item.is-overdue .mq-ad-todo__text { color: var(--mq-ad-danger); }
-.mq-ad-todo__text { flex: 1; }
+.mq-ad-todo__text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mq-ad-todo__hierarchy-tag {
+  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  min-width: 15px; height: 15px; padding: 0 3px; border-radius: 3px;
+  font-size: 10px; line-height: 1; font-weight: 600; letter-spacing: 0;
+}
+.mq-ad-todo__hierarchy-tag--child { color: var(--mq-ad-text-dim); background: var(--mq-ad-s2); }
+.mq-ad-todo__hierarchy-tag--parent { color: var(--mq-ad-accent); background: var(--mq-ad-accent-dim); }
 .mq-ad-todo__tag {
   font-family: var(--font-monospace, monospace); font-size: clamp(10px, 3.6cqi, 11px); letter-spacing: 0.04em;
   padding: 1px 6px; border: 1px solid var(--mq-ad-line); border-radius: var(--mq-ad-r1);
@@ -2085,6 +2092,8 @@ input[type="date"].mq-ad-modal-input { cursor: pointer; }
 
 /* Clickable table name cell */
 .mq-po-name-cell { cursor: pointer; }
+.mq-po-name-cell { white-space: nowrap; }
+.mq-po-list-tree { display: inline-flex; vertical-align: middle; align-self: stretch; height: 1.6em; margin: -0.3em 4px -0.3em 0; }
 
 /* Calendar title */
 .mq-po-cal__title { font-weight: 600; }

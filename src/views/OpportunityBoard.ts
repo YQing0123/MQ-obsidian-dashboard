@@ -123,6 +123,7 @@ export class OpportunityBoard {
 		this.host.boardEl.removeClass('mq-ad-board');
 		this.host.boardEl.removeClass('mq-po-board');
 		this.host.boardEl.removeClass('mq-dr-board');
+		this.host.boardEl.removeClass('mq-ai-qa-board');
 		this.host.boardEl.addClass('mq-op-board');
 		this.host.currentPage = 'opportunity';
 
