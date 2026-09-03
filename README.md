@@ -65,14 +65,15 @@ Dashboard 是一个 Obsidian 插件：把「任务管理 / 项目管理 / 笔记
 ![AI 问答界面](docs/images/ai-qa.png)
 
 - **会话工作区**：独立的新建、切换与删除会话；问答历史保存在 Vault 的 AI 问答会话目录，可将完成回答一键入库为 Markdown
-- **检索范围**：默认检索本地 Vault Markdown；接入可选的 SAG 知识库 MCP 后，可通过 `@知识库名` 限定来源，也可在未选来源时跨已授权知识库检索
+- **SAG + 本地知识库问答**：接入 [knowledge-SAG](https://github.com/YQing0123/knowledge-SAG) 后，AI 问答会先检索已授权的 SAG 知识库，再检索当前 Vault 的本地 Markdown；模型只根据本轮命中的两类证据整理回答，不把会话历史混入检索证据
+- **检索范围控制**：可通过 `@知识库名` 限定某个 SAG 信源；未指定时搜索已授权的 SAG 信源。本地检索覆盖当前 Vault 中的 Markdown 笔记
 - **普通问答与深度研究**：普通模式用于快速查证；深度研究会执行多轮互补检索。分析型问题至少使用三个检索角度，并在界面中展示处理步骤
-- **证据与引用**：SAG 结果按分块 ID 去重，过滤图片或摄入元数据等不可用内容；回答保留本地、知识库和联网来源，可展开查看原文摘录
+- **证据与引用**：SAG 结果按分块 ID 去重，过滤图片或摄入元数据等不可用内容；回答分别保留 SAG、本地知识库和联网来源，可展开查看原文摘录
 - **联网搜索（可选）**：启用 Firecrawl MCP 后可搜索并抓取网页内容，联网结果会与知识库证据分开标识
 - **模型与流式回答**：支持配置兼容 OpenAI Chat Completions 或 Responses 协议的模型；回答以流式 Markdown 呈现，完成后支持复制和重新回答
 - **附件与输入体验**：可附加最多 8 个文件（单个不超过 15MB），支持粘贴文件；输入框高度会记住，用户问题文本可直接选中复制
 
-> AI 问答不会内置模型密钥或第三方服务。SAG、Firecrawl 和模型供应商均需要在插件设置中单独配置；当外部服务不可用时，仍保留本地 Vault 检索，但无法生成模型回答。
+> AI 问答不会内置模型密钥或第三方服务。SAG 提供检索与可追溯证据，模型提供方负责生成回答；两者均需单独配置。当 SAG 不可用时，插件继续检索本地 Vault；未配置模型时则不会生成回答。
 
 ### 性能与数据一致性
 - 任务扫描支持短时缓存和进行中的扫描复用，避免主页、项目页、日报和统计模块重复遍历 Vault
@@ -84,6 +85,42 @@ Dashboard 是一个 Obsidian 插件：把「任务管理 / 项目管理 / 笔记
 ## 安装
 
 将 `mq-obsidian-dashboard` 文件夹放入 `<你的库>/.obsidian/plugins/` 目录，然后在 Obsidian 命令面板执行 **Reload app without saving**（或重启 Obsidian）即可。
+
+### 接入 SAG 知识库（可选）
+
+本插件通过 [knowledge-SAG](https://github.com/YQing0123/knowledge-SAG) 的 Streamable HTTP MCP 读取已入库资料。SAG 仅负责知识库检索和返回证据；MQ Obsidian Dashboard 使用你配置的模型把 SAG 证据和当前 Vault 笔记一起整理为回答。
+
+1. 获取并启动 SAG：
+
+   ```bash
+   git clone https://github.com/YQing0123/knowledge-SAG.git
+   cd knowledge-SAG
+   docker compose up -d --build
+   ```
+
+   服务启动后打开 `http://localhost:3000`，导入资料并等待其处理完成。默认 MCP 地址为 `http://localhost:8000/mcp/`。
+
+2. 在 SAG Web 中打开 **设置 → 集成 → 知识库 MCP**，创建一个命名的 MCP API Key。该 Key 只会在创建时显示一次；请妥善保存，之后可在 SAG 中撤销。
+
+3. 在 Obsidian 打开 **设置 → MQ Obsidian Dashboard → AI 问答 → MCP 服务 → SAG 知识库**，确认已启用，并填写：
+
+   | 配置项 | 填写内容 |
+   | --- | --- |
+   | 服务地址 | `http://localhost:8000/mcp/` |
+   | 访问令牌 | 第 2 步创建的 SAG MCP API Key |
+   | 启用服务 | 开启 |
+
+   SAG 与 Obsidian 不在同一台机器时，请将服务地址替换为受访问控制的 SAG 地址。不要把默认本地端口直接暴露到公网。
+
+4. 在 **AI 问答** 设置中添加一个兼容 OpenAI Chat Completions 或 OpenAI Responses 的模型提供方，并选择默认模型。模型 API Key 与 SAG MCP Key 均只保存在本机的 Obsidian 安全存储中。
+
+### 使用 AI 问答
+
+1. 从工作台导航点击 **AI 问答**，新建或打开一个会话。
+2. 直接输入问题即可同时检索 SAG 与本地 Vault；输入 `@` 后可选择一个 SAG 知识库，将检索范围限定到该信源。
+3. 需要横向分析时切换到 **深度研究**。插件会执行多轮检索，界面会显示处理步骤与命中数量。
+4. 发送后，回答下方可展开 **引用来源**，查看每条 SAG 或本地笔记证据；SAG 引用可查看检索摘录，本地笔记引用可打开原文。
+5. 完成回答可复制、重新回答，或使用 **会话入库** 保存为 Vault 内的 Markdown 记录。
 
 ## 数据格式
 
