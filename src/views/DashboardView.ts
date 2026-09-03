@@ -203,6 +203,8 @@ export class DashboardView extends ItemView {
 	private bannerEl: HTMLElement | null = null;
 	private bannerStatsEl: HTMLElement | null = null;
 	private bannerCollapsed = false;
+	/** True only when the user explicitly collapsed the banner. */
+	private bannerManuallyCollapsed = false;
 	public boardEl: HTMLElement | null = null;
 	private heatmapCard: HTMLElement | null = null;
 	private heatmapTimer: number | null = null;
@@ -483,7 +485,9 @@ export class DashboardView extends ItemView {
 		setIcon(collapseBtn, this.bannerCollapsed ? 'chevron-down' : 'chevron-up');
 		collapseBtn.addEventListener('click', (e) => {
 			e.stopPropagation();
-			this.setBannerCollapsed(!this.bannerCollapsed);
+			const collapsed = !this.bannerCollapsed;
+			this.bannerManuallyCollapsed = collapsed;
+			this.setBannerCollapsed(collapsed);
 		});
 		if (this.bannerState.mode === 'stats') {
 			banner.addClass('mq-ad-banner--stats');
@@ -537,6 +541,11 @@ export class DashboardView extends ItemView {
 		button.setAttribute('title', collapsed ? '展开横幅' : '收起横幅');
 		button.setAttribute('aria-expanded', String(!collapsed));
 		setIcon(button, collapsed ? 'chevron-down' : 'chevron-up');
+	}
+
+	/** Restore the banner when leaving AI Q&A, unless the user collapsed it manually. */
+	private restoreBannerForNonAiPage(): void {
+		this.setBannerCollapsed(this.bannerManuallyCollapsed);
 	}
 
 	/** Date, lunar date, theme and plugin settings now live inside the banner. */
@@ -897,6 +906,7 @@ export class DashboardView extends ItemView {
 			btn.addEventListener('click', () => {
 				btn.addClass('is-active');
 				try {
+					if (it.action === 'home' || it.action === 'all' || it.action === 'opportunity' || it.action === 'daily-report') this.restoreBannerForNonAiPage();
 					if (it.action === 'home') void this.showDashboard();
 					if (it.action === 'diary') void this.createDiary();
 					if (it.action === 'task') void this.openTaskModal(this.selectedProject ?? undefined);
@@ -1413,6 +1423,7 @@ export class DashboardView extends ItemView {
 
 	private async showDashboard(): Promise<void> {
 		if (!this.boardEl) return;
+		this.restoreBannerForNonAiPage();
 		// 进入首页前确保退出可能的编辑态（修复「切页未退出编辑态」残留）
 		this.exitEditMode();
 		this.boardEl.empty();
@@ -1463,7 +1474,8 @@ export class DashboardView extends ItemView {
 
 	/** Show AI Q&A inside the existing workbench view. */
 	async showAiQa(): Promise<void> {
-		if (this.plugin.settings.aiQa.collapseBannerOnOpen === true) this.setBannerCollapsed(true);
+		const autoCollapse = this.plugin.settings.aiQa.collapseBannerOnOpen === true;
+		this.setBannerCollapsed(this.bannerManuallyCollapsed || autoCollapse);
 		await this.aiQaBoard.show();
 	}
 
