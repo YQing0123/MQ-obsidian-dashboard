@@ -184,7 +184,12 @@ export class AiQaBoard {
 
   private async refreshSessions(): Promise<void> {
     this.sessions = await this.store.list(); this.renderHistory();
-    if (this.active && this.sessions.some((item) => item.id === this.active?.id)) { this.syncSessionControls(); return; }
+    if (this.active && this.sessions.some((item) => item.id === this.active?.id)) {
+      this.syncSessionControls();
+      this.renderHistory();
+      this.renderMessages();
+      return;
+    }
     if (this.sessions[0]) await this.selectSession(this.sessions[0]); else await this.newSession();
   }
   private renderHistory(): void {
