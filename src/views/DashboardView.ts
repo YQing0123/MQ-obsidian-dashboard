@@ -874,6 +874,18 @@ export class DashboardView extends ItemView {
 	/* ============================================================
 	   Actions toolbar
 	   ============================================================ */
+	private toolbarPageAction(action: string): string {
+		if (action === 'all') return 'project';
+		return action;
+	}
+
+	private setToolbarActive(action: string): void {
+		const activeAction = this.toolbarPageAction(action);
+		this.dashboardEl?.querySelectorAll<HTMLElement>('.mq-ad-toolbar__btn[data-page-action]').forEach((button) => {
+			button.toggleClass('is-active', button.dataset.pageAction === activeAction);
+		});
+	}
+
 	private renderActions(root: HTMLElement): void {
 		const nav = root.createEl('nav', { cls: 'mq-ad-toolbar' });
 
@@ -899,6 +911,11 @@ export class DashboardView extends ItemView {
 
 		const makeBtn = (it: { glyph: string; label: string; action: string; svg?: string; icon?: string }, extraCls = ''): HTMLElement => {
 			const btn = nav.createEl('button', { cls: 'mq-ad-toolbar__btn' + (extraCls ? ' ' + extraCls : '') });
+			const pageAction = ['home', 'all', 'opportunity', 'daily-report', 'ai-qa'].includes(it.action) ? this.toolbarPageAction(it.action) : null;
+			if (pageAction) {
+				btn.dataset.pageAction = pageAction;
+				btn.toggleClass('is-active', pageAction === this.currentPage);
+			}
 			const glyphEl = btn.createSpan({ cls: 'mq-ad-glyph' });
 			if (it.svg) injectSvg(glyphEl, it.svg);
 			else if (it.icon) setIcon(glyphEl, it.icon);
@@ -907,6 +924,7 @@ export class DashboardView extends ItemView {
 			btn.addEventListener('click', () => {
 				btn.addClass('is-active');
 				try {
+					if (pageAction) this.setToolbarActive(pageAction);
 					if (it.action === 'home' || it.action === 'all' || it.action === 'opportunity' || it.action === 'daily-report') this.restoreBannerForNonAiPage();
 					if (it.action === 'home') void this.showDashboard();
 					if (it.action === 'diary') void this.createDiary();
@@ -922,7 +940,7 @@ export class DashboardView extends ItemView {
 					this.showToast('打开失败：' + msg, 'error');
 					console.error('[Dashboard] toolbar action "' + it.action + '" failed', e);
 				}
-				window.setTimeout(() => btn.removeClass('is-active'), 350);
+				if (!pageAction) window.setTimeout(() => btn.removeClass('is-active'), 350);
 			});
 			return btn;
 		};
@@ -1434,6 +1452,7 @@ export class DashboardView extends ItemView {
 		this.boardEl.removeClass('mq-ai-qa-board');
 		this.boardEl.addClass('mq-ad-board');
 		this.currentPage = 'home';
+		this.setToolbarActive('home');
 		// 按注册表渲染全部启用模块（顺序/显隐由 settings.homeModules 决定）
 		await this.renderEnabledModules(this.boardEl);
 	}
@@ -1477,6 +1496,7 @@ export class DashboardView extends ItemView {
 	async showAiQa(): Promise<void> {
 		const autoCollapse = this.plugin.settings.aiQa.collapseBannerOnOpen === true;
 		this.setBannerCollapsed(this.bannerManuallyCollapsed || autoCollapse);
+		this.setToolbarActive('ai-qa');
 		await this.aiQaBoard.show();
 	}
 
@@ -3309,6 +3329,7 @@ export class DashboardView extends ItemView {
 
 	/** Navigate to project overview and select a specific project's Gantt view */
 	private async navigateToProjectGantt(proj: ProjectInfo): Promise<void> {
+		this.setToolbarActive('project');
 		await this.projectBoard.openProjectGantt(proj);
 	}
 
