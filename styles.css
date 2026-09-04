@@ -1693,6 +1693,17 @@ input[type="date"].mq-ad-modal-input { cursor: pointer; }
 .mq-ad-modal-row { display: flex; gap: 10px; }
 .mq-ad-modal-col { flex: 1; display: flex; flex-direction: column; }
 .mq-ad-modal-field { display: flex; flex-direction: column; gap: 6px; }
+.mq-ad-parent-combobox { position: relative; }
+.mq-ad-parent-combobox > input { padding-right: 32px; }
+.mq-ad-parent-combobox__toggle { position: absolute; top: 50%; right: 4px; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; transform: translateY(-50%); border: 0; border-radius: var(--mq-ad-r1); background: transparent; color: var(--mq-ad-text-mute); cursor: pointer; }
+.mq-ad-parent-combobox__toggle:hover, .mq-ad-parent-combobox__toggle.is-open { background: var(--mq-ad-h1); color: var(--mq-ad-text); }
+.mq-ad-parent-combobox__toggle.is-open svg { transform: rotate(180deg); }
+.mq-ad-parent-combobox__menu { position: absolute; z-index: 30; top: calc(100% + 4px); right: 0; left: 0; display: none; max-height: 188px; overflow: auto; padding: 4px; border: 1px solid var(--mq-ad-line-s); border-radius: var(--mq-ad-r1); background: var(--background-primary); box-shadow: 0 10px 24px color-mix(in srgb, var(--background-modifier-box-shadow) 28%, transparent); }
+.mq-ad-parent-combobox__menu.is-open { display: block; }
+.mq-ad-parent-combobox__option { display: block; width: 100%; overflow: hidden; padding: 7px 8px; border: 0; border-radius: 4px; background: transparent; color: var(--mq-ad-text); font: inherit; font-size: 12px; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.mq-ad-parent-combobox__option:hover, .mq-ad-parent-combobox__option.is-active { background: var(--mq-ad-h1); }
+.mq-ad-parent-combobox__option.is-selected { color: var(--mq-ad-accent); font-weight: 600; }
+.mq-ad-parent-combobox__empty { padding: 7px 8px; color: var(--mq-ad-text-mute); font-size: 12px; }
 .mq-ad-tag-picker {
   position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
   width: 100%; min-height: 34px; box-sizing: border-box; padding: 4px 7px;

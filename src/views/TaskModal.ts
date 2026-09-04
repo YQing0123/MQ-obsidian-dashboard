@@ -1,4 +1,4 @@
-import { App, Modal } from 'obsidian';
+import { App, Modal, setIcon } from 'obsidian';
 import { UI_TEXT } from '../constants';
 
 /* ============================================================
@@ -134,23 +134,90 @@ export class TaskModal extends Modal {
 
 		const parentCol = row1.createDiv({ cls: 'mq-ad-modal-col' });
 		this.label(parentCol, '父任务');
-		const parentSel = parentCol.createEl('select', { cls: 'mq-ad-modal-input' });
-		parentSel.createEl('option', { text: '无（顶级任务）', attr: { value: '' } });
+		const parentPicker = parentCol.createDiv({ cls: 'mq-ad-parent-combobox' });
+		const parentInput = parentPicker.createEl('input', {
+			cls: 'mq-ad-modal-input',
+			attr: {
+				type: 'search', placeholder: '搜索或选择父任务', 'aria-label': '搜索或选择父任务',
+				role: 'combobox', 'aria-autocomplete': 'list', 'aria-expanded': 'false', autocomplete: 'off',
+			},
+		});
+		const parentToggle = parentPicker.createEl('button', { cls: 'mq-ad-parent-combobox__toggle', attr: { type: 'button', 'aria-label': '展开父任务列表', title: '展开父任务列表' } });
+		setIcon(parentToggle, 'chevron-down');
+		const parentMenu = parentPicker.createDiv({ cls: 'mq-ad-parent-combobox__menu', attr: { role: 'listbox' } });
+		const parentOptionsId = `mq-ad-parent-options-${crypto.randomUUID()}`;
+		parentMenu.id = parentOptionsId;
+		parentInput.setAttribute('aria-controls', parentOptionsId);
 
-		const populateParents = (projectName: string): void => {
-			const filtered = (this.opts.allTasks || []).filter((t) => t.projectId === projectName);
-			while (parentSel.options.length > 1) parentSel.remove(1);
-			for (const t of filtered) {
-				parentSel.createEl('option', { text: t.title, attr: { value: t.title } });
+		const parentCandidates = (projectName: string): TaskInfo[] => {
+			const byTitle = new Map<string, TaskInfo>();
+			for (const task of this.opts.allTasks || []) if (task.projectId === projectName && !byTitle.has(task.title)) byTitle.set(task.title, task);
+			return [...byTitle.values()].sort((left, right) => left.title.localeCompare(right.title, 'zh-CN'));
+		};
+		let parentMenuOpen = false;
+		let activeParentIndex = 0;
+		let visibleParents: Array<{ value: string; label: string }> = [];
+		const closeParentMenu = (): void => {
+			parentMenuOpen = false;
+			parentMenu.removeClass('is-open');
+			parentInput.setAttribute('aria-expanded', 'false');
+			parentToggle.removeClass('is-open');
+		};
+		const selectParent = (value: string): void => {
+			parentInput.value = value;
+			parentInput.removeClass('mq-ad-input-error');
+			closeParentMenu();
+		};
+		const renderParentMenu = (): void => {
+			const keyword = parentInput.value.trim().toLocaleLowerCase();
+			visibleParents = [{ value: '', label: '无（顶级任务）' }, ...parentCandidates(projSel.value)
+				.filter((task) => !keyword || task.title.toLocaleLowerCase().includes(keyword))
+				.map((task) => ({ value: task.title, label: task.title }))];
+			activeParentIndex = Math.max(0, Math.min(activeParentIndex, visibleParents.length - 1));
+			parentMenu.empty();
+			for (const [index, parent] of visibleParents.entries()) {
+				const option = parentMenu.createEl('button', {
+					cls: `mq-ad-parent-combobox__option${index === activeParentIndex ? ' is-active' : ''}${parent.value === parentInput.value ? ' is-selected' : ''}`,
+					text: parent.label,
+					attr: { type: 'button', role: 'option', 'aria-selected': String(parent.value === parentInput.value) },
+				});
+				option.addEventListener('click', () => selectParent(parent.value));
 			}
+			if (visibleParents.length === 1 && keyword) parentMenu.createDiv({ cls: 'mq-ad-parent-combobox__empty', text: '没有匹配的父任务' });
+		};
+		const openParentMenu = (): void => {
+			parentMenuOpen = true;
+			activeParentIndex = 0;
+			renderParentMenu();
+			parentMenu.addClass('is-open');
+			parentInput.setAttribute('aria-expanded', 'true');
+			parentToggle.addClass('is-open');
 		};
 
-		populateParents(projSel.value);
-		if (this.opts.defaultParent) parentSel.value = this.opts.defaultParent;
+		if (this.opts.defaultParent) parentInput.value = this.opts.defaultParent;
 
 		projSel.addEventListener('change', () => {
-			populateParents(projSel.value);
+			parentInput.value = '';
+			closeParentMenu();
 		});
+		parentInput.addEventListener('focus', openParentMenu);
+		parentInput.addEventListener('input', () => { activeParentIndex = 0; parentInput.removeClass('mq-ad-input-error'); if (!parentMenuOpen) openParentMenu(); else renderParentMenu(); });
+		parentInput.addEventListener('keydown', (event) => {
+			if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+				event.preventDefault();
+				if (!parentMenuOpen) openParentMenu();
+				else { activeParentIndex = (activeParentIndex + (event.key === 'ArrowDown' ? 1 : -1) + visibleParents.length) % visibleParents.length; renderParentMenu(); }
+			} else if (event.key === 'Enter' && parentMenuOpen) {
+				event.preventDefault();
+				const parent = visibleParents[activeParentIndex];
+				if (parent) selectParent(parent.value);
+			} else if (event.key === 'Escape') closeParentMenu();
+		});
+		parentToggle.addEventListener('click', () => {
+			if (parentMenuOpen) closeParentMenu();
+			else { parentInput.focus(); openParentMenu(); }
+		});
+		parentPicker.addEventListener('focusout', () => window.setTimeout(() => { if (!parentPicker.contains(document.activeElement)) closeParentMenu(); }, 0));
 
 		// ---- Dates (side by side) ----
 		const row2 = contentEl.createDiv({ cls: 'mq-ad-modal-row' });
@@ -309,8 +376,14 @@ export class TaskModal extends Modal {
 			.addEventListener('click', () => {
 				contentEl.querySelectorAll('.mq-ad-input-error').forEach((el) => el.removeClass('mq-ad-input-error'));
 
-				const titleEl = contentEl.querySelector('.mq-ad-input-title') as HTMLInputElement;
-				const title = titleEl?.value?.trim();
+					const titleEl = contentEl.querySelector('.mq-ad-input-title') as HTMLInputElement;
+					const title = titleEl?.value?.trim();
+					const parent = parentInput.value.trim();
+					if (parent && !parentCandidates(projSel.value).some((candidate) => candidate.title === parent)) {
+						parentInput.addClass('mq-ad-input-error');
+						parentInput.focus();
+						return;
+					}
 
 				const fields: [HTMLElement | null, string][] = [
 					[titleEl, title || ''],
@@ -340,7 +413,7 @@ export class TaskModal extends Modal {
 				const data: TaskFormData = {
 					title,
 					project: projSel.value,
-					parent: (parentSel).value,
+						parent,
 					startDate: startInput.value || getToday(),
 					endDate: noEnd ? '' : (endInput.value || startInput.value || getToday()),
 					priority: (prioSel).value,

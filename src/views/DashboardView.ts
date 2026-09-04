@@ -10,6 +10,7 @@ import { activityColor, PomodoroService } from '../pomodoro-service';
 import { TaskEditModal } from './TaskEditModal';
 import { TaskItem, ProjectInfo, TaskStatus, ProjectType, LONG_TERM_STAGES, isLongTermProject, priorityWeight, NodeState, RepeatRule, parseDailyNodesFromBody, serializeDailyNodesBlock } from '../data/taskParser';
 import { TaskStore } from '../data/taskStore';
+import { sortProjectsByOrder } from '../data/projectOrder';
 import { writeFrontmatter as fmWriteFrontmatter, yamlScalar } from '../data/frontmatterWriter';
 import type { ParseIssue } from '../data/parserDiagnostics';
 import { DashboardStore } from '../data/dashboardStore';
@@ -1653,13 +1654,13 @@ export class DashboardView extends ItemView {
 
 	/** Get list of all projects (async version using scanAllProjects) */
 	private async getProjectsList(): Promise<ProjectInfo[]> {
-		return await this.taskStore.scanAllProjects();
+		return sortProjectsByOrder(await this.taskStore.scanAllProjects(), this.plugin.settings.poProjectOrder);
 	}
 
 	/** Open TaskModal for creating a new task */
 	async openTaskModal(defaultProject?: string, options?: { defaultTitle?: string; opportunityId?: string; onCreated?: (taskId: string) => void }): Promise<void> {
 		const { TaskModal } = await import('./TaskModal');
-		const projects = await this.taskStore.scanAllProjects();
+		const projects = await this.getProjectsList();
 		const allTasks = await this.taskStore.scanAllTasks();
 
 		new TaskModal({
@@ -1699,7 +1700,7 @@ export class DashboardView extends ItemView {
 /** Open TaskModal with a pre-filled parent task */
 	async openTaskModalWithParent(parentName: string, projectName: string): Promise<void> {
 		const { TaskModal } = await import('./TaskModal');
-		const projects = await this.taskStore.scanAllProjects();
+		const projects = await this.getProjectsList();
 		const allTasks = await this.taskStore.scanAllTasks();
 
 		new TaskModal({
@@ -3219,7 +3220,7 @@ export class DashboardView extends ItemView {
 
 		let projects: ProjectInfo[] = [];
 		try {
-			projects = await this.taskStore.scanAllProjects();
+			projects = await this.getProjectsList();
 		} catch { /* keep empty */ }
 
 		// Long-term projects are first-class projects on the home card. The

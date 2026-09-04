@@ -7,6 +7,7 @@ import {
 import type { TaskStore } from '../data/taskStore';
 import { fmtDate, nowFmt } from '../data/taskLogic';
 import { buildTaskHierarchy, orderTasksByHierarchy } from '../data/taskHierarchy';
+import { sortProjectsByOrder } from '../data/projectOrder';
 import type { TaskHierarchyNode } from '../data/taskHierarchy';
 import { computeWindow, filterWithOrig } from '../data/virtualList';
 import { UI_TEXT } from '../constants';
@@ -439,15 +440,7 @@ export class ProjectBoard {
 
 	/** Sort currentProjects by the persisted sidebar order (new projects go last) */
 	private applyProjectOrder(): void {
-		const order = this.plugin.settings.poProjectOrder;
-		if (!order || order.length === 0) return;
-		this.currentProjects.sort((a, b) => {
-			const ia = order.indexOf(a.name);
-			const ib = order.indexOf(b.name);
-			const wa = ia < 0 ? Number.MAX_SAFE_INTEGER : ia;
-			const wb = ib < 0 ? Number.MAX_SAFE_INTEGER : ib;
-			return wa - wb;
-		});
+		this.currentProjects = sortProjectsByOrder(this.currentProjects, this.plugin.settings.poProjectOrder);
 	}
 
 
